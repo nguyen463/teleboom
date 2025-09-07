@@ -13,8 +13,8 @@ function LandingPage() {
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl text-white">💬</span>
           </div>
-          <h1 className="text-3xl font-bold mb-2 text-gray-800">Selamat Datang!</h1>
-          <p className="text-gray-600">Bergabunglah dengan komunitas chat kami yang menyenangkan</p>
+          <h1 className="text-3xl font-bold mb-2 text-gray-800">welcome!</h1>
+          <p className="text-gray-600">join with us</p>
         </div>
         
         <div className="space-y-3">
