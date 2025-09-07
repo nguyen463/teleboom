@@ -73,7 +73,7 @@ export default function RegisterPage() {
       
       sessionStorage.setItem('chat-app-token', loginResponse.data.token);
       sessionStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
-      router.push('/');
+     router.push('/chat');
 
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Registration failed');
