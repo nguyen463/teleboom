@@ -25,7 +25,7 @@ export default function LoginPage() {
 
     try {
       // 1. Kirim data login ke backend
-      const response = await axios.post('http://localhost:3001/api/auth/login', formData);
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, formData);
       
       // 2. Jika berhasil, backend akan mengirimkan token
       const { token } = response.data;
