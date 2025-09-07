@@ -35,7 +35,7 @@ app.use(express.json({ limit: '10mb' }));
 // ====== CORS ======
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "https://teleboom.vercel.app",
+    origin: true, //process.env.FRONTEND_URL || "https://teleboom.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
