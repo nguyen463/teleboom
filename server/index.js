@@ -17,7 +17,7 @@ app.use("/api/auth", authRoutes);
 app.use(express.json());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000", // ganti sesuai frontend
+     origin: process.env.FRONTEND_URL || "https://teleboom.vercel.app" // ganti sesuai frontend
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
