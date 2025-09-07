@@ -11,6 +11,8 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
+app.use("/api/auth", authRoutes);
+
 // ====== MIDDLEWARE ======
 app.use(express.json());
 app.use(
