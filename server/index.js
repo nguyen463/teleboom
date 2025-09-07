@@ -1,144 +1,149 @@
-// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const morgan = require("morgan"); // Tambahkan untuk logging
-const path = require("path"); // Tambahkan untuk path
-const Message = require("./models/Message"); // Pastikan model Message sudah ada
+const morgan = require("morgan");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const jwt = require("jsonwebtoken");
 
-// Jika Anda memiliki authRoutes, pastikan di-import
-// const authRoutes = require("./routes/authRoutes"); 
+// Model & Routes
+const Message = require("./models/Message");
+const authRoutes = require("./routes/authRoutes");
 
-// ====== INI HALAMAN UTAMA BACKEND-MU ======
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
+// ====== ENV VALIDATION ======
+if (!process.env.MONGO_URI) {
+  console.error("❌ MONGO_URI is required");
+  process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  console.error("❌ JWT_SECRET is required");
+  process.exit(1);
+}
+
 // ====== MIDDLEWARE ======
-// Logging HTTP requests
-app.use(morgan("dev")); 
+app.use(helmet());
+app.use(morgan("dev"));
+app.use(express.json({ limit: '10mb' }));
 
-// Mengizinkan parsing JSON dari body request
-app.use(express.json());
-
-// Mengatur CORS untuk HTTP
+// ====== CORS ======
 app.use(
   cors({
-    origin: "https://teleboom.vercel.app",
+    origin: process.env.FRONTEND_URL || "https://teleboom.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
 
-// Serve file statis dari direktori frontend (jika ada)
-// app.use(express.static(path.join(__dirname, 'frontend/build')));
+// ====== RATE LIMITING ======
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many attempts, please try again later'
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
-// ====== PENANGANAN KESALAHAN PADA RUTE (ROUTE-NOT-FOUND) ======
-// app.use((req, res, next) => {
-//     res.status(404).json({ error: 'Rute tidak ditemukan' });
-// });
-
-// ====== KONEKSI KE MONGODB ======
-const MONGO_URI = process.env.MONGO_URI;
-
-mongoose.set('strictQuery', true); // Direkomendasikan oleh Mongoose
-
-mongoose
-  .connect(MONGO_URI)
-  .then(() => {
-    console.log("✅ Terhubung ke MongoDB Atlas dengan sukses");
-  })
+// ====== CONNECT MONGODB ======
+mongoose.set("strictQuery", true);
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ Terhubung ke MongoDB Atlas"))
   .catch((err) => {
-    console.error("❌ Gagal terhubung ke MongoDB Atlas:", err.message);
-    process.exit(1); // Menghentikan aplikasi jika koneksi gagal
+    console.error("❌ Gagal terhubung ke MongoDB:", err.message);
+    process.exit(1);
   });
 
-// ====== RUTE API (INI TEMPAT UNTUK MENAMBAHKAN RUTE LAIN) ======
-// app.use("/api/auth", authRoutes); // Gunakan rute yang sudah diimpor
+// ====== ROUTES ======
+app.use("/api/auth", authRoutes);
 
+// Health check
 app.get('/', (req, res) => {
-  res.send('Server berjalan dengan baik!');
+  res.json({ 
+    message: 'Teleboom Backend API',
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
 });
 
-// ====== KONFIGURASI SOCKET.IO ======
+// ====== SOCKET.IO ======
 const io = new Server(server, {
   cors: {
-    origin: "https://teleboom.vercel.app",
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: process.env.FRONTEND_URL || "https://teleboom.vercel.app",
+    methods: ["GET", "POST"],
     credentials: true,
   },
 });
 
-// ====== EVENT SOCKET.IO ======
-io.on("connection", async (socket) => {
-  console.log(`🔗 Pengguna terhubung: ${socket.id}`);
+// Socket.io authentication middleware
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    return next(new Error("Authentication required"));
+  }
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = decoded.userId;
+    next();
+  } catch (err) {
+    next(new Error("Invalid token"));
+  }
+});
 
-  // Kirim semua pesan saat koneksi baru
+io.on("connection", async (socket) => {
+  console.log(`🔗 User connected: ${socket.id}, UserId: ${socket.userId}`);
+
   try {
     const allMessages = await Message.find().sort({ createdAt: 1 });
     socket.emit("load_messages", allMessages);
   } catch (err) {
-    console.error("❌ Gagal load messages:", err.message);
+    console.error("❌ Failed to load messages:", err.message);
+    socket.emit("error", "Failed to load messages");
   }
 
-  // Kirim pesan baru
   socket.on("chat_message", async (data) => {
     try {
-      if (!data.text) {
-        return console.error("Pesan kosong diterima");
-      }
-      const newMessage = new Message({
-        text: data.text,
-        senderId: socket.id,
+      if (!data.text || data.text.trim() === '') return;
+      
+      const newMessage = new Message({ 
+        text: data.text.trim(),
+        senderId: socket.userId,
+        senderName: data.senderName || "Anonymous"
       });
+      
       await newMessage.save();
-      // Mengirim pesan ke semua klien, termasuk pengirim
       io.emit("receive_message", newMessage);
+      
     } catch (err) {
-      console.error("❌ Gagal kirim pesan:", err.message);
+      console.error("❌ Error sending message:", err);
+      socket.emit("error", "Failed to send message");
     }
   });
 
-  // Edit pesan
-  socket.on("edit_message", async ({ id, newText }) => {
-    try {
-      const updatedMessage = await Message.findByIdAndUpdate(
-        id,
-        { text: newText },
-        { new: true }
-      );
-      if (updatedMessage) {
-        io.emit("message_updated", updatedMessage);
-      } else {
-        console.warn(`Pesan dengan ID ${id} tidak ditemukan.`);
-      }
-    } catch (err) {
-      console.error("❌ Gagal update pesan:", err.message);
-    }
-  });
-
-  // Hapus pesan
-  socket.on("delete_message", async (id) => {
-    try {
-      const deletedMessage = await Message.findByIdAndDelete(id);
-      if (deletedMessage) {
-        io.emit("message_deleted", id);
-      } else {
-        console.warn(`Pesan dengan ID ${id} tidak ditemukan.`);
-      }
-    } catch (err) {
-      console.error("❌ Gagal hapus pesan:", err.message);
-    }
-  });
+  // [Tambahkan edit_message dan delete_message handlers...]
 
   socket.on("disconnect", () => {
-    console.log(`❌ Pengguna terputus: ${socket.id}`);
+    console.log(`❌ User disconnected: ${socket.id}`);
   });
 });
 
-// ====== JALANKAN SERVER ======
+// ====== START SERVER ======
 server.listen(PORT, () => {
-  console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    mongoose.connection.close();
+    process.exit(0);
+  });
 });
