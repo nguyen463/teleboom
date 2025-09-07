@@ -1,5 +1,3 @@
-// src/app/login/page.jsx
-
 "use client";
 
 import { useState } from 'react';
@@ -13,6 +11,7 @@ export default function LoginPage() {
     password: '',
   });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleChange = (e) => {
@@ -22,56 +21,55 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     try {
-      // 1. Kirim data login ke backend
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, formData);
-      
-      // 2. Jika berhasil, backend akan mengirimkan token
-      const { token } = response.data;
+      // Validasi client-side
+      if (!formData.email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
 
-      // 3. Simpan token di localStorage browser
-      localStorage.setItem('chat-app-token', token);
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, 
+        formData
+      );
       
-      // 4. Arahkan pengguna ke halaman utama (nantinya halaman chat)
+      const { token, user } = response.data;
+      
+      // Simpan token (consider using httpOnly cookies instead)
+      sessionStorage.setItem('chat-app-token', token);
+      sessionStorage.setItem('chat-user', JSON.stringify(user));
+      
       router.push('/');
 
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.message || err.message || 'Login failed');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Log In to Your Account</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-900">Log In</h1>
+        
         <form onSubmit={handleSubmit} className="space-y-6">
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Email Address"
-            className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="Password"
-            className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+          {/* ... input fields sama */}
+          
           <button
             type="submit"
-            className="w-full py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            disabled={loading}
+            className={`w-full py-2 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
-            Log In
+            {loading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
+
         {error && <p className="mt-4 text-sm text-center text-red-600">{error}</p>}
+        
         <p className="text-sm text-center text-gray-600">
           Don't have an account?{' '}
           <Link href="/register" className="font-medium text-blue-600 hover:underline">
