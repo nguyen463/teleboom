@@ -50,65 +50,33 @@ export default function RegisterPage() {
         throw new Error('Username must be at least 3 characters');
       }
 
-      // Check if backend is reachable
-      const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      if (!API_URL) {
-        throw new Error('Server configuration error');
-      }
-
-      console.log('Registering with API URL:', API_URL);
-
       const response = await axios.post(
-        `${API_URL}/api/auth/register`, 
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, 
         {
           email: formData.email,
           username: formData.username,
           displayName: formData.displayName,
           password: formData.password
-        },
-        {
-          timeout: 10000, // 10 second timeout
-          headers: {
-            'Content-Type': 'application/json',
-          }
         }
       );
       
       setSuccess('Account created successfully! Redirecting...');
       
       // Auto-login
-      try {
-        const loginResponse = await axios.post(
-          `${API_URL}/api/auth/login`, 
-          {
-            email: formData.email,
-            password: formData.password
-          },
-          {
-            timeout: 10000,
-          }
-        );
-        
-        sessionStorage.setItem('chat-app-token', loginResponse.data.token);
-        sessionStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
-        router.push('/');
-      } catch (loginError) {
-        // If auto-login fails, just redirect to login page
-        setSuccess('Account created! Please login now.');
-        setTimeout(() => {
-          router.push('/login');
-        }, 2000);
-      }
+      const loginResponse = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, 
+        {
+          email: formData.email,
+          password: formData.password
+        }
+      );
+      
+      sessionStorage.setItem('chat-app-token', loginResponse.data.token);
+      sessionStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
+      router.push('/');
 
     } catch (err) {
-      if (err.code === 'NETWORK_ERROR' || err.code === 'ECONNABORTED') {
-        setError('Cannot connect to server. Please try again later.');
-      } else if (err.response?.status === 404) {
-        setError('Server endpoint not found. Please check configuration.');
-      } else {
-        setError(err.response?.data?.message || err.message || 'Registration failed');
-      }
-      console.error('Registration error:', err);
+      setError(err.response?.data?.message || err.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -120,8 +88,91 @@ export default function RegisterPage() {
         <h1 className="text-2xl font-bold text-center text-gray-900">Create Your Account</h1>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* ... (input fields remain the same) ... */}
-          
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="Enter your email"
+              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              Username
+            </label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              placeholder="Choose a username"
+              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
+              Display Name
+            </label>
+            <input
+              type="text"
+              id="displayName"
+              name="displayName"
+              value={formData.displayName}
+              onChange={handleChange}
+              placeholder="Your display name"
+              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Create a password (min. 6 characters)"
+              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              placeholder="Confirm your password"
+              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading}
@@ -157,16 +208,13 @@ export default function RegisterPage() {
         <div className="text-center">
           <p className="text-sm text-gray-600">
             Already have an account?{' '}
-            <Link 
-              href="/login" 
-              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-            >
+            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
               Sign in here
             </Link>
           </p>
         </div>
 
-        {/* REMOVED Terms and Privacy links to avoid 404 errors */}
+        {/* HAPUS BAGIAN TERMS & PRIVACY UNTUK HINDARI 404 ERROR */}
       </div>
     </div>
   );
