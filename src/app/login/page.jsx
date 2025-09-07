@@ -44,7 +44,7 @@ export default function LoginPage() {
       sessionStorage.setItem('chat-app-token', token);
       sessionStorage.setItem('chat-user', JSON.stringify(user));
       
-      router.push('/');
+     router.push('/chat');
 
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Login failed');
