@@ -217,20 +217,20 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        {/* Terms and Conditions */}
-        <div className="text-center">
-          <p className="text-xs text-gray-500">
-            By creating an account, you agree to our{' '}
-            <Link href="/terms" className="text-blue-600 hover:text-blue-500">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
-              Privacy Policy
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+     //   {/* Terms and Conditions */}
+      //  <div className="text-center">
+        //  <p className="text-xs text-gray-500">
+          //  By creating an account, you agree to our{' '}
+          //  <Link href="/terms" className="text-blue-600 hover:text-blue-500">
+           //   Terms of Service
+           // </Link>{' '}
+         //   and{' '}
+           // <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
+           //   Privacy Policy
+         //   </Link>
+       //   </p>
+      //  </div>
+    //  </div>
+   // </div>
   );
 }
