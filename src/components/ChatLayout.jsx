@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "../hooks/useSocket";
-import { FaTrash, FaEdit, FaSignOutAlt, FaUser } from "react-icons/fa";
+import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaSync, FaExclamationTriangle } from "react-icons/fa";
 
 export default function ChatLayout() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export default function ChatLayout() {
   const [userId, setUserId] = useState(null);
   const [editMessageId, setEditMessageId] = useState(null);
   const [user, setUser] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // ====== CEK USER LOGIN ======
   useEffect(() => {
@@ -27,52 +28,90 @@ export default function ChatLayout() {
     }
     
     setUser(JSON.parse(userData));
-  }, []);
+  }, [router]);
 
   // ====== KONEKSI SOCKET.IO ======
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      setStatus("❌ Socket tidak terinisialisasi");
+      return;
+    }
 
-    socket.on("connect", () => {
+    console.log("Socket status:", socket.connected ? "Connected" : "Disconnected");
+
+    const handleConnect = () => {
       setStatus("✅ Terhubung ke server!");
       setUserId(socket.id);
-    });
+      setIsConnected(true);
+      console.log("Socket connected, ID:", socket.id);
+      
+      // Request messages setelah connected
+      socket.emit("load_messages");
+    };
 
-    socket.on("disconnect", () => {
+    const handleDisconnect = () => {
       setStatus("❌ Terputus dari server.");
-    });
+      setIsConnected(false);
+    };
 
-    socket.on("receive_message", (data) => {
+    const handleReceiveMessage = (data) => {
+      console.log("Pesan diterima:", data);
       setMessages((prev) => [...prev, data]);
-    });
+    };
 
-    socket.on("load_messages", (allMessages) => {
+    const handleLoadMessages = (allMessages) => {
+      console.log("Messages loaded:", allMessages.length);
       setMessages(allMessages);
-    });
+    };
 
-    socket.on("message_deleted", (id) => {
+    const handleMessageDeleted = (id) => {
       setMessages((prev) => prev.filter((msg) => msg._id !== id));
-    });
+    };
 
-    socket.on("message_updated", (updatedMsg) => {
+    const handleMessageUpdated = (updatedMsg) => {
       setMessages((prev) =>
         prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
       );
-    });
+    };
+
+    const handleError = (error) => {
+      console.error("Socket error:", error);
+      setStatus("❌ Error koneksi socket");
+    };
+
+    // Event listeners
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("receive_message", handleReceiveMessage);
+    socket.on("load_messages", handleLoadMessages);
+    socket.on("message_deleted", handleMessageDeleted);
+    socket.on("message_updated", handleMessageUpdated);
+    socket.on("error", handleError);
+
+    // Load messages jika sudah connected
+    if (socket.connected) {
+      socket.emit("load_messages");
+    }
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("receive_message");
-      socket.off("load_messages");
-      socket.off("message_deleted");
-      socket.off("message_updated");
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("receive_message", handleReceiveMessage);
+      socket.off("load_messages", handleLoadMessages);
+      socket.off("message_deleted", handleMessageDeleted);
+      socket.off("message_updated", handleMessageUpdated);
+      socket.off("error", handleError);
     };
   }, [socket]);
 
   // ====== KIRIM PESAN ======
   const handleSendMessage = () => {
-    if (message.trim() === "" || !socket) return;
+    if (message.trim() === "" || !socket || !isConnected) {
+      console.log("Cannot send message - connected:", isConnected, "socket:", socket);
+      return;
+    }
+
+    console.log("Mengirim pesan:", message);
 
     if (editMessageId) {
       socket.emit("edit_message", { id: editMessageId, newText: message });
@@ -90,7 +129,7 @@ export default function ChatLayout() {
 
   // ====== HAPUS PESAN ======
   const handleDeleteMessage = (id) => {
-    if (confirm("Yakin mau hapus pesan ini?") && socket) {
+    if (confirm("Yakin mau hapus pesan ini?") && socket && isConnected) {
       socket.emit("delete_message", id);
     }
   };
@@ -101,11 +140,20 @@ export default function ChatLayout() {
     setEditMessageId(msg._id);
   };
 
+  // ====== RECONNECT ======
+  const handleReconnect = () => {
+    if (socket) {
+      socket.connect();
+    }
+  };
+
   // ====== LOGOUT ======
   const handleLogout = () => {
     sessionStorage.removeItem("chat-app-token");
     sessionStorage.removeItem("chat-user");
-    if (socket) socket.disconnect();
+    if (socket) {
+      socket.disconnect();
+    }
     router.push("/login");
   };
 
@@ -133,11 +181,19 @@ export default function ChatLayout() {
 
         <div className="mb-6">
           <h3 className="text-lg font-bold mb-3">Status Koneksi</h3>
-          <div className={`p-2 rounded text-sm ${
-            status.includes("✅") ? "bg-green-600" : "bg-red-600"
+          <div className={`p-2 rounded text-sm mb-2 ${
+            isConnected ? "bg-green-600" : "bg-red-600"
           }`}>
             {status}
           </div>
+          {!isConnected && (
+            <button
+              onClick={handleReconnect}
+              className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              <FaSync /> Reconnect
+            </button>
+          )}
         </div>
 
         <div className="flex-1">
@@ -179,7 +235,7 @@ export default function ChatLayout() {
           ) : (
             messages.map((msg, index) => (
               <div
-                key={index}
+                key={msg._id || index}
                 className={`relative mb-4 p-3 rounded-lg max-w-md shadow-md ${
                   msg.senderId === userId
                     ? "bg-blue-500 text-white ml-auto"
@@ -192,7 +248,7 @@ export default function ChatLayout() {
                     {msg.senderId === userId ? "Anda" : msg.senderName || "Anonim"}
                   </span>
                   <span className="text-xs opacity-70">
-                    {new Date(msg.createdAt).toLocaleTimeString()}
+                    {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : 'Just now'}
                   </span>
                 </div>
 
@@ -237,22 +293,26 @@ export default function ChatLayout() {
                 if (e.key === "Enter") handleSendMessage();
               }}
               className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!socket || status.includes("❌")}
+              disabled={!isConnected}
             />
 
             <button
               onClick={handleSendMessage}
-              disabled={!message.trim() || !socket || status.includes("❌")}
+              disabled={!message.trim() || !isConnected}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
             >
               {editMessageId ? "Update" : "Kirim"}
             </button>
           </div>
           
-          {status.includes("❌") && (
-            <p className="text-red-500 text-sm mt-2">
-              Tidak terhubung ke server. Silakan refresh halaman.
-            </p>
+          {!isConnected && (
+            <div className="flex items-center gap-2 mt-2 text-red-500 text-sm">
+              <FaExclamationTriangle />
+              <span>Tidak terhubung ke server. </span>
+              <button onClick={handleReconnect} className="text-blue-500 hover:underline">
+                Coba reconnect
+              </button>
+            </div>
           )}
         </footer>
       </div>
