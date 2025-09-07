@@ -33,7 +33,7 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await axios.post('http://localhost:3001/api/auth/register', formData);
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, formData);
       setSuccess(response.data.message);
       
       setTimeout(() => {
