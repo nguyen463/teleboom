@@ -2,9 +2,16 @@
 
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
+import {
+  FaTrash,
+  FaEdit,
+  FaSignOutAlt,
+  FaUser,
+  FaPaperPlane,
+  FaUsers,
+} from "react-icons/fa";
 
 // URL backend Socket.IO
-// Ganti URL ini dengan URL backend Heroku-mu saat deployment
 const SOCKET_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 export default function ChatLayout() {
@@ -16,8 +23,8 @@ export default function ChatLayout() {
   const [user, setUser] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const messagesEndRef = useRef(null);
   const [hasAuthError, setHasAuthError] = useState(false);
+  const messagesEndRef = useRef(null);
 
   // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
@@ -28,9 +35,6 @@ export default function ChatLayout() {
       token = localStorage.getItem("chat-app-token");
       userData = localStorage.getItem("chat-user");
       
-      console.log("Token ditemukan:", !!token);
-      console.log("Data pengguna ditemukan:", !!userData);
-
       if (!token || !userData) {
         setHasAuthError(true);
         return;
@@ -59,7 +63,6 @@ export default function ChatLayout() {
 
       setSocket(newSocket);
 
-      // Clean up on component unmount
       return () => {
         newSocket.disconnect();
       };
@@ -74,7 +77,6 @@ export default function ChatLayout() {
   useEffect(() => {
     if (!socket || !user) return;
 
-    // Mendengarkan pesan dari backend
     const handleReceiveMessage = (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
@@ -121,21 +123,14 @@ export default function ChatLayout() {
       });
       setEditMessageId(null);
     } else {
-      const tempId = Date.now().toString();
       const newMessage = {
-        tempId,
         text: message.trim(),
-        senderId: user.id,
-        senderName: user.displayName,
-        createdAt: new Date(),
-        status: "sending",
       };
-      setMessages((prev) => [...prev, newMessage]);
-      socket.emit("chat_message", { text: newMessage.text });
+      socket.emit("chat_message", newMessage);
     }
 
     setMessage("");
-    setIsSending(false); // Reset isSending after emit
+    setIsSending(false);
   };
 
   const handleDeleteMessage = (id) => socket?.emit("delete_message", id);
@@ -162,7 +157,7 @@ export default function ChatLayout() {
           <h2 className="text-xl font-bold text-gray-800">Sesi Habis atau Belum Login</h2>
           <p className="text-gray-600">Silakan login kembali untuk mengakses chat.</p>
           <a
-            href="/login"
+            href="https://teleboom.vercel.app/login"
             className="inline-block w-full py-2 font-medium text-white transition-colors bg-blue-600 rounded-md hover:bg-blue-700"
           >
             Masuk
