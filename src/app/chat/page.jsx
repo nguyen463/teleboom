@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import ChatLayout from '../components/ChatLayout'; // Pastikan path ini benar
+import ChatLayout from '../../components/ChatLayout'; // GAGAL. Harap periksa path ini.
+
+// --- PENTING: Jika build gagal, periksa jalur impor ini. ---
+// Pastikan folder dan nama file sudah benar, termasuk huruf besar/kecil.
+// Contoh: `src/app/chat/page.jsx` mencoba mengimpor `src/components/ChatLayout.jsx`.
+// Path yang benar seharusnya `../../components/ChatLayout`.
+
+// Jika path di atas salah, coba gunakan path relatif yang benar sesuai struktur foldermu.
 
 // Endpoint API autentikasi jika diperlukan
 const AUTH_API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com/api/auth";
