@@ -6,6 +6,7 @@ export function useSocket() {
   const [socket, setSocket] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const socketRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
 
   useEffect(() => {
     // Gunakan API URL sebagai fallback untuk socket URL
@@ -23,14 +24,18 @@ export function useSocket() {
       return;
     }
 
-    // Buat koneksi socket
+    // Buat koneksi socket dengan konfigurasi khusus untuk Heroku
     const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       timeout: 10000,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: Infinity, // Coba reconnect terus menerus
       reconnectionDelay: 3000,
+      reconnectionDelayMax: 10000,
       autoConnect: true,
-      forceNew: false // Ubah ke false untuk menghindari multiple connections
+      forceNew: false,
+      // Konfigurasi khusus untuk Heroku
+      pingTimeout: 60000, // 60 detik
+      pingInterval: 25000, // 25 detik (harus kurang dari 30 detik timeout Heroku)
     });
 
     socketRef.current = newSocket;
@@ -39,6 +44,11 @@ export function useSocket() {
     const handleConnect = () => {
       console.log('✅ Socket connected successfully');
       setConnectionStatus('connected');
+      // Clear any pending reconnect timeouts
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
     };
 
     const handleConnecting = () => {
@@ -49,11 +59,35 @@ export function useSocket() {
     const handleConnectError = (error) => {
       console.error('❌ Socket connection error:', error.message);
       setConnectionStatus('error');
+      
+      // Coba reconnect setelah delay jika error
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('🔄 Attempting manual reconnect after error');
+          if (newSocket && !newSocket.connected) {
+            newSocket.connect();
+          }
+          reconnectTimeoutRef.current = null;
+        }, 5000);
+      }
     };
 
     const handleDisconnect = (reason) => {
       console.log('❌ Socket disconnected:', reason);
       setConnectionStatus('disconnected');
+      
+      // Coba reconnect untuk kasus disconnect tidak terduga
+      if (reason === 'transport close' || reason === 'ping timeout' || reason === 'transport error') {
+        if (!reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('🔄 Attempting manual reconnect after disconnect');
+            if (newSocket && !newSocket.connected) {
+              newSocket.connect();
+            }
+            reconnectTimeoutRef.current = null;
+          }, 3000);
+        }
+      }
     };
 
     const handleReconnect = (attemptNumber) => {
@@ -74,6 +108,17 @@ export function useSocket() {
     const handleReconnectFailed = () => {
       console.error('❌ Socket reconnect failed');
       setConnectionStatus('error');
+      
+      // Coba reconnect manual setelah failure
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log('🔄 Attempting manual reconnect after failure');
+          if (newSocket && !newSocket.connected) {
+            newSocket.connect();
+          }
+          reconnectTimeoutRef.current = null;
+        }, 5000);
+      }
     };
 
     const handleError = (error) => {
@@ -92,11 +137,24 @@ export function useSocket() {
     newSocket.on('reconnect_failed', handleReconnectFailed);
     newSocket.on('error', handleError);
 
+    // Ping handler untuk menjaga koneksi tetap hidup di Heroku
+    const keepAliveInterval = setInterval(() => {
+      if (newSocket && newSocket.connected) {
+        newSocket.emit('ping', { timestamp: Date.now() });
+      }
+    }, 20000); // Ping setiap 20 detik
+
     setSocket(newSocket);
 
     // Cleanup function
     return () => {
       console.log('🧹 Cleaning up socket connection');
+      
+      // Clear intervals
+      clearInterval(keepAliveInterval);
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       
       // Remove all event listeners
       if (newSocket) {
