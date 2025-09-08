@@ -1,19 +1,15 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import {
-  FaTrash,
-  FaEdit,
-  FaSignOutAlt,
-  FaUser,
-  FaPaperPlane,
-  FaUsers,
-} from "react-icons/fa";
-import { useSocket } from "@/hooks/useSocket";
+import { io } from "socket.io-client";
+
+// URL backend Socket.IO
+// Ganti URL ini dengan URL backend Heroku-mu saat deployment
+const SOCKET_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 export default function ChatLayout() {
-  const router = useRouter();
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [editMessageId, setEditMessageId] = useState(null);
@@ -22,70 +18,77 @@ export default function ChatLayout() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const messagesEndRef = useRef(null);
 
-  const { socket, isConnected } = useSocket();
-
-  // ===== CEK LOGIN =====
+  // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
-    const token = sessionStorage.getItem("chat-app-token");
-    const userData = sessionStorage.getItem("chat-user");
+    const token = localStorage.getItem("chat-app-token");
+    const userData = localStorage.getItem("chat-user");
 
     if (!token || !userData) {
-      router.push("/login");
+      window.location.href = "https://teleboom.vercel.app/login";
       return;
     }
 
     const userObj = JSON.parse(userData);
     setUser(userObj);
-  }, [router]);
+
+    const newSocket = io(SOCKET_URL, {
+      auth: { token },
+    });
+
+    newSocket.on("connect", () => {
+      setIsConnected(true);
+      console.log("🔗 Terhubung ke server Socket.IO");
+    });
+
+    newSocket.on("disconnect", () => {
+      setIsConnected(false);
+      console.log("❌ Terputus dari server Socket.IO");
+    });
+    
+    newSocket.on("error", (msg) => {
+        console.error("❌ Socket Error:", msg);
+    });
+
+    setSocket(newSocket);
+
+    // Clean up on component unmount
+    return () => {
+      newSocket.disconnect();
+    };
+  }, []);
 
   // ===== SOCKET EVENTS =====
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !user) return;
 
-    const handleNewMessage = (msg) => {
+    // Mendengarkan pesan dari backend
+    const handleReceiveMessage = (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
     };
 
-    const handleAllMessages = (msgs) => setMessages(msgs || []);
+    const handleLoadMessages = (msgs) => setMessages(msgs || []);
     const handleDeleteMessage = (id) => setMessages((prev) => prev.filter((m) => m._id !== id));
     const handleUpdateMessage = (updated) =>
       setMessages((prev) => prev.map((m) => (m._id === updated._id ? updated : m)));
     const handleOnlineUsers = (users) => setOnlineUsers(users || []);
-    const handleMessageSent = (msg) => {
-      setIsSending(false);
-      setMessages((prev) =>
-        prev.map((m) => (m.tempId === msg.tempId ? { ...msg, status: "delivered" } : m))
-      );
-    };
-
-    socket.on("newMessage", handleNewMessage);
-    socket.on("allMessages", handleAllMessages);
-    socket.on("messageDeleted", handleDeleteMessage);
-    socket.on("messageUpdated", handleUpdateMessage);
-    socket.on("onlineUsers", handleOnlineUsers);
-    socket.on("messageSent", handleMessageSent);
-
-    if (isConnected && user) {
-      socket.emit("getAllMessages");
-      socket.emit("joinRoom", {
-        userId: user.id,
-        username: user.username,
-        displayName: user.displayName,
-      });
-    }
-
+    
+    socket.on("receive_message", handleReceiveMessage);
+    socket.on("load_messages", handleLoadMessages);
+    socket.on("message_deleted", handleDeleteMessage);
+    socket.on("message_updated", handleUpdateMessage);
+    socket.on("online_users", handleOnlineUsers);
+    
     return () => {
-      socket.off("newMessage", handleNewMessage);
-      socket.off("allMessages", handleAllMessages);
-      socket.off("messageDeleted", handleDeleteMessage);
-      socket.off("messageUpdated", handleUpdateMessage);
-      socket.off("onlineUsers", handleOnlineUsers);
-      socket.off("messageSent", handleMessageSent);
+      socket.off("receive_message", handleReceiveMessage);
+      socket.off("load_messages", handleLoadMessages);
+      socket.off("message_deleted", handleDeleteMessage);
+      socket.off("message_updated", handleUpdateMessage);
+      socket.off("online_users", handleOnlineUsers);
     };
-  }, [socket, isConnected, user]);
+  }, [socket, user]);
 
   // ===== AUTO SCROLL =====
   useEffect(() => {
@@ -94,37 +97,35 @@ export default function ChatLayout() {
 
   // ===== KIRIM PESAN =====
   const handleSendMessage = () => {
-    if (message.trim() === "" || !socket) return;
+    if (message.trim() === "" || !socket || isSending) return;
 
     setIsSending(true);
 
     if (editMessageId) {
-      socket.emit("updateMessage", {
-        _id: editMessageId,
-        text: message,
-        senderId: user.id,
-        senderName: user.displayName,
-        updatedAt: new Date(),
+      socket.emit("edit_message", {
+        id: editMessageId,
+        newText: message,
       });
       setEditMessageId(null);
     } else {
       const tempId = Date.now().toString();
       const newMessage = {
         tempId,
-        text: message,
+        text: message.trim(),
         senderId: user.id,
         senderName: user.displayName,
         createdAt: new Date(),
         status: "sending",
       };
       setMessages((prev) => [...prev, newMessage]);
-      socket.emit("sendMessage", newMessage);
+      socket.emit("chat_message", { text: newMessage.text });
     }
 
     setMessage("");
+    setIsSending(false); // Reset isSending after emit
   };
 
-  const handleDeleteMessage = (id) => socket?.emit("deleteMessage", id);
+  const handleDeleteMessage = (id) => socket?.emit("delete_message", id);
   const handleEditMessage = (msg) => {
     setMessage(msg.text);
     setEditMessageId(msg._id);
@@ -135,10 +136,9 @@ export default function ChatLayout() {
   };
 
   const handleLogout = () => {
-    socket?.emit("leaveRoom", { userId: user?.id });
     socket?.disconnect();
-    sessionStorage.clear();
-    router.push("/login");
+    localStorage.clear();
+    window.location.href = "https://teleboom.vercel.app/login";
   };
 
   if (!user) {
@@ -161,7 +161,7 @@ export default function ChatLayout() {
             {user.avatar ? (
               <img src={user.avatar} alt={user.displayName} className="w-10 h-10 rounded-full" />
             ) : (
-              <FaUser className="text-white" />
+              <span className="text-white text-xl">👤</span>
             )}
           </div>
           <div>
@@ -173,12 +173,12 @@ export default function ChatLayout() {
         {/* Pengguna Online */}
         <div className="flex-1 mb-4">
           <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-            <FaUsers /> Pengguna Online ({onlineUsers.length})
+            <span className="text-xl">👥</span> Pengguna Online ({onlineUsers.length})
           </h3>
           <div className="bg-gray-700 p-3 rounded max-h-60 overflow-y-auto">
             {onlineUsers.length > 0 ? (
               onlineUsers.map((onlineUser, index) => (
-                <div key={index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
+                <div key={onlineUser.userId || index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
                   <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
                   <span>{onlineUser.displayName || onlineUser.username}</span>
                   {onlineUser.userId === user.id && (
@@ -196,7 +196,7 @@ export default function ChatLayout() {
           onClick={handleLogout}
           className="flex items-center justify-center gap-2 w-full py-2 bg-red-600 text-white rounded-md hover:bg-red-700 mt-4 transition-colors"
         >
-          <FaSignOutAlt /> Logout
+          <span>➡️</span> Logout
         </button>
       </div>
 
@@ -206,7 +206,7 @@ export default function ChatLayout() {
           <div>
             <h1 className="text-xl font-bold text-gray-800">💬 Teleboom Chat</h1>
             <p className="text-sm text-gray-600">
-              {isConnected ? "Online Mode - Terhubung" : "Menghubungkan..."}
+              {isConnected ? "Online - Terhubung" : "Menghubungkan..."}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -245,21 +245,21 @@ export default function ChatLayout() {
                   </span>
                 </div>
                 <p className="text-sm break-words">{msg.text}</p>
-                {msg.senderId === user.id && msg.status !== "sending" && (
+                {msg.senderId === user.id && (
                   <div className="absolute -top-2 -right-2 flex gap-1">
                     <button
                       onClick={() => handleEditMessage(msg)}
-                      className="p-1 bg-yellow-400 text-white rounded hover:bg-yellow-500 transition-colors"
+                      className="p-1 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition-colors"
                       title="Edit pesan"
                     >
-                      <FaEdit size={12} />
+                      <span>✏️</span>
                     </button>
                     <button
                       onClick={() => handleDeleteMessage(msg._id)}
-                      className="p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                      className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                       title="Hapus pesan"
                     >
-                      <FaTrash size={12} />
+                      <span>🗑️</span>
                     </button>
                   </div>
                 )}
@@ -302,9 +302,9 @@ export default function ChatLayout() {
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition-colors"
             >
               {isSending ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>⌛</span>
               ) : (
-                <FaPaperPlane />
+                <span>✉️</span>
               )}
               {editMessageId ? "Update" : "Kirim"}
             </button>
