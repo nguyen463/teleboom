@@ -2,19 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
-import {
-  FaTrash,
-  FaEdit,
-  FaSignOutAlt,
-  FaUser,
-  FaPaperPlane,
-  FaUsers,
-} from "react-icons/fa";
+import axios from 'axios';
+import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaPaperPlane, FaUsers, FaSpinner } from "react-icons/fa";
 
-// URL backend Socket.IO
-const SOCKET_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
+// Ganti URL ini dengan URL backend Heroku-mu saat deployment
+const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
-export default function ChatLayout() {
+export default function ChatPage() {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [message, setMessage] = useState("");
@@ -24,53 +18,79 @@ export default function ChatLayout() {
   const [isSending, setIsSending] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [hasAuthError, setHasAuthError] = useState(false);
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
+
+  // Fungsi untuk validasi token di backend
+  const validateToken = async (token) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/auth/validate`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      return response.status === 200;
+    } catch (error) {
+      console.error("Token validation failed:", error);
+      return false;
+    }
+  };
 
   // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
-    let userData = null;
-    let token = null;
+    const checkAuth = async () => {
+      let userData = null;
+      let token = null;
 
-    try {
-      token = localStorage.getItem("chat-app-token");
-      userData = localStorage.getItem("chat-user");
-      
-      if (!token || !userData) {
+      try {
+        token = localStorage.getItem("chat-app-token");
+        userData = localStorage.getItem("chat-user");
+        
+        if (!token || !userData) {
+          throw new Error("Token atau data pengguna tidak ditemukan.");
+        }
+
+        const userObj = JSON.parse(userData);
+        setUser(userObj);
+
+        const isValid = await validateToken(token);
+        if (!isValid) {
+          throw new Error("Sesi tidak valid.");
+        }
+        
+        // Koneksi Socket.IO
+        const newSocket = io(API_URL, {
+          auth: { token },
+        });
+
+        newSocket.on("connect", () => {
+          setIsConnected(true);
+        });
+
+        newSocket.on("disconnect", () => {
+          setIsConnected(false);
+        });
+        
+        newSocket.on("error", (msg) => {
+            console.error("❌ Socket Error:", msg);
+        });
+
+        setSocket(newSocket);
+        
+        return () => {
+          newSocket.disconnect();
+        };
+
+      } catch (error) {
+        console.error("❌ Gagal memuat data pengguna:", error.message);
+        localStorage.clear();
         setHasAuthError(true);
-        return;
+        setLoading(false);
+      } finally {
+        setLoading(false);
       }
-
-      const userObj = JSON.parse(userData);
-      setUser(userObj);
-
-      const newSocket = io(SOCKET_URL, {
-        auth: { token },
-      });
-
-      newSocket.on("connect", () => {
-        setIsConnected(true);
-        console.log("🔗 Terhubung ke server Socket.IO");
-      });
-
-      newSocket.on("disconnect", () => {
-        setIsConnected(false);
-        console.log("❌ Terputus dari server Socket.IO");
-      });
-      
-      newSocket.on("error", (msg) => {
-          console.error("❌ Socket Error:", msg);
-      });
-
-      setSocket(newSocket);
-
-      return () => {
-        newSocket.disconnect();
-      };
-
-    } catch (error) {
-      console.error("❌ Gagal memuat data pengguna:", error.message);
-      setHasAuthError(true);
-    }
+    };
+    checkAuth();
   }, []);
 
   // ===== SOCKET EVENTS =====
@@ -148,9 +168,21 @@ export default function ChatLayout() {
     localStorage.clear();
     setHasAuthError(true);
     setUser(null);
+    window.location.href = "https://teleboom.vercel.app/login";
   };
 
-  if (!user || hasAuthError) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="mt-3 text-gray-600">Memuat...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasAuthError) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="w-full max-w-md p-8 space-y-4 text-center bg-white rounded-lg shadow-md">
@@ -162,6 +194,17 @@ export default function ChatLayout() {
           >
             Masuk
           </a>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="mt-3 text-gray-600">Memuat data pengguna...</p>
         </div>
       </div>
     );
@@ -317,7 +360,7 @@ export default function ChatLayout() {
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition-colors"
             >
               {isSending ? (
-                <span>⌛</span>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               ) : (
                 <span>✉️</span>
               )}
