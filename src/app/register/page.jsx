@@ -4,7 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 
-const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com/api/auth";
+const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com/api/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
