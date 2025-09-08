@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaExclamationTriangle, FaPaperPlane, FaWifi, FaRegCircle } from "react-icons/fa";
+import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaPaperPlane, FaWifi, FaRegCircle, FaUsers, FaSync } from "react-icons/fa";
 import { useSocket } from "@/hooks/useSocket";
 
 export default function ChatLayout() {
@@ -12,10 +12,11 @@ export default function ChatLayout() {
   const [editMessageId, setEditMessageId] = useState(null);
   const [user, setUser] = useState(null);
   const [isSending, setIsSending] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
   const messagesEndRef = useRef(null);
   
   // Gunakan hook socket
-  const { socket, connectionStatus, isConnected, isConnecting, hasError } = useSocket();
+  const { socket, connectionStatus, isConnected, isConnecting } = useSocket();
 
   // Status berdasarkan koneksi socket
   const getStatusMessage = () => {
@@ -27,7 +28,7 @@ export default function ChatLayout() {
       case 'error':
         return "❌ Gagal terhubung ke server";
       default:
-        return "❌ Backend sedang maintenance";
+        return "❌ Tidak terhubung";
     }
   };
 
@@ -43,16 +44,6 @@ export default function ChatLayout() {
     
     const userObj = JSON.parse(userData);
     setUser(userObj);
-    
-    // Load messages from localStorage if available
-    const savedMessages = localStorage.getItem("chat-messages");
-    if (savedMessages) {
-      try {
-        setMessages(JSON.parse(savedMessages));
-      } catch (e) {
-        console.error("Error parsing saved messages:", e);
-      }
-    }
   }, [router]);
 
   // ====== SOCKET EVENT HANDLERS ======
@@ -67,57 +58,77 @@ export default function ChatLayout() {
         const messageExists = prev.some(msg => msg._id === messageData._id);
         if (messageExists) return prev;
         
-        const updatedMessages = [...prev, messageData];
-        localStorage.setItem("chat-messages", JSON.stringify(updatedMessages));
-        return updatedMessages;
+        return [...prev, messageData];
       });
+    };
+
+    // Event untuk menerima semua pesan saat pertama connect
+    const handleAllMessages = (messagesData) => {
+      console.log("📨 Semua pesan diterima:", messagesData);
+      setMessages(messagesData || []);
     };
 
     // Event untuk menerima pesan yang dihapus
     const handleDeleteMessage = (messageId) => {
       console.log("🗑️ Pesan dihapus:", messageId);
-      setMessages(prev => {
-        const updatedMessages = prev.filter(msg => msg._id !== messageId);
-        localStorage.setItem("chat-messages", JSON.stringify(updatedMessages));
-        return updatedMessages;
-      });
+      setMessages(prev => prev.filter(msg => msg._id !== messageId));
     };
 
     // Event untuk menerima pesan yang diupdate
     const handleUpdateMessage = (updatedMessage) => {
       console.log("✏️ Pesan diupdate:", updatedMessage);
-      setMessages(prev => {
-        const updatedMessages = prev.map(msg => 
-          msg._id === updatedMessage._id ? updatedMessage : msg
-        );
-        localStorage.setItem("chat-messages", JSON.stringify(updatedMessages));
-        return updatedMessages;
-      });
+      setMessages(prev => prev.map(msg => 
+        msg._id === updatedMessage._id ? updatedMessage : msg
+      ));
     };
 
     // Event untuk menerima daftar pengguna online
     const handleOnlineUsers = (users) => {
       console.log("👥 Pengguna online:", users);
-      // Di sini Anda bisa menyimpan daftar pengguna online ke state
+      setOnlineUsers(users || []);
+    };
+
+    // Event untuk konfirmasi pesan terkirim
+    const handleMessageSent = (messageData) => {
+      console.log("✅ Pesan terkirim:", messageData);
+      setIsSending(false);
+      
+      // Update pesan lokal dengan data dari server
+      setMessages(prev => prev.map(msg => 
+        msg.tempId === messageData.tempId ? messageData : msg
+      ));
     };
 
     // Daftarkan event listeners
     socket.on('newMessage', handleNewMessage);
+    socket.on('allMessages', handleAllMessages);
     socket.on('messageDeleted', handleDeleteMessage);
     socket.on('messageUpdated', handleUpdateMessage);
     socket.on('onlineUsers', handleOnlineUsers);
+    socket.on('messageSent', handleMessageSent);
+
+    // Request semua pesan setelah terhubung
+    if (isConnected) {
+      socket.emit('getAllMessages');
+    }
 
     // Join room berdasarkan user ID setelah terhubung
     if (isConnected && user) {
-      socket.emit('joinRoom', { userId: user.id, username: user.username });
+      socket.emit('joinRoom', { 
+        userId: user.id, 
+        username: user.username,
+        displayName: user.displayName 
+      });
     }
 
     // Cleanup event listeners
     return () => {
       socket.off('newMessage', handleNewMessage);
+      socket.off('allMessages', handleAllMessages);
       socket.off('messageDeleted', handleDeleteMessage);
       socket.off('messageUpdated', handleUpdateMessage);
       socket.off('onlineUsers', handleOnlineUsers);
+      socket.off('messageSent', handleMessageSent);
     };
   }, [socket, isConnected, user]);
 
@@ -130,16 +141,9 @@ export default function ChatLayout() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // ====== SIMPAN PESAN KE LOCALSTORAGE ======
-  useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem("chat-messages", JSON.stringify(messages));
-    }
-  }, [messages]);
-
   // ====== KIRIM PESAN ======
   const handleSendMessage = async () => {
-    if (message.trim() === "") return;
+    if (message.trim() === "" || !socket || !isConnected) return;
     
     setIsSending(true);
 
@@ -154,61 +158,45 @@ export default function ChatLayout() {
           updatedAt: new Date()
         };
 
-        if (isConnected && socket) {
-          // Kirim ke server jika terhubung
-          socket.emit('updateMessage', updatedMessage);
-        } else {
-          // Simpan lokal jika offline
-          setMessages(prev => prev.map(msg => 
-            msg._id === editMessageId ? { ...msg, ...updatedMessage } : msg
-          ));
-        }
-        
+        // Kirim ke server
+        socket.emit('updateMessage', updatedMessage);
         setEditMessageId(null);
       } else {
-        // Buat pesan baru
+        // Buat pesan baru dengan ID sementara
+        const tempId = Date.now().toString();
         const newMessage = {
-          _id: Date.now().toString(),
+          tempId, // ID sementara sampai dikonfirmasi server
           text: message,
           senderId: user.id,
           senderName: user.displayName,
           createdAt: new Date(),
-          isLocal: !isConnected // Tandai sebagai lokal jika offline
+          status: 'sending'
         };
 
-        if (isConnected && socket) {
-          // Kirim ke server jika terhubung
-          socket.emit('sendMessage', newMessage);
-        } else {
-          // Simpan lokal jika offline
-          setMessages(prev => [...prev, newMessage]);
-        }
+        // Tambahkan pesan ke UI langsung (optimistic update)
+        setMessages(prev => [...prev, newMessage]);
+        
+        // Kirim ke server
+        socket.emit('sendMessage', {
+          text: message,
+          senderId: user.id,
+          senderName: user.displayName,
+          tempId // Kirim tempId untuk matching nanti
+        });
       }
       
       setMessage("");
-      console.log(isConnected ? "Pesan dikirim ke server" : "Pesan disimpan lokal (offline)");
     } catch (error) {
       console.error("Error sending message:", error);
-    } finally {
       setIsSending(false);
     }
   };
 
   // ====== HAPUS PESAN ======
   const handleDeleteMessage = (id) => {
-    if (confirm("Yakin mau hapus pesan ini?")) {
-      if (isConnected && socket) {
-        // Kirim permintaan hapus ke server
-        socket.emit('deleteMessage', id);
-      } else {
-        // Hapus lokal jika offline
-        setMessages(prev => prev.filter(msg => msg._id !== id));
-        
-        // Jika menghapus semua pesan, hapus juga dari localStorage
-        if (messages.length === 1) {
-          localStorage.removeItem("chat-messages");
-        }
-      }
+    if (confirm("Yakin mau hapus pesan ini?") && socket && isConnected) {
+      // Kirim permintaan hapus ke server
+      socket.emit('deleteMessage', id);
     }
   };
 
@@ -233,7 +221,6 @@ export default function ChatLayout() {
     
     sessionStorage.removeItem("chat-app-token");
     sessionStorage.removeItem("chat-user");
-    localStorage.removeItem("chat-messages");
     router.push("/login");
   };
 
@@ -248,7 +235,7 @@ export default function ChatLayout() {
         break;
       case 'connecting':
         bgColor = 'bg-yellow-600';
-        icon = <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>;
+        icon = <FaSync className="text-white animate-spin" />;
         break;
       case 'error':
         bgColor = 'bg-red-600';
@@ -305,23 +292,27 @@ export default function ChatLayout() {
           </div>
           <p className="text-sm text-gray-400 mt-2">
             {isConnected 
-              ? "Terhubung ke server. Pesan akan disinkronisasi." 
-              : "Mode offline. Pesan disimpan sementara di browser."}
+              ? "Terhubung ke server. Pesan disinkronisasi secara real-time." 
+              : "Menghubungkan ke server..."}
           </p>
         </div>
 
-        <div className="flex-1">
-          <h3 className="text-lg font-bold mb-3">Online Users</h3>
-          <div className="bg-gray-700 p-3 rounded">
-            <div className="flex items-center mb-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-              <span>{user.displayName} (Anda)</span>
-            </div>
-            <p className="text-gray-400 text-sm mt-3">
-              {isConnected 
-                ? "Memuat daftar pengguna..." 
-                : "Terhubung ke server untuk melihat pengguna online"}
-            </p>
+        <div className="flex-1 mb-4">
+          <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+            <FaUsers /> Pengguna Online ({onlineUsers.length})
+          </h3>
+          <div className="bg-gray-700 p-3 rounded max-h-60 overflow-y-auto">
+            {onlineUsers.length > 0 ? (
+              onlineUsers.map((onlineUser, index) => (
+                <div key={index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
+                  <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                  <span>{onlineUser.displayName || onlineUser.username}</span>
+                  {onlineUser.userId === user.id && <span className="ml-2 text-xs text-gray-400">(Anda)</span>}
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400 text-sm">Tidak ada pengguna online</p>
+            )}
           </div>
         </div>
 
@@ -340,7 +331,7 @@ export default function ChatLayout() {
           <div>
             <h1 className="text-xl font-bold text-gray-800">💬 Teleboom Chat</h1>
             <p className="text-sm text-gray-600">
-              {isConnected ? "Online Mode" : "Offline Mode"}
+              {isConnected ? "Online Mode - Terhubung ke Server" : "Menghubungkan..."}
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -356,19 +347,19 @@ export default function ChatLayout() {
               <p className="text-gray-500 text-lg">Mulai percakapan pertama Anda!</p>
               <p className="text-gray-400 text-sm mt-2">
                 {isConnected 
-                  ? "Pesan akan disinkronisasi dengan server" 
-                  : "Pesan disimpan sementara di browser"}
+                  ? "Pesan akan dikirim dan diterima secara real-time" 
+                  : "Menunggu koneksi ke server..."}
               </p>
             </div>
           ) : (
             messages.map((msg, index) => (
               <div
-                key={msg._id || index}
+                key={msg._id || msg.tempId || index}
                 className={`relative mb-4 p-3 rounded-lg max-w-md shadow-md transition-all duration-200 ${
                   msg.senderId === user.id
                     ? "bg-blue-500 text-white ml-auto"
                     : "bg-white text-gray-800 border"
-                }`}
+                } ${msg.status === 'sending' ? 'opacity-70' : ''}`}
               >
                 {/* Header Pesan */}
                 <div className="flex items-center justify-between mb-1">
@@ -387,15 +378,15 @@ export default function ChatLayout() {
                 {/* Isi Pesan */}
                 <p className="text-sm break-words">{msg.text}</p>
 
-                {/* Badge Local */}
-                {msg.isLocal && (
-                  <span className="absolute -top-2 -left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
-                    Local
-                  </span>
+                {/* Status Pengiriman */}
+                {msg.status === 'sending' && (
+                  <div className="absolute -bottom-1 -right-1">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  </div>
                 )}
 
                 {/* Tombol Edit & Hapus */}
-                {msg.senderId === user.id && (
+                {msg.senderId === user.id && msg.status !== 'sending' && (
                   <div className="absolute -top-2 -right-2 flex gap-1">
                     <button
                       onClick={() => handleEditMessage(msg)}
@@ -448,12 +439,12 @@ export default function ChatLayout() {
                 }
               }}
               className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              disabled={isSending}
+              disabled={isSending || !isConnected}
             />
 
             <button
               onClick={handleSendMessage}
-              disabled={!message.trim() || isSending}
+              disabled={!message.trim() || isSending || !isConnected}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition-colors"
             >
               {isSending ? (
@@ -465,12 +456,12 @@ export default function ChatLayout() {
             </button>
           </div>
           
-          <div className="flex items-center gap-2 mt-2 text-yellow-600 text-sm">
-            <FaExclamationTriangle />
+          <div className="flex items-center gap-2 mt-2 text-blue-600 text-sm">
+            <FaWifi />
             <span>
               {isConnected 
-                ? "Terhubung ke server - pesan disinkronisasi" 
-                : "Mode offline - pesan disimpan sementara di browser"}
+                ? "Terhubung ke server - pesan dikirim secara real-time" 
+                : "Menghubungkan ke server..."}
             </span>
           </div>
         </footer>
