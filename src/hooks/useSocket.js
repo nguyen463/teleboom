@@ -3,7 +3,7 @@ import { io } from "socket.io-client";
 
 export function useSocket() {
   const [socket, setSocket] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
+  const [connectionStatus, setConnectionStatus] = useState("connecting");
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -13,13 +13,14 @@ export function useSocket() {
       process.env.NEXT_PUBLIC_API_URL ||
       "http://localhost:3001";
 
+    // Cegah koneksi ulang
     if (socketRef.current && socketRef.current.connected) {
       setSocket(socketRef.current);
       setConnectionStatus("connected");
       return;
     }
 
-    // ✅ Kirim token JWT ke server
+    // Buat koneksi baru dengan autentikasi token
     const newSocket = io(SOCKET_URL, {
       transports: ["websocket"],
       path: "/socket.io",
@@ -34,13 +35,12 @@ export function useSocket() {
     socketRef.current = newSocket;
     setSocket(newSocket);
 
-    // Events
+    // Status koneksi
     newSocket.on("connect", () => setConnectionStatus("connected"));
     newSocket.on("disconnect", () => setConnectionStatus("disconnected"));
-    newSocket.on("connect_error", (err) => {
-      console.error("Gagal konek socket:", err.message);
-      setConnectionStatus("error");
-    });
+    newSocket.on("connect_error", () => setConnectionStatus("error"));
+    newSocket.on("reconnect_attempt", () => setConnectionStatus("connecting"));
+    newSocket.on("reconnect", () => setConnectionStatus("connected"));
 
     return () => {
       if (newSocket) {
