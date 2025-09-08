@@ -8,7 +8,7 @@ const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 export default function LoginPage() {
   const [credentials, setCredentials] = useState({
-    usernameOrEmail: '',
+    email: '',
     password: ''
   });
   const [loading, setLoading] = useState(false);
@@ -28,24 +28,23 @@ export default function LoginPage() {
 
     try {
       // Validasi input
-      if (!credentials.usernameOrEmail.trim() || !credentials.password.trim()) {
+      if (!credentials.email.trim() || !credentials.password.trim()) {
         throw new Error('Mohon isi semua kolom.');
       }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(credentials.email)) {
+        throw new Error('Mohon masukkan alamat email yang valid.');
+      }
 
-      // Melakukan panggilan API login
       const response = await axios.post(
         `${API_URL}/api/auth/login`,
-        { 
-          usernameOrEmail: credentials.usernameOrEmail,
-          password: credentials.password 
-        }
+        credentials
       );
 
-      // Simpan token dan user data ke localStorage
       localStorage.setItem('chat-app-token', response.data.token);
       localStorage.setItem('chat-user', JSON.stringify(response.data.user));
       
-      // Redirect ke halaman chat
       window.location.href = '/'; 
 
     } catch (err) {
@@ -72,17 +71,18 @@ export default function LoginPage() {
           )}
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="usernameOrEmail" className="sr-only">
-                Nama Pengguna atau Email
+              <label htmlFor="email" className="sr-only">
+                Email
               </label>
               <input
-                id="usernameOrEmail"
-                name="usernameOrEmail"
-                type="text"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Nama Pengguna atau Email"
-                value={credentials.usernameOrEmail}
+                placeholder="Alamat Email"
+                value={credentials.email}
                 onChange={handleChange}
                 disabled={loading}
               />
@@ -95,6 +95,7 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
+                autoComplete="current-password"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
@@ -129,16 +130,6 @@ export default function LoginPage() {
                 Daftar di sini
               </a>
             </p>
-          </div>
-
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700">
-                  <strong>Demo:</strong> Anda bisa menggunakan nama pengguna dan _password_ apa pun untuk masuk. Sistem akan membuat akun tiruan untuk pengujian.
-                </p>
-              </div>
-            </div>
           </div>
         </form>
       </div>
