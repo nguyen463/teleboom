@@ -2,73 +2,136 @@
 
 import { useState } from 'react';
 import axios from 'axios';
+import { useRouter } from 'next/navigation';
+import sanitizeHtml from 'sanitize-html';
 
 // Ganti URL ini dengan URL backend Heroku-mu saat deployment
 const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     displayName: '',
     password: '',
     confirmPassword: '',
   });
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    // Clear specific field error when user starts typing
+    setErrors({ ...errors, [name]: '' });
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email || !emailRegex.test(formData.email)) {
+      newErrors.email = 'Mohon masukkan alamat email yang valid';
+    }
+
+    // DisplayName validation (3-50 characters)
+    if (!formData.displayName || formData.displayName.length < 3 || formData.displayName.length > 50) {
+      newErrors.displayName = 'Nama tampilan harus antara 3-50 karakter';
+    }
+
+    // Password validation (min 8 chars, with uppercase, lowercase, and number)
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+    if (!formData.password || formData.password.length < 8) {
+      newErrors.password = 'Password minimal 8 karakter';
+    } else if (!passwordRegex.test(formData.password)) {
+      newErrors.password = 'Password harus mengandung huruf besar, kecil, dan angka';
+    }
+
+    // Confirm password
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Password tidak cocok';
+    }
+
+    return newErrors;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setErrors({});
     setSuccess('');
     setLoading(true);
 
     try {
-      // Validasi
-      if (!formData.email || !formData.displayName || !formData.password || !formData.confirmPassword) {
-        throw new Error('Mohon isi semua kolom yang diperlukan.');
+      // Client-side validation
+      const validationErrors = validateForm();
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        setLoading(false);
+        return;
       }
 
-      if (formData.password.length < 6) {
-        throw new Error('Password harus memiliki minimal 6 karakter.');
-      }
-
-      if (formData.password !== formData.confirmPassword) {
-        throw new Error('Password tidak cocok.');
-      }
-
-      if (!formData.email.includes('@') || !formData.email.includes('.')) {
-        throw new Error('Mohon masukkan alamat email yang valid.');
-      }
+      // Sanitize inputs
+      const sanitizedData = {
+        email: sanitizeHtml(formData.email.toLowerCase().trim()),
+        displayName: sanitizeHtml(formData.displayName.trim()),
+        password: formData.password // Password tidak perlu sanitasi karena akan di-hash di backend
+      };
 
       const response = await axios.post(
         `${API_URL}/api/auth/register`,
-        {
-          email: formData.email,
-          displayName: formData.displayName,
-          password: formData.password
-        }
+        sanitizedData
       );
+
+      setSuccess('Akun berhasil dibuat! Anda akan diarahkan ke halaman login...');
       
-      setSuccess('Akun berhasil dibuat! Silakan login.');
-      
+      // Redirect to login page after 2 seconds
+      setTimeout(() => {
+        router.push('/login');
+      }, 2000);
+
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Pendaftaran gagal.');
+      let errorMessage = 'Pendaftaran gagal';
+      if (err.response?.data?.errors) {
+        // Handle validation errors from backend
+        const backendErrors = {};
+        err.response.data.errors.forEach(error => {
+          backendErrors[error.path] = error.msg;
+        });
+        setErrors(backendErrors);
+      } else if (err.response?.data?.errorCode) {
+        // Handle specific error codes from backend
+        switch (err.response.data.errorCode) {
+          case 'EMAIL_EXISTS':
+            setErrors({ email: 'Email sudah terdaftar' });
+            break;
+          case 'SERVER_ERROR':
+            errorMessage = 'Terjadi error di server';
+            break;
+          default:
+            errorMessage = err.response?.data?.message || err.message;
+        }
+      } else {
+        errorMessage = err.message;
+      }
+
+      if (!err.response?.data?.errors) {
+        setErrors({ general: errorMessage });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Buat Akun Baru</h1>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
+        <div>
+          <h1 className="text-3xl font-bold text-center text-gray-900">Buat Akun Baru</h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Alamat Email
@@ -80,10 +143,14 @@ export default function RegisterPage() {
               value={formData.email}
               onChange={handleChange}
               placeholder="Masukkan alamat email"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+              className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.email ? 'border-red-300' : 'border-gray-300'
+              }`}
               disabled={loading}
             />
+            {errors.email && (
+              <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+            )}
           </div>
 
           <div>
@@ -97,10 +164,14 @@ export default function RegisterPage() {
               value={formData.displayName}
               onChange={handleChange}
               placeholder="Masukkan nama tampilan Anda"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+              className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.displayName ? 'border-red-300' : 'border-gray-300'
+              }`}
               disabled={loading}
             />
+            {errors.displayName && (
+              <p className="mt-1 text-sm text-red-600">{errors.displayName}</p>
+            )}
           </div>
 
           <div>
@@ -113,11 +184,15 @@ export default function RegisterPage() {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Buat password (min. 6 karakter)"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+              placeholder="Buat password (min. 8 karakter)"
+              className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.password ? 'border-red-300' : 'border-gray-300'
+              }`}
               disabled={loading}
             />
+            {errors.password && (
+              <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+            )}
           </div>
 
           <div>
@@ -131,16 +206,20 @@ export default function RegisterPage() {
               value={formData.confirmPassword}
               onChange={handleChange}
               placeholder="Konfirmasi password Anda"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
+              className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+              }`}
               disabled={loading}
             />
+            {errors.confirmPassword && (
+              <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
+            )}
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${
+            className={`w-full py-3 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 ${
               loading 
                 ? 'bg-blue-400 cursor-not-allowed' 
                 : 'bg-blue-600 hover:bg-blue-700'
@@ -148,7 +227,10 @@ export default function RegisterPage() {
           >
             {loading ? (
               <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
                 Membuat Akun...
               </div>
             ) : (
@@ -157,9 +239,9 @@ export default function RegisterPage() {
           </button>
         </form>
 
-        {error && (
+        {errors.general && (
           <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md">
-            ⚠️ {error}
+            ⚠️ {errors.general}
           </div>
         )}
 
@@ -172,7 +254,7 @@ export default function RegisterPage() {
         <div className="text-center">
           <p className="text-sm text-gray-600">
             Sudah punya akun?{' '}
-            <a href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+            <a href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200">
               Masuk di sini
             </a>
           </p>
