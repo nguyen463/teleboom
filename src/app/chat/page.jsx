@@ -1,17 +1,7 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import ChatLayout from '../../components/ChatLayout'; // GAGAL. Harap periksa path ini.
-
-// --- PENTING: Jika build gagal, periksa jalur impor ini. ---
-// Pastikan folder dan nama file sudah benar, termasuk huruf besar/kecil.
-// Contoh: `src/app/chat/page.jsx` mencoba mengimpor `src/components/ChatLayout.jsx`.
-// Path yang benar seharusnya `../../components/ChatLayout`.
-
-// Jika path di atas salah, coba gunakan path relatif yang benar sesuai struktur foldermu.
-
-// Endpoint API autentikasi jika diperlukan
-const AUTH_API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com/api/auth";
+import { useEffect, useState } from "react";
+import ChatLayout from "../../../components/ChatLayout"; // Sesuaikan path ini
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
@@ -19,34 +9,26 @@ export default function ChatPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const checkAuth = () => {
-      try {
-        const token = localStorage.getItem('chat-app-token');
-        const userData = localStorage.getItem('chat-user');
+    const token = localStorage.getItem("chat-app-token");
+    const userData = localStorage.getItem("chat-user");
 
-        if (!token || !userData) {
-          // Arahkan ke halaman login jika token tidak ada
-          window.location.href = '/login';
-          return;
-        }
+    if (!token || !userData) {
+      // Redirect ke login jika token/user tidak ada
+      window.location.href = "/login";
+      return;
+    }
 
-        // Karena tidak bisa memvalidasi token dari frontend, kita asumsikan token valid jika ada.
-        // Validasi sesungguhnya harus dilakukan di backend.
-        setUser(JSON.parse(userData));
-        setError(null);
-      } catch (err) {
-        console.error('Auth check error:', err);
-        setError('Gagal memuat sesi. Silakan login kembali.');
-        
-        // Hapus data yang tidak valid dari localStorage
-        localStorage.removeItem('chat-app-token');
-        localStorage.removeItem('chat-user');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuth();
+    try {
+      setUser(JSON.parse(userData));
+      setError(null);
+    } catch (err) {
+      console.error("Auth parse error:", err);
+      setError("Gagal memuat sesi. Silakan login kembali.");
+      localStorage.removeItem("chat-app-token");
+      localStorage.removeItem("chat-user");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   if (loading) {
