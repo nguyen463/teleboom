@@ -131,7 +131,6 @@ export default function ChatLayout() {
         status: "sending",
       };
       setMessages((prev) => [...prev, newMessage]);
-      // SINKRONISASI EVENT: Mengubah "sendMessage" menjadi "chat_message"
       socket.emit("chat_message", { text: newMessage.text });
     }
 
