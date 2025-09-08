@@ -17,44 +17,57 @@ export default function ChatLayout() {
   const [isSending, setIsSending] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const messagesEndRef = useRef(null);
+  const [hasAuthError, setHasAuthError] = useState(false);
 
   // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
-    const token = localStorage.getItem("chat-app-token");
-    const userData = localStorage.getItem("chat-user");
+    let userData = null;
+    let token = null;
 
-    if (!token || !userData) {
-      window.location.href = "https://teleboom.vercel.app/login";
-      return;
+    try {
+      token = localStorage.getItem("chat-app-token");
+      userData = localStorage.getItem("chat-user");
+      
+      console.log("Token ditemukan:", !!token);
+      console.log("Data pengguna ditemukan:", !!userData);
+
+      if (!token || !userData) {
+        setHasAuthError(true);
+        return;
+      }
+
+      const userObj = JSON.parse(userData);
+      setUser(userObj);
+
+      const newSocket = io(SOCKET_URL, {
+        auth: { token },
+      });
+
+      newSocket.on("connect", () => {
+        setIsConnected(true);
+        console.log("🔗 Terhubung ke server Socket.IO");
+      });
+
+      newSocket.on("disconnect", () => {
+        setIsConnected(false);
+        console.log("❌ Terputus dari server Socket.IO");
+      });
+      
+      newSocket.on("error", (msg) => {
+          console.error("❌ Socket Error:", msg);
+      });
+
+      setSocket(newSocket);
+
+      // Clean up on component unmount
+      return () => {
+        newSocket.disconnect();
+      };
+
+    } catch (error) {
+      console.error("❌ Gagal memuat data pengguna:", error.message);
+      setHasAuthError(true);
     }
-
-    const userObj = JSON.parse(userData);
-    setUser(userObj);
-
-    const newSocket = io(SOCKET_URL, {
-      auth: { token },
-    });
-
-    newSocket.on("connect", () => {
-      setIsConnected(true);
-      console.log("🔗 Terhubung ke server Socket.IO");
-    });
-
-    newSocket.on("disconnect", () => {
-      setIsConnected(false);
-      console.log("❌ Terputus dari server Socket.IO");
-    });
-    
-    newSocket.on("error", (msg) => {
-        console.error("❌ Socket Error:", msg);
-    });
-
-    setSocket(newSocket);
-
-    // Clean up on component unmount
-    return () => {
-      newSocket.disconnect();
-    };
   }, []);
 
   // ===== SOCKET EVENTS =====
@@ -138,15 +151,22 @@ export default function ChatLayout() {
   const handleLogout = () => {
     socket?.disconnect();
     localStorage.clear();
-    window.location.href = "https://teleboom.vercel.app/login";
+    setHasAuthError(true);
+    setUser(null);
   };
 
-  if (!user) {
+  if (!user || hasAuthError) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-3 text-gray-600">Memuat...</p>
+        <div className="w-full max-w-md p-8 space-y-4 text-center bg-white rounded-lg shadow-md">
+          <h2 className="text-xl font-bold text-gray-800">Sesi Habis atau Belum Login</h2>
+          <p className="text-gray-600">Silakan login kembali untuk mengakses chat.</p>
+          <a
+            href="https://teleboom.vercel.app/login"
+            className="inline-block w-full py-2 font-medium text-white transition-colors bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            Masuk
+          </a>
         </div>
       </div>
     );
