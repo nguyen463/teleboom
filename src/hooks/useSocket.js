@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { io } from "socket.io-client";
 
-// Gunakan URL backend yang benar - pastikan endpoint Socket.IO tersedia
+// Gunakan URL backend yang benar
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
+// Pastikan menggunakan export default
 export default function useSocket(user) {
   const [socket, setSocket] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -14,7 +15,6 @@ export default function useSocket(user) {
 
   useEffect(() => {
     if (!user) {
-      // Jika user null, pastikan socket terputus
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -24,7 +24,6 @@ export default function useSocket(user) {
       return;
     }
 
-    // Jika socket sudah aktif, jangan buat ulang
     if (socketRef.current && socketRef.current.connected) {
       setSocket(socketRef.current);
       setConnectionStatus("connected");
@@ -49,7 +48,7 @@ export default function useSocket(user) {
     setSocket(newSocket);
     setConnectionStatus("connecting");
 
-    // Event koneksi
+    // Event handlers
     newSocket.on("connect", () => {
       console.log("✅ Socket terhubung:", newSocket.id);
       setConnectionStatus("connected");
@@ -61,38 +60,33 @@ export default function useSocket(user) {
       setIsSending(false);
     });
 
-    // Load semua pesan lama
     newSocket.on("allMessages", (msgs) => {
       console.log("Received messages:", msgs);
       setMessages(Array.isArray(msgs) ? msgs : []);
     });
 
-    // Pesan baru diterima
     newSocket.on("newMessage", (msg) => {
       console.log("New message received:", msg);
       setMessages((prev) => [...prev, msg]);
       setIsSending(false);
     });
 
-    // Daftar pengguna online
     newSocket.on("onlineUsers", (users) => {
       console.log("Online users:", users);
       setOnlineUsers(Array.isArray(users) ? users : []);
     });
 
-    // Jika koneksi putus
     newSocket.on("disconnect", (reason) => {
       console.warn("❌ Socket terputus:", reason);
       setConnectionStatus("disconnected");
     });
 
-    // Event reconnect
     newSocket.on("reconnecting", (attempt) => {
       console.log(`🔄 Mencoba reconnect (attempt ${attempt})`);
       setConnectionStatus("reconnecting");
     });
 
-    // Bersihkan saat unmount
+    // Cleanup
     return () => {
       if (socketRef.current) {
         console.log("Cleaning up socket connection");
@@ -105,7 +99,6 @@ export default function useSocket(user) {
     };
   }, [user]);
 
-  // Fungsi kirim pesan dengan useCallback untuk optimisasi
   const sendMessage = useCallback((text) => {
     if (!socket || !text.trim() || isSending) return;
     
@@ -117,7 +110,6 @@ export default function useSocket(user) {
       timestamp: new Date().toISOString()
     });
     
-    // Timeout untuk mencegah isSending tetap true jika ada masalah
     setTimeout(() => {
       setIsSending(false);
     }, 5000);
