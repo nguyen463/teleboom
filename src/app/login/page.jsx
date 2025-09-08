@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { loginUser } from '@/services/authService';
-import Link from 'next/link';
+import axios from 'axios';
+
+// Ganti dengan URL backend-mu saat deployment
+const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 export default function LoginPage() {
   const [credentials, setCredentials] = useState({
@@ -12,7 +13,6 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
 
   const handleChange = (e) => {
     setCredentials({
@@ -29,20 +29,25 @@ export default function LoginPage() {
     try {
       // Validasi input
       if (!credentials.username.trim() || !credentials.password.trim()) {
-        throw new Error('Please fill in all fields');
+        throw new Error('Mohon isi semua kolom.');
       }
 
-      const data = await loginUser(credentials);
+      // Melakukan panggilan API login
+      const response = await axios.post(
+        `${API_URL}/api/auth/login`,
+        credentials
+      );
+
+      // Simpan token dan user data ke localStorage
+      localStorage.setItem('chat-app-token', response.data.token);
+      localStorage.setItem('chat-user', JSON.stringify(response.data.user));
       
-      // Simpan token dan user data ke sessionStorage
-      sessionStorage.setItem('chat-app-token', data.token);
-      sessionStorage.setItem('chat-user', JSON.stringify(data.user));
-      
-      // Redirect ke chat page
-      router.push('/chat');
+      // Redirect ke halaman chat
+      window.location.href = '/'; 
+
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message || 'Login failed. Please try again.');
+      setError(err.response?.data?.msg || 'Login gagal. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
@@ -53,7 +58,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
+            Masuk ke Akun Anda
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -65,7 +70,7 @@ export default function LoginPage() {
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="username" className="sr-only">
-                Username
+                Nama Pengguna
               </label>
               <input
                 id="username"
@@ -73,7 +78,7 @@ export default function LoginPage() {
                 type="text"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
+                placeholder="Nama Pengguna"
                 value={credentials.username}
                 onChange={handleChange}
                 disabled={loading}
@@ -105,24 +110,21 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Signing in...
+                  <span className="animate-spin -ml-1 mr-2 h-4 w-4 border-b-2 border-white rounded-full"></span>
+                  Memproses...
                 </span>
               ) : (
-                'Sign in'
+                'Masuk'
               )}
             </button>
           </div>
 
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                Register here
-              </Link>
+              Belum punya akun?{' '}
+              <a href="/register" className="font-medium text-blue-600 hover:text-blue-500">
+                Daftar di sini
+              </a>
             </p>
           </div>
 
@@ -130,7 +132,7 @@ export default function LoginPage() {
             <div className="flex">
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  <strong>Demo:</strong> You can use any username and password to login. The system will create a mock account for testing.
+                  <strong>Demo:</strong> Anda bisa menggunakan nama pengguna dan _password_ apa pun untuk masuk. Sistem akan membuat akun tiruan untuk pengujian.
                 </p>
               </div>
             </div>
