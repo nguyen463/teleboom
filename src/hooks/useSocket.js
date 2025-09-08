@@ -1,66 +1,90 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-export function useSocket() {
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-backend-new.herokuapp.com";
+
+export default function useSocket(user) {
   const [socket, setSocket] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
-  const socketRef = useRef(null);
+  const [messages, setMessages] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    const SOCKET_URL =
-      process.env.NEXT_PUBLIC_SOCKET_URL ||
-      "https://teleboom-backend-new.herokuapp.com";
+    if (!user) return;
 
-    const token = sessionStorage.getItem("chat-app-token");
-
-    // Cegah koneksi ulang jika sudah ada socket
-    if (socketRef.current && socketRef.current.connected) {
-      setSocket(socketRef.current);
-      setConnectionStatus("connected");
-      return;
-    }
-
-    // Inisialisasi koneksi socket dengan autentikasi
     const newSocket = io(SOCKET_URL, {
-      transports: ["websocket"],
       path: "/socket.io",
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 3000,
-      secure: true,
-      withCredentials: true,
+      transports: ["websocket", "polling"],
       auth: {
-        token, // Kirim token ke server
+        token: sessionStorage.getItem("chat-app-token"),
       },
     });
 
-    socketRef.current = newSocket;
     setSocket(newSocket);
 
-    // Event socket
-    newSocket.on("connect", () => setConnectionStatus("connected"));
-    newSocket.on("disconnect", () => setConnectionStatus("disconnected"));
-    newSocket.on("connect_error", (err) => {
-      console.error("❌ Gagal konek socket:", err.message);
-      setConnectionStatus("error");
+    // Saat koneksi berhasil
+    newSocket.on("connect", () => {
+      console.log("✅ Socket terhubung:", newSocket.id);
     });
-    newSocket.on("reconnect_attempt", () => setConnectionStatus("connecting"));
-    newSocket.on("reconnect", () => setConnectionStatus("connected"));
 
-    // Cleanup saat unmount
+    // Ambil semua pesan lama
+    newSocket.on("allMessages", (data) => {
+      setMessages(data);
+    });
+
+    // Pesan baru dari user lain
+    newSocket.on("newMessage", (msg) => {
+      setMessages((prev) => [...prev, msg]);
+    });
+
+    // Konfirmasi pesan terkirim → matikan loading tombol
+    newSocket.on("messageSent", (confirmedMsg) => {
+      setIsSending(false);
+      setMessages((prev) => [...prev, confirmedMsg]);
+    });
+
+    // Saat pesan dihapus
+    newSocket.on("messageDeleted", (id) => {
+      setMessages((prev) => prev.filter((m) => m._id !== id));
+    });
+
+    // Saat pesan diupdate
+    newSocket.on("messageUpdated", (updatedMsg) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === updatedMsg._id ? updatedMsg : m))
+      );
+    });
+
+    // Daftar online user diperbarui
+    newSocket.on("onlineUsers", (users) => {
+      setOnlineUsers(users);
+    });
+
+    // Cleanup saat komponen unmount
     return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-        newSocket.off();
-      }
+      newSocket.disconnect();
     };
-  }, []);
+  }, [user]);
+
+  // Fungsi kirim pesan
+  const sendMessage = (text) => {
+    if (!socket || !text.trim()) return;
+    setIsSending(true);
+
+    const tempId = `temp-${Date.now()}`;
+
+    socket.emit("sendMessage", {
+      text,
+      senderName: user?.displayName || user?.username || "Anonim",
+      tempId,
+    });
+  };
 
   return {
     socket,
-    connectionStatus,
-    isConnected: connectionStatus === "connected",
-    isConnecting: connectionStatus === "connecting",
-    hasError: connectionStatus === "error",
+    messages,
+    onlineUsers,
+    isSending,
+    sendMessage,
   };
 }
