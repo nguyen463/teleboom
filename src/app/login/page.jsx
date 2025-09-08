@@ -50,7 +50,7 @@ export default function LoginPage() {
 
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.msg || 'Login gagal. Silakan coba lagi.');
+      setError(err.response?.data?.message || 'Login gagal. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
