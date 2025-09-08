@@ -6,7 +6,7 @@ import axios from 'axios';
 import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaPaperPlane, FaUsers, FaSpinner } from "react-icons/fa";
 
 // Ganti URL ini dengan URL backend Heroku-mu saat deployment
-const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
+const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatPage() {
   const [socket, setSocket] = useState(null);
