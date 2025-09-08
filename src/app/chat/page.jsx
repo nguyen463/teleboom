@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import ChatLayout from '@/components/ChatLayout';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import ChatLayout from "@/components/ChatLayout";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://teleboom-backend-new.herokuapp.com";
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
@@ -10,37 +14,48 @@ export default function ChatPage() {
   const [error, setError] = useState(null);
   const router = useRouter();
 
+  const validateToken = async (token) => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/validate`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        return false;
+      }
+
+      const data = await res.json();
+      return data.valid || false;
+    } catch (err) {
+      console.error("Token validation failed:", err);
+      return false;
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
-      try {
-        const token = sessionStorage.getItem('chat-app-token');
-        const userData = sessionStorage.getItem('chat-user');
+      const token = sessionStorage.getItem("chat-app-token");
+      const userData = sessionStorage.getItem("chat-user");
 
-        if (!token || !userData) {
-          router.push('/login');
-          return;
-        }
-
-        // Validasi token (opsional, tergantung backend)
-        const isValid = await validateToken(token); // Fungsi ini perlu diimplementasi
-        if (!isValid) {
-          sessionStorage.removeItem('chat-app-token');
-          sessionStorage.removeItem('chat-user');
-          router.push('/login');
-          return;
-        }
-
-        setUser(JSON.parse(userData));
-        setError(null);
-      } catch (err) {
-        console.error('Auth check error:', err);
-        setError('Failed to validate session');
-        sessionStorage.removeItem('chat-app-token');
-        sessionStorage.removeItem('chat-user');
-        router.push('/login');
-      } finally {
-        setLoading(false);
+      if (!token || !userData) {
+        router.push("/login");
+        return;
       }
+
+      const isValid = await validateToken(token);
+      if (!isValid) {
+        sessionStorage.removeItem("chat-app-token");
+        sessionStorage.removeItem("chat-user");
+        router.push("/login");
+        return;
+      }
+
+      setUser(JSON.parse(userData));
+      setLoading(false);
     };
 
     checkAuth();
@@ -63,8 +78,8 @@ export default function ChatPage() {
         <div className="text-center">
           <div className="text-red-500 text-xl mb-4">Error</div>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button 
-            onClick={() => router.push('/login')}
+          <button
+            onClick={() => router.push("/login")}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Go to Login
