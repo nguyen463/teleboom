@@ -1,11 +1,11 @@
 // src/hooks/useSocket.js
-
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 
 export function useSocket() {
   const [socket, setSocket] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const socketRef = useRef(null);
 
   useEffect(() => {
     // Gunakan API URL sebagai fallback untuk socket URL
@@ -15,6 +15,14 @@ export function useSocket() {
 
     console.log('🔄 Attempting to connect to socket server:', SOCKET_URL);
 
+    // Cek jika socket sudah ada dan terhubung
+    if (socketRef.current && socketRef.current.connected) {
+      console.log('✅ Socket already connected');
+      setConnectionStatus('connected');
+      setSocket(socketRef.current);
+      return;
+    }
+
     // Buat koneksi socket
     const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -22,63 +30,92 @@ export function useSocket() {
       reconnectionAttempts: 5,
       reconnectionDelay: 3000,
       autoConnect: true,
-      forceNew: true
+      forceNew: false // Ubah ke false untuk menghindari multiple connections
     });
+
+    socketRef.current = newSocket;
 
     // Event handlers untuk connection status
-    newSocket.on('connect', () => {
+    const handleConnect = () => {
       console.log('✅ Socket connected successfully');
       setConnectionStatus('connected');
-    });
+    };
 
-    newSocket.on('connecting', () => {
+    const handleConnecting = () => {
       console.log('🔄 Socket connecting...');
       setConnectionStatus('connecting');
-    });
+    };
 
-    newSocket.on('connect_error', (error) => {
+    const handleConnectError = (error) => {
       console.error('❌ Socket connection error:', error.message);
       setConnectionStatus('error');
-    });
+    };
 
-    newSocket.on('disconnect', (reason) => {
+    const handleDisconnect = (reason) => {
       console.log('❌ Socket disconnected:', reason);
       setConnectionStatus('disconnected');
-    });
+    };
 
-    newSocket.on('reconnect', (attemptNumber) => {
+    const handleReconnect = (attemptNumber) => {
       console.log(`✅ Socket reconnected after ${attemptNumber} attempts`);
       setConnectionStatus('connected');
-    });
+    };
 
-    newSocket.on('reconnect_attempt', (attemptNumber) => {
+    const handleReconnectAttempt = (attemptNumber) => {
       console.log(`🔄 Socket reconnect attempt ${attemptNumber}`);
       setConnectionStatus('connecting');
-    });
+    };
 
-    newSocket.on('reconnect_error', (error) => {
+    const handleReconnectError = (error) => {
       console.error('❌ Socket reconnect error:', error.message);
       setConnectionStatus('error');
-    });
+    };
 
-    newSocket.on('reconnect_failed', () => {
+    const handleReconnectFailed = () => {
       console.error('❌ Socket reconnect failed');
       setConnectionStatus('error');
-    });
+    };
 
-    newSocket.on('error', (error) => {
+    const handleError = (error) => {
       console.error('❌ Socket error:', error);
       setConnectionStatus('error');
-    });
+    };
+
+    // Attach event listeners
+    newSocket.on('connect', handleConnect);
+    newSocket.on('connecting', handleConnecting);
+    newSocket.on('connect_error', handleConnectError);
+    newSocket.on('disconnect', handleDisconnect);
+    newSocket.on('reconnect', handleReconnect);
+    newSocket.on('reconnect_attempt', handleReconnectAttempt);
+    newSocket.on('reconnect_error', handleReconnectError);
+    newSocket.on('reconnect_failed', handleReconnectFailed);
+    newSocket.on('error', handleError);
 
     setSocket(newSocket);
 
     // Cleanup function
     return () => {
       console.log('🧹 Cleaning up socket connection');
-      if (newSocket.connected) {
-        newSocket.disconnect();
+      
+      // Remove all event listeners
+      if (newSocket) {
+        newSocket.off('connect', handleConnect);
+        newSocket.off('connecting', handleConnecting);
+        newSocket.off('connect_error', handleConnectError);
+        newSocket.off('disconnect', handleDisconnect);
+        newSocket.off('reconnect', handleReconnect);
+        newSocket.off('reconnect_attempt', handleReconnectAttempt);
+        newSocket.off('reconnect_error', handleReconnectError);
+        newSocket.off('reconnect_failed', handleReconnectFailed);
+        newSocket.off('error', handleError);
+        
+        // Only disconnect if no other components are using this socket
+        if (newSocket.connected) {
+          newSocket.disconnect();
+        }
       }
+      
       setConnectionStatus('disconnected');
     };
   }, []);
