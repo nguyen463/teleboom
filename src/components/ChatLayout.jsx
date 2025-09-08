@@ -8,11 +8,7 @@ import {
   FaSignOutAlt,
   FaUser,
   FaPaperPlane,
-  FaWifi,
-  FaRegCircle,
   FaUsers,
-  FaSync,
-  FaRedo,
 } from "react-icons/fa";
 import { useSocket } from "@/hooks/useSocket";
 
@@ -24,12 +20,11 @@ export default function ChatLayout() {
   const [user, setUser] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const [retryCount, setRetryCount] = useState(0);
   const messagesEndRef = useRef(null);
 
-  const { socket, connectionStatus, isConnected, hasError } = useSocket();
+  const { socket, isConnected } = useSocket();
 
-  // ===== CEK USER LOGIN =====
+  // ===== CEK LOGIN =====
   useEffect(() => {
     const token = sessionStorage.getItem("chat-app-token");
     const userData = sessionStorage.getItem("chat-user");
@@ -47,39 +42,22 @@ export default function ChatLayout() {
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewMessage = (messageData) => {
+    const handleNewMessage = (msg) => {
       setMessages((prev) => {
-        if (prev.some((msg) => msg._id === messageData._id)) return prev;
-        return [...prev, messageData];
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
       });
     };
 
-    const handleAllMessages = (messagesData) => {
-      setMessages(messagesData || []);
-    };
-
-    const handleDeleteMessage = (messageId) => {
-      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
-    };
-
-    const handleUpdateMessage = (updatedMessage) => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg._id === updatedMessage._id ? updatedMessage : msg))
-      );
-    };
-
-    const handleOnlineUsers = (users) => {
-      setOnlineUsers(users || []);
-    };
-
-    const handleMessageSent = (messageData) => {
+    const handleAllMessages = (msgs) => setMessages(msgs || []);
+    const handleDeleteMessage = (id) => setMessages((prev) => prev.filter((m) => m._id !== id));
+    const handleUpdateMessage = (updated) =>
+      setMessages((prev) => prev.map((m) => (m._id === updated._id ? updated : m)));
+    const handleOnlineUsers = (users) => setOnlineUsers(users || []);
+    const handleMessageSent = (msg) => {
       setIsSending(false);
       setMessages((prev) =>
-        prev.map((msg) =>
-          msg.tempId === messageData.tempId
-            ? { ...messageData, status: "delivered" }
-            : msg
-        )
+        prev.map((m) => (m.tempId === msg.tempId ? { ...msg, status: "delivered" } : m))
       );
     };
 
@@ -90,23 +68,13 @@ export default function ChatLayout() {
     socket.on("onlineUsers", handleOnlineUsers);
     socket.on("messageSent", handleMessageSent);
 
-    if (isConnected) {
+    if (isConnected && user) {
       socket.emit("getAllMessages");
-      if (user) {
-        socket.emit("joinRoom", {
-          userId: user.id,
-          username: user.username,
-          displayName: user.displayName,
-        });
-      }
-      setRetryCount(0);
-    }
-
-    if (hasError) {
-      const timer = setTimeout(() => {
-        setRetryCount((prev) => prev + 1);
-      }, 5000);
-      return () => clearTimeout(timer);
+      socket.emit("joinRoom", {
+        userId: user.id,
+        username: user.username,
+        displayName: user.displayName,
+      });
     }
 
     return () => {
@@ -117,7 +85,7 @@ export default function ChatLayout() {
       socket.off("onlineUsers", handleOnlineUsers);
       socket.off("messageSent", handleMessageSent);
     };
-  }, [socket, isConnected, user, hasError]);
+  }, [socket, isConnected, user]);
 
   // ===== AUTO SCROLL =====
   useEffect(() => {
@@ -131,14 +99,13 @@ export default function ChatLayout() {
     setIsSending(true);
 
     if (editMessageId) {
-      const updatedMessage = {
+      socket.emit("updateMessage", {
         _id: editMessageId,
         text: message,
         senderId: user.id,
         senderName: user.displayName,
         updatedAt: new Date(),
-      };
-      socket.emit("updateMessage", updatedMessage);
+      });
       setEditMessageId(null);
     } else {
       const tempId = Date.now().toString();
@@ -151,40 +118,26 @@ export default function ChatLayout() {
         status: "sending",
       };
       setMessages((prev) => [...prev, newMessage]);
-      socket.emit("sendMessage", {
-        text: message,
-        senderId: user.id,
-        senderName: user.displayName,
-        tempId,
-      });
+      socket.emit("sendMessage", newMessage);
     }
 
     setMessage("");
   };
 
-  const handleDeleteMessage = (id) => {
-    if (socket && isConnected) {
-      socket.emit("deleteMessage", id);
-    }
-  };
-
+  const handleDeleteMessage = (id) => socket?.emit("deleteMessage", id);
   const handleEditMessage = (msg) => {
     setMessage(msg.text);
     setEditMessageId(msg._id);
   };
-
   const cancelEdit = () => {
     setEditMessageId(null);
     setMessage("");
   };
 
   const handleLogout = () => {
-    if (socket) {
-      socket.emit("leaveRoom", { userId: user?.id });
-      socket.disconnect();
-    }
-    sessionStorage.removeItem("chat-app-token");
-    sessionStorage.removeItem("chat-user");
+    socket?.emit("leaveRoom", { userId: user?.id });
+    socket?.disconnect();
+    sessionStorage.clear();
     router.push("/login");
   };
 
@@ -340,12 +293,12 @@ export default function ChatLayout() {
                 }
               }}
               className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              disabled={isSending || !isConnected}
+              disabled={isSending}
             />
 
             <button
               onClick={handleSendMessage}
-              disabled={!message.trim() || isSending || !isConnected}
+              disabled={!message.trim() || isSending}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition-colors"
             >
               {isSending ? (
