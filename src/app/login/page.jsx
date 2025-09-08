@@ -1,32 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setError("");
 
     const email = e.target.email.value;
     const password = e.target.password.value;
 
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch("http://localhost:5000/api/login", {
+        // Ganti URL sesuai backend kamu
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      // Kalau responsenya kosong, hentikan eksekusi
+      const text = await res.text();
+      if (!text) {
+        throw new Error("Server tidak mengembalikan data");
+      }
 
-      if (!res.ok) throw new Error(data.message || "Login gagal");
+      const data = JSON.parse(text);
 
+      if (!res.ok) {
+        throw new Error(data.message || "Login gagal");
+      }
+
+      // Simpan token dan data user
       sessionStorage.setItem("chat-app-token", data.token);
       sessionStorage.setItem("chat-user", JSON.stringify(data.user));
 
