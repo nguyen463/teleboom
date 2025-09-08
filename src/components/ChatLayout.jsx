@@ -2,7 +2,19 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaPaperPlane, FaWifi, FaRegCircle, FaUsers, FaSync, FaExclamationTriangle, FaRedo } from "react-icons/fa";
+import {
+  FaTrash,
+  FaEdit,
+  FaSignOutAlt,
+  FaUser,
+  FaPaperPlane,
+  FaWifi,
+  FaRegCircle,
+  FaUsers,
+  FaSync,
+  FaExclamationTriangle,
+  FaRedo,
+} from "react-icons/fa";
 import { useSocket } from "@/hooks/useSocket";
 
 export default function ChatLayout() {
@@ -15,270 +27,227 @@ export default function ChatLayout() {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [retryCount, setRetryCount] = useState(0);
   const messagesEndRef = useRef(null);
-  
-  // Gunakan hook socket
+
+  // Gunakan hook socket terbaru
   const { socket, connectionStatus, isConnected, isConnecting, hasError } = useSocket();
 
-  // Status berdasarkan koneksi socket
+  // Status koneksi untuk UI
   const getStatusMessage = () => {
     switch (connectionStatus) {
-      case 'connected':
+      case "connected":
         return "✅ Terhubung ke server";
-      case 'connecting':
+      case "connecting":
         return "🔄 Menghubungkan ke server...";
-      case 'error':
-        return `❌ Gagal terhubung (${retryCount > 0 ? `attempt ${retryCount}` : 'retrying...'})`;
+      case "error":
+        return `❌ Gagal terhubung (${retryCount > 0 ? `percobaan ${retryCount}` : "retrying..."})`;
       default:
         return "❌ Tidak terhubung";
     }
   };
 
-  // ====== CEK USER LOGIN ======
+  // ===== CEK USER LOGIN =====
   useEffect(() => {
     const token = sessionStorage.getItem("chat-app-token");
     const userData = sessionStorage.getItem("chat-user");
-    
+
     if (!token || !userData) {
       router.push("/login");
       return;
     }
-    
+
     const userObj = JSON.parse(userData);
     setUser(userObj);
   }, [router]);
 
-  // ====== SOCKET EVENT HANDLERS ======
+  // ===== SOCKET EVENTS =====
   useEffect(() => {
     if (!socket) return;
 
-    // Event untuk menerima pesan baru
     const handleNewMessage = (messageData) => {
-      console.log("📩 Pesan baru diterima:", messageData);
-      setMessages(prev => {
-        // Cek jika pesan sudah ada (hindari duplikasi)
-        const messageExists = prev.some(msg => msg._id === messageData._id);
-        if (messageExists) return prev;
-        
+      console.log("📩 Pesan baru:", messageData);
+      setMessages((prev) => {
+        if (prev.some((msg) => msg._id === messageData._id)) return prev;
         return [...prev, messageData];
       });
     };
 
-    // Event untuk menerima semua pesan saat pertama connect
     const handleAllMessages = (messagesData) => {
       console.log("📨 Semua pesan diterima:", messagesData);
       setMessages(messagesData || []);
     };
 
-    // Event untuk menerima pesan yang dihapus
     const handleDeleteMessage = (messageId) => {
       console.log("🗑️ Pesan dihapus:", messageId);
-      setMessages(prev => prev.filter(msg => msg._id !== messageId));
+      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
     };
 
-    // Event untuk menerima pesan yang diupdate
     const handleUpdateMessage = (updatedMessage) => {
       console.log("✏️ Pesan diupdate:", updatedMessage);
-      setMessages(prev => prev.map(msg => 
-        msg._id === updatedMessage._id ? updatedMessage : msg
-      ));
+      setMessages((prev) =>
+        prev.map((msg) => (msg._id === updatedMessage._id ? updatedMessage : msg))
+      );
     };
 
-    // Event untuk menerima daftar pengguna online
     const handleOnlineUsers = (users) => {
       console.log("👥 Pengguna online:", users);
       setOnlineUsers(users || []);
     };
 
-    // Event untuk konfirmasi pesan terkirim
     const handleMessageSent = (messageData) => {
       console.log("✅ Pesan terkirim:", messageData);
       setIsSending(false);
-      
-      // Update pesan lokal dengan data dari server
-      setMessages(prev => prev.map(msg => 
-        msg.tempId === messageData.tempId ? { ...messageData, status: 'delivered' } : msg
-      ));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.tempId === messageData.tempId
+            ? { ...messageData, status: "delivered" }
+            : msg
+        )
+      );
     };
 
-    // Event untuk ping response
-    const handlePong = (data) => {
-      console.log("🏓 Pong received:", data);
-    };
+    const handlePong = (data) => console.log("🏓 Pong:", data);
 
-    // Daftarkan event listeners
-    socket.on('newMessage', handleNewMessage);
-    socket.on('allMessages', handleAllMessages);
-    socket.on('messageDeleted', handleDeleteMessage);
-    socket.on('messageUpdated', handleUpdateMessage);
-    socket.on('onlineUsers', handleOnlineUsers);
-    socket.on('messageSent', handleMessageSent);
-    socket.on('pong', handlePong);
+    // Pasang listener
+    socket.on("newMessage", handleNewMessage);
+    socket.on("allMessages", handleAllMessages);
+    socket.on("messageDeleted", handleDeleteMessage);
+    socket.on("messageUpdated", handleUpdateMessage);
+    socket.on("onlineUsers", handleOnlineUsers);
+    socket.on("messageSent", handleMessageSent);
+    socket.on("pong", handlePong);
 
-    // Request semua pesan setelah terhubung
     if (isConnected) {
-      socket.emit('getAllMessages');
-      setRetryCount(0); // Reset retry count on successful connection
+      socket.emit("getAllMessages");
+      if (user) {
+        socket.emit("joinRoom", {
+          userId: user.id,
+          username: user.username,
+          displayName: user.displayName,
+        });
+      }
+      setRetryCount(0);
     }
 
-    // Join room berdasarkan user ID setelah terhubung
-    if (isConnected && user) {
-      socket.emit('joinRoom', { 
-        userId: user.id, 
-        username: user.username,
-        displayName: user.displayName 
-      });
-    }
-
-    // Handle connection errors
     if (hasError) {
       const timer = setTimeout(() => {
-        setRetryCount(prev => prev + 1);
+        setRetryCount((prev) => prev + 1);
       }, 5000);
-      
       return () => clearTimeout(timer);
     }
 
-    // Cleanup event listeners
     return () => {
-      socket.off('newMessage', handleNewMessage);
-      socket.off('allMessages', handleAllMessages);
-      socket.off('messageDeleted', handleDeleteMessage);
-      socket.off('messageUpdated', handleUpdateMessage);
-      socket.off('onlineUsers', handleOnlineUsers);
-      socket.off('messageSent', handleMessageSent);
-      socket.off('pong', handlePong);
+      socket.off("newMessage", handleNewMessage);
+      socket.off("allMessages", handleAllMessages);
+      socket.off("messageDeleted", handleDeleteMessage);
+      socket.off("messageUpdated", handleUpdateMessage);
+      socket.off("onlineUsers", handleOnlineUsers);
+      socket.off("messageSent", handleMessageSent);
+      socket.off("pong", handlePong);
     };
   }, [socket, isConnected, user, hasError]);
 
-  // ====== AUTO SCROLL KE PESAN TERBARU ======
+  // ===== AUTO SCROLL =====
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  // ====== MANUAL RECONNECT ======
+  // ===== MANUAL RECONNECT =====
   const handleManualReconnect = () => {
     if (socket && !isConnected) {
-      console.log("🔄 Manual reconnect attempt");
+      console.log("🔄 Manual reconnect");
       socket.connect();
-      setRetryCount(prev => prev + 1);
+      setRetryCount((prev) => prev + 1);
     }
   };
 
-  // ====== KIRIM PESAN ======
-  const handleSendMessage = async () => {
+  // ===== KIRIM PESAN =====
+  const handleSendMessage = () => {
     if (message.trim() === "" || !socket) return;
-    
-    // Jika tidak terhubung, tampilkan pesan error
     if (!isConnected) {
-      alert("Tidak terhubung ke server. Silakan coba lagi dalam beberapa saat.");
+      alert("Tidak terhubung ke server. Coba lagi nanti.");
       return;
     }
-    
+
     setIsSending(true);
 
-    try {
-      if (editMessageId) {
-        // Edit pesan yang sudah ada
-        const updatedMessage = {
-          _id: editMessageId,
-          text: message,
-          senderId: user.id,
-          senderName: user.displayName,
-          updatedAt: new Date()
-        };
-
-        // Kirim ke server
-        socket.emit('updateMessage', updatedMessage);
-        setEditMessageId(null);
-      } else {
-        // Buat pesan baru dengan ID sementara
-        const tempId = Date.now().toString();
-        const newMessage = {
-          tempId, // ID sementara sampai dikonfirmasi server
-          text: message,
-          senderId: user.id,
-          senderName: user.displayName,
-          createdAt: new Date(),
-          status: 'sending'
-        };
-
-        // Tambahkan pesan ke UI langsung (optimistic update)
-        setMessages(prev => [...prev, newMessage]);
-        
-        // Kirim ke server
-        socket.emit('sendMessage', {
-          text: message,
-          senderId: user.id,
-          senderName: user.displayName,
-          tempId // Kirim tempId untuk matching nanti
-        });
-      }
-      
-      setMessage("");
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setIsSending(false);
+    if (editMessageId) {
+      const updatedMessage = {
+        _id: editMessageId,
+        text: message,
+        senderId: user.id,
+        senderName: user.displayName,
+        updatedAt: new Date(),
+      };
+      socket.emit("updateMessage", updatedMessage);
+      setEditMessageId(null);
+    } else {
+      const tempId = Date.now().toString();
+      const newMessage = {
+        tempId,
+        text: message,
+        senderId: user.id,
+        senderName: user.displayName,
+        createdAt: new Date(),
+        status: "sending",
+      };
+      setMessages((prev) => [...prev, newMessage]);
+      socket.emit("sendMessage", {
+        text: message,
+        senderId: user.id,
+        senderName: user.displayName,
+        tempId,
+      });
     }
+
+    setMessage("");
   };
 
-  // ====== HAPUS PESAN ======
   const handleDeleteMessage = (id) => {
-    if (confirm("Yakin mau hapus pesan ini?") && socket && isConnected) {
-      // Kirim permintaan hapus ke server
-      socket.emit('deleteMessage', id);
+    if (confirm("Hapus pesan ini?") && socket && isConnected) {
+      socket.emit("deleteMessage", id);
     }
   };
 
-  // ====== EDIT PESAN ======
   const handleEditMessage = (msg) => {
     setMessage(msg.text);
     setEditMessageId(msg._id);
   };
 
-  // ====== BATAL EDIT ======
   const cancelEdit = () => {
     setEditMessageId(null);
     setMessage("");
   };
 
-  // ====== LOGOUT ======
   const handleLogout = () => {
     if (socket) {
-      socket.emit('leaveRoom', { userId: user?.id });
+      socket.emit("leaveRoom", { userId: user?.id });
       socket.disconnect();
     }
-    
     sessionStorage.removeItem("chat-app-token");
     sessionStorage.removeItem("chat-user");
     router.push("/login");
   };
 
-  // ====== INDIKATOR STATUS KONEKSI ======
+  // ===== INDIKATOR STATUS =====
   const ConnectionIndicator = () => {
     let bgColor, icon;
-    
     switch (connectionStatus) {
-      case 'connected':
-        bgColor = 'bg-green-600';
+      case "connected":
+        bgColor = "bg-green-600";
         icon = <FaWifi className="text-white" />;
         break;
-      case 'connecting':
-        bgColor = 'bg-yellow-600';
+      case "connecting":
+        bgColor = "bg-yellow-600";
         icon = <FaSync className="text-white animate-spin" />;
         break;
-      case 'error':
-        bgColor = 'bg-red-600';
+      case "error":
+        bgColor = "bg-red-600";
         icon = <FaExclamationTriangle className="text-white" />;
         break;
       default:
-        bgColor = 'bg-gray-600';
+        bgColor = "bg-gray-600";
         icon = <FaRegCircle className="text-white" />;
     }
-    
     return (
       <div className="flex items-center gap-2">
         <div className={`w-3 h-3 ${bgColor} rounded-full flex items-center justify-center`}>
@@ -286,7 +255,7 @@ export default function ChatLayout() {
         </div>
         <span className="text-sm">{getStatusMessage()}</span>
         {hasError && (
-          <button 
+          <button
             onClick={handleManualReconnect}
             className="ml-2 p-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 flex items-center gap-1"
           >
@@ -332,8 +301,8 @@ export default function ChatLayout() {
             <ConnectionIndicator />
           </div>
           <p className="text-sm text-gray-400 mt-2">
-            {isConnected 
-              ? "Terhubung ke server. Pesan disinkronisasi secara real-time." 
+            {isConnected
+              ? "Terhubung ke server. Pesan disinkronisasi real-time."
               : "Menghubungkan ke server..."}
           </p>
         </div>
@@ -348,7 +317,9 @@ export default function ChatLayout() {
                 <div key={index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
                   <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
                   <span>{onlineUser.displayName || onlineUser.username}</span>
-                  {onlineUser.userId === user.id && <span className="ml-2 text-xs text-gray-400">(Anda)</span>}
+                  {onlineUser.userId === user.id && (
+                    <span className="ml-2 text-xs text-gray-400">(Anda)</span>
+                  )}
                 </div>
               ))
             ) : (
@@ -369,7 +340,6 @@ export default function ChatLayout() {
 
       {/* Area Chat */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <header className="flex justify-between items-center bg-white p-4 border-b shadow-sm">
           <div>
             <h1 className="text-xl font-bold text-gray-800">💬 Teleboom Chat</h1>
@@ -382,7 +352,6 @@ export default function ChatLayout() {
           </div>
         </header>
 
-        {/* Connection Banner */}
         {hasError && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
             <div className="flex items-center justify-between">
@@ -390,7 +359,7 @@ export default function ChatLayout() {
                 <FaExclamationTriangle className="mr-2" />
                 <p>Koneksi terputus. Sedang mencoba menghubungkan kembali...</p>
               </div>
-              <button 
+              <button
                 onClick={handleManualReconnect}
                 className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 flex items-center gap-1"
               >
@@ -400,15 +369,14 @@ export default function ChatLayout() {
           </div>
         )}
 
-        {/* Daftar Pesan */}
         <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
           {messages.length === 0 ? (
             <div className="text-center mt-10">
               <div className="text-6xl mb-4">💬</div>
               <p className="text-gray-500 text-lg">Mulai percakapan pertama Anda!</p>
               <p className="text-gray-400 text-sm mt-2">
-                {isConnected 
-                  ? "Pesan akan dikirim dan diterima secara real-time" 
+                {isConnected
+                  ? "Pesan akan dikirim dan diterima real-time"
                   : "Menunggu koneksi ke server..."}
               </p>
             </div>
@@ -420,35 +388,30 @@ export default function ChatLayout() {
                   msg.senderId === user.id
                     ? "bg-blue-500 text-white ml-auto"
                     : "bg-white text-gray-800 border"
-                } ${msg.status === 'sending' ? 'opacity-70' : ''}`}
+                } ${msg.status === "sending" ? "opacity-70" : ""}`}
               >
-                {/* Header Pesan */}
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-semibold text-sm">
                     {msg.senderId === user.id ? "Anda" : msg.senderName || "Anonim"}
                   </span>
                   <span className="text-xs opacity-70">
-                    {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString('id-ID', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    }) : 'Baru saja'}
+                    {msg.createdAt
+                      ? new Date(msg.createdAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Baru saja"}
                     {msg.updatedAt && " (diedit)"}
-                    {msg.status === 'sending' && " (mengirim...)"}
+                    {msg.status === "sending" && " (mengirim...)"}
                   </span>
                 </div>
-
-                {/* Isi Pesan */}
                 <p className="text-sm break-words">{msg.text}</p>
-
-                {/* Status Pengiriman */}
-                {msg.status === 'sending' && (
+                {msg.status === "sending" && (
                   <div className="absolute -bottom-1 -right-1">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   </div>
                 )}
-
-                {/* Tombol Edit & Hapus */}
-                {msg.senderId === user.id && msg.status !== 'sending' && (
+                {msg.senderId === user.id && msg.status !== "sending" && (
                   <div className="absolute -top-2 -right-2 flex gap-1">
                     <button
                       onClick={() => handleEditMessage(msg)}
@@ -472,26 +435,20 @@ export default function ChatLayout() {
           <div ref={messagesEndRef} />
         </main>
 
-        {/* Input Pesan */}
         <footer className="bg-white p-4 border-t shadow-inner">
           {editMessageId && (
             <div className="flex items-center justify-between mb-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
               <span className="text-sm">Sedang mengedit pesan...</span>
-              <button 
-                onClick={cancelEdit}
-                className="text-yellow-800 hover:text-yellow-900 text-sm"
-              >
+              <button onClick={cancelEdit} className="text-yellow-800 hover:text-yellow-900 text-sm">
                 Batalkan
               </button>
             </div>
           )}
-          
+
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder={
-                editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."
-              }
+              placeholder={editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => {
@@ -517,16 +474,13 @@ export default function ChatLayout() {
               {editMessageId ? "Update" : "Kirim"}
             </button>
           </div>
-          
-          <div className={`flex items-center gap-2 mt-2 text-sm ${
-            isConnected ? 'text-green-600' : 'text-yellow-600'
-          }`}>
-            {isConnected ? <FaWifi /> : <FaExclamationTriangle />}
-            <span>
-              {isConnected 
-                ? "Terhubung ke server - pesan dikirim secara real-time" 
-                : "Menghubungkan ke server..."}
-            </span>
+
+          <div
+            className={`text-xs mt-2 ${
+              isConnected ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {getStatusMessage()}
           </div>
         </footer>
       </div>
