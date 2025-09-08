@@ -1,74 +1,49 @@
-// src/hooks/useSocket.js
-import { useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
+import { useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
 
 export function useSocket() {
   const [socket, setSocket] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const socketRef = useRef(null);
 
   useEffect(() => {
-    // Ambil URL socket dari environment
     const SOCKET_URL =
       process.env.NEXT_PUBLIC_SOCKET_URL ||
       process.env.NEXT_PUBLIC_API_URL ||
-      'http://localhost:3001';
+      "http://localhost:3001";
 
-    console.log(`🔌 Connecting to socket server: ${SOCKET_URL}`);
-
-    // Jika socket sudah terhubung, jangan buat baru
+    // Cegah koneksi ulang jika socket sudah aktif
     if (socketRef.current && socketRef.current.connected) {
-      console.log('✅ Socket already connected');
       setSocket(socketRef.current);
-      setConnectionStatus('connected');
+      setConnectionStatus("connected");
       return;
     }
 
     // Buat koneksi baru
     const newSocket = io(SOCKET_URL, {
-      transports: ['websocket'], // Prioritaskan websocket
-      path: '/socket.io',        // WAJIB untuk Heroku
+      transports: ["websocket"], // prioritaskan websocket
+      path: "/socket.io",        // untuk heroku
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 3000,
-      secure: true,              // Paksa HTTPS untuk Heroku
-      withCredentials: true,     // Izinkan cookie jika perlu
-      pingInterval: 25000,       // Ping tiap 25 detik
-      pingTimeout: 60000,        // Timeout 60 detik
+      secure: true,             // paksa https untuk heroku
+      withCredentials: true,
+      pingInterval: 25000,      // ping tiap 25 detik
+      pingTimeout: 60000,       // timeout 60 detik
     });
 
     socketRef.current = newSocket;
     setSocket(newSocket);
 
-    // Event handler socket
-    newSocket.on('connect', () => {
-      console.log('✅ Socket connected');
-      setConnectionStatus('connected');
-    });
+    // Event socket
+    newSocket.on("connect", () => setConnectionStatus("connected"));
+    newSocket.on("disconnect", () => setConnectionStatus("disconnected"));
+    newSocket.on("connect_error", () => setConnectionStatus("error"));
+    newSocket.on("reconnect_attempt", () => setConnectionStatus("connecting"));
+    newSocket.on("reconnect", () => setConnectionStatus("connected"));
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('⚠️ Socket disconnected:', reason);
-      setConnectionStatus('disconnected');
-    });
-
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ Socket connection error:', error.message);
-      setConnectionStatus('error');
-    });
-
-    newSocket.on('reconnect_attempt', (attempt) => {
-      console.log(`🔄 Reconnecting... (attempt ${attempt})`);
-      setConnectionStatus('connecting');
-    });
-
-    newSocket.on('reconnect', () => {
-      console.log('✅ Socket reconnected');
-      setConnectionStatus('connected');
-    });
-
-    // Cleanup saat komponen unmount
+    // Cleanup saat unmount
     return () => {
-      console.log('🧹 Cleaning up socket connection');
       if (newSocket) {
         newSocket.disconnect();
         newSocket.off();
@@ -79,8 +54,8 @@ export function useSocket() {
   return {
     socket,
     connectionStatus,
-    isConnected: connectionStatus === 'connected',
-    isConnecting: connectionStatus === 'connecting',
-    hasError: connectionStatus === 'error',
+    isConnected: connectionStatus === "connected",
+    isConnecting: connectionStatus === "connecting",
+    hasError: connectionStatus === "error",
   };
 }
