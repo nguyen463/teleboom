@@ -1,23 +1,23 @@
 "use client";
 
-import { useState } from 'react';
-import axios from 'axios';
-import Link from 'next/link';
+import { useState } from "react";
+import axios from "axios";
+import { useRouter } from "next/navigation";
 
-// Ganti dengan URL backend-mu saat deployment
-const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
+// URL backend
+const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com/api/auth";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
-    email: '',
-    username: '',
-    displayName: '',
-    password: '',
-    confirmPassword: '',
+    email: "",
+    username: "",
+    displayName: "",
+    password: "",
+    confirmPassword: "",
   });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -25,174 +25,117 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
     setLoading(true);
+    setError("");
 
     try {
-      // Validasi
-      if (!formData.email || !formData.username || !formData.displayName || !formData.password || !formData.confirmPassword) {
-        throw new Error('Mohon isi semua kolom yang diperlukan: email, displayName, username, password.');
+      const { email, username, displayName, password, confirmPassword } = formData;
+
+      if (!email || !username || !displayName || !password || !confirmPassword) {
+        throw new Error("Mohon isi semua kolom.");
       }
 
-      if (formData.password.length < 6) {
-        throw new Error('Password harus memiliki minimal 6 karakter');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error("Mohon masukkan alamat email yang valid.");
       }
 
-      if (formData.password !== formData.confirmPassword) {
-        throw new Error('Password tidak cocok');
+      if (password.length < 6) {
+        throw new Error("Password harus memiliki minimal 6 karakter.");
       }
 
-      const response = await axios.post(
-        `${API_URL}/api/auth/register`, 
-        {
-          email: formData.email,
-          username: formData.username,
-          displayName: formData.displayName,
-          password: formData.password
-        }
-      );
-      
-      setSuccess('Akun berhasil dibuat! Silakan masuk.');
-      
+      if (password !== confirmPassword) {
+        throw new Error("Password tidak cocok.");
+      }
+
+      // Kirim request registrasi ke backend
+      const response = await axios.post(`${API_URL}/register`, { email, username, displayName, password });
+
+      // Simpan token & user langsung jika mau langsung login
+      localStorage.setItem("chat-app-token", response.data.token);
+      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
+
+      // Redirect ke halaman chat
+      router.push("/chat");
+
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Pendaftaran gagal');
+      console.error("Register error:", err);
+      setError(err.response?.data?.message || err.message || "Pendaftaran gagal. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-lg shadow-md">
         <h1 className="text-2xl font-bold text-center text-gray-900">Buat Akun Anda</h1>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Alamat Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Masukkan email Anda"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-          </div>
 
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              Nama Pengguna
-            </label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Pilih nama pengguna"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+            {error}
           </div>
+        )}
 
-          <div>
-            <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
-              Nama Tampilan
-            </label>
-            <input
-              type="text"
-              id="displayName"
-              name="displayName"
-              value={formData.displayName}
-              onChange={handleChange}
-              placeholder="Nama tampilan Anda"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Buat password (min. 6 karakter)"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-              Konfirmasi Password
-            </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              placeholder="Konfirmasi password Anda"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-          </div>
+        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+          <input
+            type="email"
+            name="email"
+            placeholder="Alamat Email"
+            value={formData.email}
+            onChange={handleChange}
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="text"
+            name="username"
+            placeholder="Nama Pengguna"
+            value={formData.username}
+            onChange={handleChange}
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="text"
+            name="displayName"
+            placeholder="Nama Tampilan"
+            value={formData.displayName}
+            onChange={handleChange}
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={handleChange}
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="password"
+            name="confirmPassword"
+            placeholder="Konfirmasi Password"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            disabled={loading}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${
-              loading 
-                ? 'bg-blue-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
+            className="w-full py-3 px-4 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Membuat Akun...
-              </div>
-            ) : (
-              'Buat Akun'
-            )}
+            {loading ? "Membuat Akun..." : "Buat Akun"}
           </button>
         </form>
 
-        {error && (
-          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md">
-            ⚠️ {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="p-3 text-sm text-green-700 bg-green-100 rounded-md">
-            ✅ {success}
-          </div>
-        )}
-
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            Sudah punya akun?{' '}
-            <a href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-              Masuk di sini
-            </a>
-          </p>
-        </div>
+        <p className="text-center text-sm text-gray-600 mt-4">
+          Sudah punya akun? <Link href="/login" className="text-blue-600 hover:text-blue-500">Masuk di sini</Link>
+        </p>
       </div>
     </div>
   );
