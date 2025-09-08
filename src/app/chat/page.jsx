@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ChatLayout from '@/components/ChatLayout';
+import { validateToken } from '@/services/authService';
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
@@ -21,11 +22,24 @@ export default function ChatPage() {
           return;
         }
 
+        // Validasi token
+        const isValid = await validateToken(token);
+        if (!isValid) {
+          sessionStorage.removeItem('chat-app-token');
+          sessionStorage.removeItem('chat-user');
+          router.push('/login');
+          return;
+        }
+
         setUser(JSON.parse(userData));
         setError(null);
       } catch (err) {
         console.error('Auth check error:', err);
-        setError('Failed to validate session');
+        setError('Failed to validate session. Please login again.');
+        
+        // Hapus data session yang invalid
+        sessionStorage.removeItem('chat-app-token');
+        sessionStorage.removeItem('chat-user');
       } finally {
         setLoading(false);
       }
@@ -48,12 +62,12 @@ export default function ChatPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center">
-          <div className="text-red-500 text-xl mb-4">Connection Error</div>
-          <p className="text-gray-600 mb-4">{error}</p>
+        <div className="text-center max-w-md p-6 bg-white rounded-lg shadow-md">
+          <div className="text-red-500 text-xl mb-4">Authentication Error</div>
+          <p className="text-gray-600 mb-6">{error}</p>
           <button 
             onClick={() => router.push('/login')}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             Go to Login
           </button>
