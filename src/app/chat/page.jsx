@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ChatLayout from '@/components/ChatLayout';
-import { validateToken } from '@/services/authService'; // Asumsikan ada service untuk validasi token
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
