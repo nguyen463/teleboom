@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import axios from 'axios';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+
+// URL backend-mu
+const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     email: '',
-    username: '',
     displayName: '',
     password: '',
     confirmPassword: '',
@@ -16,7 +16,6 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -29,54 +28,52 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Validations
-      if (!formData.email || !formData.username || !formData.displayName || !formData.password || !formData.confirmPassword) {
-        throw new Error('All fields are required');
+      // Validasi input
+      if (!formData.email || !formData.displayName || !formData.password || !formData.confirmPassword) {
+        throw new Error('Mohon isi semua kolom yang diperlukan.');
       }
 
       if (formData.password.length < 6) {
-        throw new Error('Password must be at least 6 characters');
+        throw new Error('Password harus memiliki minimal 6 karakter');
       }
 
       if (formData.password !== formData.confirmPassword) {
-        throw new Error('Passwords do not match');
+        throw new Error('Password tidak cocok');
       }
 
-      if (!formData.email.includes('@') || !formData.email.includes('.')) {
-        throw new Error('Please enter a valid email address');
-      }
-
-      if (formData.username.length < 3) {
-        throw new Error('Username must be at least 3 characters');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error('Mohon masukkan alamat email yang valid.');
       }
 
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, 
+        `${API_URL}/api/auth/register`,
         {
           email: formData.email,
-          username: formData.username,
           displayName: formData.displayName,
           password: formData.password
         }
       );
       
-      setSuccess('Account created successfully! Redirecting...');
+      setSuccess('Akun berhasil dibuat! Mengalihkan...');
       
       // Auto-login
       const loginResponse = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, 
+        `${API_URL}/api/auth/login`,
         {
           email: formData.email,
           password: formData.password
         }
       );
       
-      sessionStorage.setItem('chat-app-token', loginResponse.data.token);
-      sessionStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
-     router.push('/chat');
+      localStorage.setItem('chat-app-token', loginResponse.data.token);
+      localStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
+      
+      window.location.href = '/';
 
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Registration failed');
+      console.error('Registration error:', err);
+      setError(err.response?.data?.message || err.message || 'Pendaftaran gagal');
     } finally {
       setLoading(false);
     }
@@ -85,12 +82,12 @@ export default function RegisterPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Create Your Account</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-900">Buat Akun Baru</h1>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address
+              Alamat Email
             </label>
             <input
               type="email"
@@ -98,24 +95,7 @@ export default function RegisterPage() {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your email"
-              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              Username
-            </label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Choose a username"
+              placeholder="Masukkan alamat email Anda"
               className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading}
@@ -124,7 +104,7 @@ export default function RegisterPage() {
 
           <div>
             <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
-              Display Name
+              Nama Tampilan
             </label>
             <input
               type="text"
@@ -132,7 +112,7 @@ export default function RegisterPage() {
               name="displayName"
               value={formData.displayName}
               onChange={handleChange}
-              placeholder="Your display name"
+              placeholder="Nama yang akan ditampilkan"
               className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading}
@@ -149,7 +129,7 @@ export default function RegisterPage() {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Create a password (min. 6 characters)"
+              placeholder="Buat password (min. 6 karakter)"
               className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading}
@@ -158,7 +138,7 @@ export default function RegisterPage() {
 
           <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-              Confirm Password
+              Konfirmasi Password
             </label>
             <input
               type="password"
@@ -166,7 +146,7 @@ export default function RegisterPage() {
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="Confirm your password"
+              placeholder="Konfirmasi password Anda"
               className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading}
@@ -185,10 +165,10 @@ export default function RegisterPage() {
             {loading ? (
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Creating Account...
+                Membuat Akun...
               </div>
             ) : (
-              'Create Account'
+              'Buat Akun'
             )}
           </button>
         </form>
@@ -207,14 +187,12 @@ export default function RegisterPage() {
 
         <div className="text-center">
           <p className="text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-              Sign in here
-            </Link>
+            Sudah punya akun?{' '}
+            <a href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              Masuk di sini
+            </a>
           </p>
         </div>
-
-        {/* HAPUS BAGIAN TERMS & PRIVACY UNTUK HINDARI 404 ERROR */}
       </div>
     </div>
   );
