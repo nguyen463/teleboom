@@ -4,10 +4,10 @@ import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 
-// URL backend
 const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com/api/auth";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -15,9 +15,8 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -25,8 +24,8 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    setLoading(true);
 
     try {
       const { email, username, displayName, password, confirmPassword } = formData;
@@ -35,75 +34,64 @@ export default function RegisterPage() {
         throw new Error("Mohon isi semua kolom.");
       }
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        throw new Error("Mohon masukkan alamat email yang valid.");
-      }
+      if (password.length < 6) throw new Error("Password minimal 6 karakter.");
+      if (password !== confirmPassword) throw new Error("Password tidak cocok.");
 
-      if (password.length < 6) {
-        throw new Error("Password harus memiliki minimal 6 karakter.");
-      }
+      await axios.post(`${API_URL}/register`, {
+        email: email.toLowerCase().trim(),
+        username: username.toLowerCase().trim(),
+        displayName,
+        password,
+      });
 
-      if (password !== confirmPassword) {
-        throw new Error("Password tidak cocok.");
-      }
-
-      // Kirim request registrasi ke backend
-      const response = await axios.post(`${API_URL}/register`, { email, username, displayName, password });
-
-      // Simpan token & user langsung jika mau langsung login
-      localStorage.setItem("chat-app-token", response.data.token);
-      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
-
-      // Redirect ke halaman chat
-      router.push("/chat");
-
+      // Redirect ke login setelah registrasi sukses
+      router.push("/login");
     } catch (err) {
-      console.error("Register error:", err);
-      setError(err.response?.data?.message || err.message || "Pendaftaran gagal. Silakan coba lagi.");
+      setError(err.response?.data?.message || err.message || "Pendaftaran gagal.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full space-y-6 bg-white p-8 rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Buat Akun Anda</h1>
+        <h2 className="text-2xl font-bold text-center">Buat Akun Baru</h2>
 
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
-            {error}
-          </div>
+          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md">{error}</div>
         )}
 
-        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
             name="email"
-            placeholder="Alamat Email"
+            placeholder="Email"
             value={formData.email}
             onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
           <input
             type="text"
             name="username"
-            placeholder="Nama Pengguna"
+            placeholder="Username"
             value={formData.username}
             onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
           <input
             type="text"
             name="displayName"
-            placeholder="Nama Tampilan"
+            placeholder="Display Name"
             value={formData.displayName}
             onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
           <input
             type="password"
@@ -111,8 +99,9 @@ export default function RegisterPage() {
             placeholder="Password"
             value={formData.password}
             onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
           <input
             type="password"
@@ -120,21 +109,27 @@ export default function RegisterPage() {
             placeholder="Konfirmasi Password"
             value={formData.confirmPassword}
             onChange={handleChange}
+            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={loading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className={`w-full py-2 text-white rounded-md ${
+              loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            {loading ? "Membuat Akun..." : "Buat Akun"}
+            {loading ? "Memproses..." : "Daftar"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-600 mt-4">
-          Sudah punya akun? <Link href="/login" className="text-blue-600 hover:text-blue-500">Masuk di sini</Link>
+        <p className="text-center text-sm mt-4">
+          Sudah punya akun?{" "}
+          <a href="/login" className="text-blue-600 hover:underline">
+            Masuk di sini
+          </a>
         </p>
       </div>
     </div>
