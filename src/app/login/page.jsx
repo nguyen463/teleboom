@@ -3,12 +3,11 @@
 import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const handleChange = (e) => {
@@ -17,19 +16,10 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
+    setError("");
 
     try {
-      // Validasi client-side
-      if (!formData.email.includes("@")) {
-        throw new Error("Please enter a valid email address");
-      }
-
-      if (formData.password.length < 6) {
-        throw new Error("Password must be at least 6 characters");
-      }
-
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
         formData
@@ -37,14 +27,14 @@ export default function LoginPage() {
 
       const { token, user } = response.data;
 
-      // Simpan token dan user data di sessionStorage
+      // Simpan JWT & User ke sessionStorage
       sessionStorage.setItem("chat-app-token", token);
       sessionStorage.setItem("chat-user", JSON.stringify(user));
 
-      // Arahkan user ke halaman chatroom
+      // Arahkan ke halaman chat
       router.push("/chat");
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Login failed");
+      setError(err.response?.data?.message || "Login gagal");
     } finally {
       setLoading(false);
     }
@@ -52,92 +42,44 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">
-          Log In to Your Account
-        </h1>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="w-full max-w-md p-8 bg-white shadow-lg rounded-xl">
+        <h1 className="text-2xl font-bold text-center mb-6">Login</h1>
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email Address
-            </label>
+            <label className="block text-gray-700">Email</label>
             <input
               type="email"
-              id="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your email"
-              className="w-full px-4 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
-              disabled={loading}
+              className="w-full p-3 border rounded-lg focus:outline-none focus:ring focus:ring-blue-400"
             />
           </div>
-
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
+            <label className="block text-gray-700">Password</label>
             <input
               type="password"
-              id="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter your password"
-              className="w-full px-4 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
-              disabled={loading}
+              className="w-full p-3 border rounded-lg focus:outline-none focus:ring focus:ring-blue-400"
             />
           </div>
-
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${
-              loading
-                ? "bg-blue-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700"
+            className={`w-full py-3 text-white rounded-lg ${
+              loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Logging in...
-              </div>
-            ) : (
-              "Log In"
-            )}
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
-
         {error && (
-          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-md">
-            ⚠️ {error}
-          </div>
+          <div className="mt-4 text-red-600 text-center">{error}</div>
         )}
-
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            Don't have an account?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-            >
-              Create an account
-            </Link>
-          </p>
-
-          <div className="mt-4">
-            <Link
-              href="/forgot-password"
-              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              Forgot your password?
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );
