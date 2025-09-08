@@ -131,6 +131,7 @@ export default function ChatLayout() {
         status: "sending",
       };
       setMessages((prev) => [...prev, newMessage]);
+      // SINKRONISASI EVENT: Mengubah "sendMessage" menjadi "chat_message"
       socket.emit("chat_message", { text: newMessage.text });
     }
 
@@ -162,7 +163,7 @@ export default function ChatLayout() {
           <h2 className="text-xl font-bold text-gray-800">Sesi Habis atau Belum Login</h2>
           <p className="text-gray-600">Silakan login kembali untuk mengakses chat.</p>
           <a
-            href="https://teleboom.vercel.app/login"
+            href="/login"
             className="inline-block w-full py-2 font-medium text-white transition-colors bg-blue-600 rounded-md hover:bg-blue-700"
           >
             Masuk
