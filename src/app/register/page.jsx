@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import axios from 'axios';
+import Link from 'next/link';
 
-// URL backend-mu
+// Ganti dengan URL backend-mu saat deployment
 const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
     email: '',
+    username: '',
     displayName: '',
     password: '',
     confirmPassword: '',
@@ -28,9 +30,9 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Validasi input
-      if (!formData.email || !formData.displayName || !formData.password || !formData.confirmPassword) {
-        throw new Error('Mohon isi semua kolom yang diperlukan.');
+      // Validasi
+      if (!formData.email || !formData.username || !formData.displayName || !formData.password || !formData.confirmPassword) {
+        throw new Error('Mohon isi semua kolom yang diperlukan: email, displayName, username, password.');
       }
 
       if (formData.password.length < 6) {
@@ -41,38 +43,19 @@ export default function RegisterPage() {
         throw new Error('Password tidak cocok');
       }
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        throw new Error('Mohon masukkan alamat email yang valid.');
-      }
-
       const response = await axios.post(
-        `${API_URL}/api/auth/register`,
+        `${API_URL}/api/auth/register`, 
         {
           email: formData.email,
+          username: formData.username,
           displayName: formData.displayName,
           password: formData.password
         }
       );
       
-      setSuccess('Akun berhasil dibuat! Mengalihkan...');
+      setSuccess('Akun berhasil dibuat! Silakan masuk.');
       
-      // Auto-login
-      const loginResponse = await axios.post(
-        `${API_URL}/api/auth/login`,
-        {
-          email: formData.email,
-          password: formData.password
-        }
-      );
-      
-      localStorage.setItem('chat-app-token', loginResponse.data.token);
-      localStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
-      
-      window.location.href = '/';
-
     } catch (err) {
-      console.error('Registration error:', err);
       setError(err.response?.data?.message || err.message || 'Pendaftaran gagal');
     } finally {
       setLoading(false);
@@ -82,7 +65,7 @@ export default function RegisterPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center text-gray-900">Buat Akun Baru</h1>
+        <h1 className="text-2xl font-bold text-center text-gray-900">Buat Akun Anda</h1>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -95,7 +78,24 @@ export default function RegisterPage() {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Masukkan alamat email Anda"
+              placeholder="Masukkan email Anda"
+              className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              Nama Pengguna
+            </label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              placeholder="Pilih nama pengguna"
               className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading}
@@ -112,7 +112,7 @@ export default function RegisterPage() {
               name="displayName"
               value={formData.displayName}
               onChange={handleChange}
-              placeholder="Nama yang akan ditampilkan"
+              placeholder="Nama tampilan Anda"
               className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
               disabled={loading}
