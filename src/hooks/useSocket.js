@@ -1,11 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { io } from "socket.io-client";
 
-// Gunakan URL backend yang benar
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
 // Pastikan menggunakan export default
-export default function useSocket(user) {
+const useSocket = (user) => {
   const [socket, setSocket] = useState(null);
   const [messages, setMessages] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -48,7 +47,6 @@ export default function useSocket(user) {
     setSocket(newSocket);
     setConnectionStatus("connecting");
 
-    // Event handlers
     newSocket.on("connect", () => {
       console.log("✅ Socket terhubung:", newSocket.id);
       setConnectionStatus("connected");
@@ -86,7 +84,6 @@ export default function useSocket(user) {
       setConnectionStatus("reconnecting");
     });
 
-    // Cleanup
     return () => {
       if (socketRef.current) {
         console.log("Cleaning up socket connection");
@@ -123,4 +120,7 @@ export default function useSocket(user) {
     isSending,
     connectionStatus,
   };
-}
+};
+
+// Ekspor sebagai default
+export default useSocket;
