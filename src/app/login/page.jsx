@@ -6,12 +6,9 @@ import axios from 'axios';
 // Ganti dengan URL backend-mu saat deployment
 const API_URL = "https://teleboom-backend-new-328274fe4961.herokuapp.com";
 
-// Fungsi helper untuk validasi email sederhana
-const isEmail = (input) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
-
 export default function LoginPage() {
   const [credentials, setCredentials] = useState({
-    identifier: '', // Kolom tunggal untuk email atau username
+    usernameOrEmail: '',
     password: ''
   });
   const [loading, setLoading] = useState(false);
@@ -30,26 +27,25 @@ export default function LoginPage() {
     setError('');
 
     try {
-      if (!credentials.identifier.trim() || !credentials.password.trim()) {
+      // Validasi input
+      if (!credentials.usernameOrEmail.trim() || !credentials.password.trim()) {
         throw new Error('Mohon isi semua kolom.');
       }
 
-      // Tentukan apakah input adalah email atau username
-      const loginData = isEmail(credentials.identifier)
-        ? { email: credentials.identifier, password: credentials.password }
-        : { username: credentials.identifier, password: credentials.password };
-      
-      // Mengirimkan permintaan login
+      // Melakukan panggilan API login
       const response = await axios.post(
         `${API_URL}/api/auth/login`,
-        loginData // Mengirimkan data yang sesuai
+        { 
+          usernameOrEmail: credentials.usernameOrEmail,
+          password: credentials.password 
+        }
       );
 
-      // Simpan token dan data user ke localStorage
+      // Simpan token dan user data ke localStorage
       localStorage.setItem('chat-app-token', response.data.token);
       localStorage.setItem('chat-user', JSON.stringify(response.data.user));
       
-      // Mengalihkan ke halaman utama
+      // Redirect ke halaman chat
       window.location.href = '/'; 
 
     } catch (err) {
@@ -76,17 +72,17 @@ export default function LoginPage() {
           )}
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="identifier" className="sr-only">
-                Email atau Nama Pengguna
+              <label htmlFor="usernameOrEmail" className="sr-only">
+                Nama Pengguna atau Email
               </label>
               <input
-                id="identifier"
-                name="identifier"
+                id="usernameOrEmail"
+                name="usernameOrEmail"
                 type="text"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email atau Nama Pengguna"
-                value={credentials.identifier}
+                placeholder="Nama Pengguna atau Email"
+                value={credentials.usernameOrEmail}
                 onChange={handleChange}
                 disabled={loading}
               />
