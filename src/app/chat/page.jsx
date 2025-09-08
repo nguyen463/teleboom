@@ -10,15 +10,14 @@ export default function ChatPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user is logged in
     const token = sessionStorage.getItem('chat-app-token');
     const userData = sessionStorage.getItem('chat-user');
-    
+
     if (!token || !userData) {
       router.push('/login');
       return;
     }
-    
+
     setUser(JSON.parse(userData));
     setLoading(false);
   }, [router]);
@@ -34,5 +33,6 @@ export default function ChatPage() {
     );
   }
 
-  return <ChatLayout />;
+  // ✅ Kirim user ke ChatLayout
+  return <ChatLayout user={user} />;
 }
