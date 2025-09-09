@@ -13,9 +13,11 @@ export default function ChatLayout({ user }) {
   const [editText, setEditText] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [typingUsers, setTypingUsers] = useState([]);
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
@@ -29,15 +31,13 @@ export default function ChatLayout({ user }) {
       scrollToBottom();
     });
 
-    socketRef.current.emit("getMessages");
     socketRef.current.on("initialMessages", (msgs) => {
       setMessages(msgs);
       scrollToBottom();
     });
 
-    socketRef.current.on("onlineUsers", (users) => {
-      setOnlineUsers(users); // array of userId yang online
-    });
+    socketRef.current.on("onlineUsers", (users) => setOnlineUsers(users));
+    socketRef.current.on("typing", (users) => setTypingUsers(users));
 
     return () => socketRef.current.disconnect();
   }, []);
@@ -49,14 +49,17 @@ export default function ChatLayout({ user }) {
   const sendMessage = () => {
     if (!newMsg.trim()) return;
     const msg = {
+      id: Date.now(),
       text: newMsg,
       userId: user.id,
-      id: Date.now(),
       username: user.name,
       avatar: user.avatar || "/default-avatar.png",
+      timestamp: new Date().toISOString(),
     };
     socketRef.current.emit("sendMessage", msg);
+    setMessages([...messages, msg]);
     setNewMsg("");
+    scrollToBottom();
   };
 
   const handleEdit = (msg) => {
@@ -79,6 +82,16 @@ export default function ChatLayout({ user }) {
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
   const isOnline = (userId) => onlineUsers.includes(userId);
+
+  const handleTyping = (e) => {
+    setNewMsg(e.target.value);
+    socketRef.current.emit("typing", user.name);
+
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socketRef.current.emit("stopTyping", user.name);
+    }, 1000);
+  };
 
   return (
     <div className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} flex flex-col h-screen`}>
@@ -121,8 +134,8 @@ export default function ChatLayout({ user }) {
                 </div>
               )}
 
-              {/* Message bubble */}
-              <div className={`relative max-w-lg p-3 rounded-lg ${isOwn ? "bg-blue-500 text-white" : darkMode ? "bg-gray-700 text-gray-100" : "bg-gray-200 text-gray-900"}`}>
+              {/* Bubble */}
+              <div className={`relative max-w-lg p-3 rounded-2xl ${isOwn ? "bg-blue-500 text-white" : darkMode ? "bg-gray-700 text-gray-100" : "bg-gray-200 text-gray-900"}`}>
                 
                 {!isOwn && <div className="text-xs font-semibold mb-1">{msg.username}</div>}
 
@@ -137,20 +150,31 @@ export default function ChatLayout({ user }) {
                     <button onClick={() => setEditingId(null)} className="bg-gray-400 px-2 rounded text-white">Cancel</button>
                   </div>
                 ) : (
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col">
                     <span>{msg.text}</span>
-                    {isOwn && (
-                      <div className="flex space-x-1 ml-2 text-sm">
-                        <button onClick={() => handleEdit(msg)} className="text-yellow-200 hover:text-yellow-400">Edit</button>
-                        <button onClick={() => handleDelete(msg.id)} className="text-red-400 hover:text-red-600">Delete</button>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center mt-1 text-xs opacity-70">
+                      <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      {isOwn && (
+                        <div className="flex space-x-1">
+                          <button onClick={() => handleEdit(msg)} className="text-yellow-200 hover:text-yellow-400">Edit</button>
+                          <button onClick={() => handleDelete(msg.id)} className="text-red-400 hover:text-red-600">Delete</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           );
         })}
+
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="text-sm italic text-gray-500">
+            {typingUsers.join(", ")} sedang mengetik...
+          </div>
+        )}
+
         <div ref={messagesEndRef}></div>
       </div>
 
@@ -160,7 +184,7 @@ export default function ChatLayout({ user }) {
           type="text"
           placeholder="Tulis pesan..."
           value={newMsg}
-          onChange={(e) => setNewMsg(e.target.value)}
+          onChange={handleTyping}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           className="flex-1 p-2 border rounded-lg"
         />
