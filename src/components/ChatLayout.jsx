@@ -1,193 +1,473 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSocket } from "../hooks/useSocket";
-import { FaTrash, FaEdit } from "react-icons/fa";
+import { useEffect, useState, useRef } from "react";
+import { io } from "socket.io-client";
 import { logout } from "@/app/utils/auth";
 
-export default function ChatLayout() {
-  const router = useRouter();
-  const socket = useSocket();
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
-  const [status, setStatus] = useState("Menghubungkan...");
-  const [message, setMessage] = useState("");
+export default function ChatLayout({ user }) {
   const [messages, setMessages] = useState([]);
-  const [userId, setUserId] = useState(null);
-  const [editMessageId, setEditMessageId] = useState(null);
+  const [newMsg, setNewMsg] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [showOnlineUsers, setShowOnlineUsers] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState("connecting");
 
-  // ====== KONEKSI SOCKET.IO ======
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+
   useEffect(() => {
-    if (!socket) return;
+    console.log("🔍 USER OBJECT:", user); // Debug user object
+    
+    const token = localStorage.getItem("chat-app-token");
+    if (!token) {
+      console.error("No token found");
+      return;
+    }
 
+    if (!socketRef.current) {
+      console.log("🔌 Connecting to socket:", SOCKET_URL);
+      socketRef.current = io(SOCKET_URL, { 
+        auth: { token },
+        transports: ["websocket", "polling"]
+      });
+    }
+
+    const socket = socketRef.current;
+
+    // Event connection status
     socket.on("connect", () => {
-      setStatus("✅ Terhubung ke server!");
-      setUserId(socket.id);
+      console.log("✅ Connected to socket server");
+      setConnectionStatus("connected");
+      socket.emit("getMessages");
     });
-
+    
     socket.on("disconnect", () => {
-      setStatus("❌ Terputus dari server.");
+      console.log("❌ Disconnected from socket server");
+      setConnectionStatus("disconnected");
+    });
+    
+    socket.on("connect_error", (err) => {
+      console.error("Connection error:", err);
+      setConnectionStatus("error");
     });
 
-    socket.on("receive_message", (data) => {
-      setMessages((prev) => [...prev, data]);
+    // Event untuk menerima semua pesan saat pertama connect
+    socket.on("allMessages", (messages) => {
+      console.log("🔍 ALL MESSAGES FROM SERVER:", messages);
+      const formatted = messages.map(m => ({ 
+        ...m, 
+        _id: m._id ? m._id.toString() : Math.random().toString(),
+        // Pastikan senderId juga string
+        senderId: m.senderId ? m.senderId.toString() : ""
+      }));
+      setMessages(formatted);
     });
 
-    socket.on("load_messages", (allMessages) => {
-      setMessages(allMessages);
+    // Event untuk menerima pesan baru
+    socket.on("newMessage", (msg) => {
+      console.log("🔍 NEW MESSAGE FROM SERVER:", msg);
+      setMessages(prev => [...prev, { 
+        ...msg, 
+        _id: msg._id ? msg._id.toString() : Math.random().toString(),
+        senderId: msg.senderId ? msg.senderId.toString() : ""
+      }]);
     });
 
-    socket.on("message_deleted", (id) => {
-      setMessages((prev) => prev.filter((msg) => msg._id !== id));
+    // Event untuk menerima pesan yang di-edit
+    socket.on("editMessage", (data) => {
+      console.log("✏️ MESSAGE EDITED:", data);
+      setMessages(prev => prev.map(m => 
+        (m._id === data.id ? {...m, text: data.text, updatedAt: data.updatedAt} : m)
+      ));
     });
 
-    socket.on("message_updated", (updatedMsg) => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
-      );
+    // Event untuk menerima pesan yang dihapus
+    socket.on("deleteMessage", (id) => {
+      console.log("🗑️ MESSAGE DELETED:", id);
+      setMessages(prev => prev.filter(m => m._id !== id.toString()));
+    });
+
+    // Event untuk menerima daftar user online
+    socket.on("onlineUsers", (users) => {
+      console.log("👥 ONLINE USERS:", users);
+      setOnlineUsers(users);
+    });
+
+    // Event untuk typing indicator
+    socket.on("userTyping", (userData) => {
+      console.log("⌨️ USER TYPING:", userData);
+      setTypingUsers(prev => {
+        const userExists = prev.some(u => u.userId === userData.userId);
+        return userExists ? prev : [...prev, userData];
+      });
+    });
+
+    socket.on("userStoppedTyping", (userData) => {
+      console.log("💤 USER STOPPED TYPING:", userData);
+      setTypingUsers(prev => prev.filter(u => u.userId !== userData.userId));
+    });
+
+    // Event untuk error
+    socket.on("error", (errorMsg) => {
+      console.error("❌ SOCKET ERROR:", errorMsg);
+      alert(`Error: ${errorMsg}`);
     });
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("receive_message");
-      socket.off("load_messages");
-      socket.off("message_deleted");
-      socket.off("message_updated");
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
-  }, [socket]);
+  }, [user]); // Tambahkan user sebagai dependency
 
-  // ====== KIRIM PESAN ======
-  const handleSendMessage = () => {
-    if (message.trim() === "") return;
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-    if (editMessageId) {
-      socket.emit("edit_message", { id: editMessageId, newText: message });
-      setEditMessageId(null);
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 100);
+  };
+
+  // ===== Send Message =====
+  const sendMessage = () => {
+    if ((!newMsg.trim() && !selectedImage) || !socketRef.current) return;
+
+    setIsUploading(true);
+
+    const send = (imageData = null) => {
+      const messageData = {
+        text: newMsg.trim(),
+        image: imageData
+      };
+
+      if (socketRef.current.connected) {
+        socketRef.current.emit("sendMessage", messageData);
+        setNewMsg("");
+        setSelectedImage(null);
+        setImagePreview(null);
+        socketRef.current.emit("stopTyping");
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      } else {
+        console.error("Socket belum terkoneksi");
+      }
+      setIsUploading(false);
+    };
+
+    if (selectedImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => send(e.target.result);
+      reader.readAsDataURL(selectedImage);
     } else {
-      socket.emit("chat_message", { text: message, id: socket.id });
-    }
-
-    setMessage("");
-  };
-
-  // ====== HAPUS PESAN ======
-  const handleDeleteMessage = (id) => {
-    if (confirm("Yakin mau hapus pesan ini?")) {
-      socket.emit("delete_message", id);
+      send();
     }
   };
 
-  // ====== EDIT PESAN ======
-  const handleEditMessage = (msg) => {
-    setMessage(msg.text);
-    setEditMessageId(msg._id);
+  // Fungsi edit pesan
+  const handleEdit = (msg) => {
+    setEditingId(msg._id);
+    setEditText(msg.text);
   };
 
-  // ====== LOGOUT ======
-  const handleLogout = () => {
-    localStorage.removeItem("chat-app-token");
-    router.push("/login");
+  // Fungsi simpan edit
+  const saveEdit = () => {
+    if (!socketRef.current || !editText.trim() || !editingId) return;
+    
+    console.log("📝 EDITING MESSAGE:", editingId, "with text:", editText);
+    
+    socketRef.current.emit("editMessage", { 
+      id: editingId.toString(), 
+      text: editText.trim() 
+    });
+    
+    setEditingId(null);
+    setEditText("");
+  };
+
+  // Fungsi hapus pesan
+  const handleDelete = (id) => {
+    if (!socketRef.current) return;
+    
+    console.log("🗑️ DELETING MESSAGE:", id);
+    
+    if (!window.confirm("Apakah Anda yakin ingin menghapus pesan ini?")) return;
+    
+    socketRef.current.emit("deleteMessage", id.toString());
+  };
+
+  const handleTyping = (e) => {
+    const value = e.target.value;
+    setNewMsg(value);
+    if (!socketRef.current) return;
+
+    if (value) {
+      socketRef.current.emit("typing");
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        socketRef.current.emit("stopTyping");
+      }, 3000);
+    } else {
+      socketRef.current.emit("stopTyping");
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    }
+  };
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.match("image.*")) {
+      alert("Hanya file gambar yang diizinkan");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Ukuran file maksimal 5MB");
+      return;
+    }
+
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Fungsi untuk menangani key press di input edit
+  const handleEditKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEdit();
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+      setEditText("");
+    }
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-1/4 bg-gray-800 text-white p-4">
-        <h2 className="text-xl font-bold mb-4">Users</h2>
-        <p className="text-gray-400">Status: {status}</p>
+    <div className="flex flex-col h-screen bg-gray-100">
+      {/* Header */}
+      <div className="flex justify-between items-center bg-blue-600 text-white p-4 shadow-md">
+        <h1 className="text-xl font-bold">Chat Room</h1>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={() => setShowOnlineUsers(!showOnlineUsers)}
+            className="relative p-2 rounded-full hover:bg-blue-700 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-green-600 rounded-full">
+              {onlineUsers.length}
+            </span>
+          </button>
+          <span className="hidden md:inline">Hai, {user?.name}</span>
+          <span className={`h-3 w-3 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
+          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition-colors">Logout</button>
+        </div>
       </div>
 
-      {/* Area Chat */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="flex justify-between items-center bg-white p-4 border-b">
-          <h1 className="text-xl font-bold text-gray-800">💬 Chat Room</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
-          >
-            Logout
-          </button>
-        </header>
-
-        {/* Daftar Pesan */}
-        <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
-          {messages.length === 0 ? (
-            <p className="text-gray-500 text-center mt-4">
-              Kirim pesan pertama Anda!
-            </p>
-          ) : (
-            messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`relative mb-3 p-3 rounded-lg max-w-xs shadow-md ${
-                  msg.id === userId
-                    ? "bg-blue-500 text-white ml-auto"
-                    : "bg-gray-200 text-gray-800"
-                }`}
-              >
-                {/* Isi Pesan */}
-                <p className="text-sm">
-                  <span className="font-semibold">
-                    {msg.id
-                      ? msg.id === userId
-                        ? "Anda"
-                        : msg.id.slice(0, 5)
-                      : "Anonim"}
-                  </span>
-                  : {msg.text}
-                </p>
-
-                {/* Tombol Edit & Hapus */}
-                {msg.id === userId && (
-                  <div className="absolute -top-2 -right-10 flex gap-2">
-                    <button
-                      onClick={() => handleEditMessage(msg)}
-                      className="text-yellow-400 hover:text-yellow-600"
-                      title="Edit pesan"
-                    >
-                      <FaEdit size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteMessage(msg._id)}
-                      className="text-red-500 hover:text-red-700"
-                      title="Hapus pesan"
-                    >
-                      <FaTrash size={18} />
-                    </button>
-                  </div>
-                )}
+      {/* Online Users Panel */}
+      {showOnlineUsers && (
+        <div className="bg-white border-b shadow-sm p-4">
+          <h3 className="font-bold text-gray-700 mb-2">Online Users ({onlineUsers.length})</h3>
+          <div className="flex flex-wrap gap-2">
+            {onlineUsers.map((userData) => (
+              <div key={userData.userId} className="flex items-center bg-blue-100 px-3 py-1 rounded-full">
+                <span className="h-2 w-2 bg-green-500 rounded-full mr-2"></span>
+                <span className={`text-sm ${userData.userId === user?.id ? "font-bold text-blue-600" : "text-gray-700"}`}>
+                  {userData.displayName || userData.username}
+                  {typingUsers.some(u => u.userId === userData.userId) && (
+                    <span className="text-xs text-green-500"> (mengetik...)</span>
+                  )}
+                </span>
               </div>
-            ))
-          )}
-        </main>
+            ))}
+          </div>
+        </div>
+      )}
 
-        {/* Input Pesan */}
-        <footer className="bg-white p-4 border-t flex gap-2">
+      {/* Connection Status */}
+      {connectionStatus !== 'connected' && (
+        <div className={`p-2 text-center text-sm ${connectionStatus === 'connecting' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+          {connectionStatus === 'connecting' ? 'Menghubungkan...' : 'Terkoneksi'}
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              <p>Belum ada pesan. Mulai percakapan!</p>
+            </div>
+          </div>
+        ) : (
+          messages.map((msg) => {
+            // PERBAIKAN: Logic isOwn yang lebih robust
+            const isOwn = user && user.id && msg.senderId && 
+              (msg.senderId.toString() === user.id.toString() || 
+               msg.senderId === user.id.toString() || 
+               msg.senderId.toString() === user.id);
+
+            console.log("🔍 MESSAGE DEBUG:", {
+              messageId: msg._id,
+              msgSenderId: msg.senderId,
+              userId: user?.id,
+              isOwn: isOwn,
+              types: {
+                msgSenderIdType: typeof msg.senderId,
+                userIdType: typeof user?.id
+              }
+            });
+
+            return (
+              <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}>
+                  {editingId === msg._id ? (
+                    <div className="flex flex-col space-y-2">
+                      <input
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={handleEditKeyPress}
+                        className="flex-1 p-2 rounded border text-black"
+                        autoFocus
+                      />
+                      <div className="flex space-x-2 self-end">
+                        <button onClick={saveEdit} className="bg-green-500 px-3 py-1 rounded text-white text-sm">Simpan</button>
+                        <button onClick={() => { setEditingId(null); setEditText(""); }} className="bg-gray-400 px-3 py-1 rounded text-white text-sm">Batal</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-xs font-bold opacity-80">{msg.senderName}</span>
+                        <span className="text-xs opacity-70">
+                          {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ''}
+                          {msg.updatedAt && ' (diedit)'}
+                        </span>
+                      </div>
+
+                      {msg.image && (
+                        <div className="my-2">
+                          <img src={msg.image} alt="Gambar pesan" className="max-w-full rounded-lg max-h-64 object-cover" />
+                        </div>
+                      )}
+
+                      {msg.text && <span className="block text-base">{msg.text}</span>}
+
+                      {/* Tombol edit/hapus hanya muncul untuk pesan milik sendiri */}
+                      <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                        {isOwn && (
+                          <>
+                            <button 
+                              onClick={() => handleEdit(msg)} 
+                              className="text-xs text-blue-100 hover:text-blue-300 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(msg._id)} 
+                              className="text-xs text-red-300 hover:text-red-500 transition-colors"
+                            >
+                              Hapus
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef}></div>
+      </div>
+
+      {/* Image Preview */}
+      {imagePreview && (
+        <div className="bg-gray-100 border-t p-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <img src={imagePreview} alt="Preview" className="h-12 w-12 object-cover rounded" />
+            <span className="text-sm text-gray-600">Gambar terpilih</span>
+          </div>
+          <button onClick={removeImage} className="text-red-500 hover:text-red-700">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Input area */}
+      <div className="flex flex-col p-4 space-y-2 border-t border-gray-300 bg-white">
+        <div className="flex space-x-2">
           <input
             type="text"
-            placeholder={
-              editMessageId ? "Edit pesan..." : "Ketik pesan..."
-            }
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSendMessage();
+            placeholder="Tulis pesan..."
+            value={newMsg}
+            onChange={handleTyping}
+            onKeyDown={(e) => { 
+              if(e.key === "Enter" && !e.shiftKey){ 
+                e.preventDefault(); 
+                sendMessage(); 
+              } 
             }}
-            className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-
-          {/* Tombol Send */}
           <button
-            onClick={handleSendMessage}
-            disabled={!message.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            onClick={sendMessage}
+            disabled={(!newMsg.trim() && !selectedImage) || isUploading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {editMessageId ? "Update" : "Send"}
+            {isUploading ? (
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : "Kirim"}
           </button>
-        </footer>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <label htmlFor="image-upload" className="cursor-pointer text-gray-600 hover:text-blue-600 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <input id="image-upload" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" ref={fileInputRef} />
+          </label>
+          <span className="text-sm text-gray-500">Tekan Enter untuk mengirim, Shift+Enter untuk baris baru</span>
+        </div>
       </div>
+
+      {/* Typing indicator */}
+      {typingUsers.length > 0 && (
+        <div className="bg-white border-t px-4 py-2 text-sm text-gray-500">
+          {typingUsers.map(u => u.displayName || u.username).join(", ")} {typingUsers.length === 1 ? "sedang mengetik..." : "sedang mengetik..."}
+        </div>
+      )}
     </div>
   );
 }
