@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
-import axios from 'axios';
-import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaPaperPlane, FaUsers, FaSpinner } from "react-icons/fa";
+import axios from "axios";
 
-// Ganti URL ini dengan URL backend Heroku-mu saat deployment
+// Ganti dengan URL backend kamu
 const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatPage() {
@@ -21,22 +20,21 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
 
-  // Fungsi untuk validasi token di backend
+  // ===== VALIDASI TOKEN =====
   const validateToken = async (token) => {
     try {
       const response = await axios.get(`${API_URL}/api/auth/validate`, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
       return response.status === 200;
-    } catch (error) {
-      console.error("Token validation failed:", error);
+    } catch {
       return false;
     }
   };
 
-  // ===== CEK LOGIN & KONEKSI SOCKET =====
+  // ===== CEK LOGIN DAN KONEKSI SOCKET =====
   useEffect(() => {
     const checkAuth = async () => {
       let userData = null;
@@ -45,44 +43,30 @@ export default function ChatPage() {
       try {
         token = localStorage.getItem("chat-app-token");
         userData = localStorage.getItem("chat-user");
-        
-        if (!token || !userData) {
-          throw new Error("Token atau data pengguna tidak ditemukan.");
-        }
+
+        if (!token || !userData) throw new Error("Token tidak ditemukan");
 
         const userObj = JSON.parse(userData);
         setUser(userObj);
 
         const isValid = await validateToken(token);
-        if (!isValid) {
-          throw new Error("Sesi tidak valid.");
-        }
-        
-        // Koneksi Socket.IO
+        if (!isValid) throw new Error("Sesi tidak valid");
+
         const newSocket = io(API_URL, {
           auth: { token },
         });
 
-        newSocket.on("connect", () => {
-          setIsConnected(true);
-        });
-
-        newSocket.on("disconnect", () => {
-          setIsConnected(false);
-        });
-        
-        newSocket.on("error", (msg) => {
-            console.error("❌ Socket Error:", msg);
-        });
+        newSocket.on("connect", () => setIsConnected(true));
+        newSocket.on("disconnect", () => setIsConnected(false));
+        newSocket.on("error", (msg) => console.error("Socket error:", msg));
 
         setSocket(newSocket);
-        
+
         return () => {
           newSocket.disconnect();
         };
-
       } catch (error) {
-        console.error("❌ Gagal memuat data pengguna:", error.message);
+        console.error("❌ Auth gagal:", error.message);
         localStorage.clear();
         setHasAuthError(true);
         setLoading(false);
@@ -90,10 +74,11 @@ export default function ChatPage() {
         setLoading(false);
       }
     };
+
     checkAuth();
   }, []);
 
-  // ===== SOCKET EVENTS =====
+  // ===== LISTENER SOCKET =====
   useEffect(() => {
     if (!socket || !user) return;
 
@@ -105,17 +90,20 @@ export default function ChatPage() {
     };
 
     const handleLoadMessages = (msgs) => setMessages(msgs || []);
-    const handleDeleteMessage = (id) => setMessages((prev) => prev.filter((m) => m._id !== id));
+    const handleDeleteMessage = (id) =>
+      setMessages((prev) => prev.filter((m) => m._id !== id));
     const handleUpdateMessage = (updated) =>
-      setMessages((prev) => prev.map((m) => (m._id === updated._id ? updated : m)));
+      setMessages((prev) =>
+        prev.map((m) => (m._id === updated._id ? updated : m))
+      );
     const handleOnlineUsers = (users) => setOnlineUsers(users || []);
-    
+
     socket.on("receive_message", handleReceiveMessage);
     socket.on("load_messages", handleLoadMessages);
     socket.on("message_deleted", handleDeleteMessage);
     socket.on("message_updated", handleUpdateMessage);
     socket.on("online_users", handleOnlineUsers);
-    
+
     return () => {
       socket.off("receive_message", handleReceiveMessage);
       socket.off("load_messages", handleLoadMessages);
@@ -130,7 +118,7 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ===== KIRIM PESAN =====
+  // ===== KIRIM / EDIT PESAN =====
   const handleSendMessage = () => {
     if (message.trim() === "" || !socket || isSending) return;
 
@@ -143,9 +131,7 @@ export default function ChatPage() {
       });
       setEditMessageId(null);
     } else {
-      const newMessage = {
-        text: message.trim(),
-      };
+      const newMessage = { text: message.trim() };
       socket.emit("chat_message", newMessage);
     }
 
@@ -153,16 +139,26 @@ export default function ChatPage() {
     setIsSending(false);
   };
 
-  const handleDeleteMessage = (id) => socket?.emit("delete_message", id);
+  // ===== HAPUS PESAN =====
+  const handleDeleteMessage = (id) => {
+    if (confirm("Yakin mau hapus pesan ini?")) {
+      socket.emit("delete_message", id);
+    }
+  };
+
+  // ===== EDIT PESAN =====
   const handleEditMessage = (msg) => {
     setMessage(msg.text);
     setEditMessageId(msg._id);
   };
+
+  // ===== BATAL EDIT =====
   const cancelEdit = () => {
     setEditMessageId(null);
     setMessage("");
   };
 
+  // ===== LOGOUT =====
   const handleLogout = () => {
     socket?.disconnect();
     localStorage.clear();
@@ -171,6 +167,7 @@ export default function ChatPage() {
     window.location.href = "https://teleboom.vercel.app/login";
   };
 
+  // ===== LOADING =====
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -186,7 +183,9 @@ export default function ChatPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="w-full max-w-md p-8 space-y-4 text-center bg-white rounded-lg shadow-md">
-          <h2 className="text-xl font-bold text-gray-800">Sesi Habis atau Belum Login</h2>
+          <h2 className="text-xl font-bold text-gray-800">
+            Sesi Habis atau Belum Login
+          </h2>
           <p className="text-gray-600">Silakan login kembali untuk mengakses chat.</p>
           <a
             href="https://teleboom.vercel.app/login"
@@ -198,7 +197,7 @@ export default function ChatPage() {
       </div>
     );
   }
-  
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -217,7 +216,11 @@ export default function ChatPage() {
         <div className="flex items-center mb-6">
           <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center mr-3">
             {user.avatar ? (
-              <img src={user.avatar} alt={user.displayName} className="w-10 h-10 rounded-full" />
+              <img
+                src={user.avatar}
+                alt={user.displayName}
+                className="w-10 h-10 rounded-full"
+              />
             ) : (
               <span className="text-white text-xl">👤</span>
             )}
@@ -231,21 +234,29 @@ export default function ChatPage() {
         {/* Pengguna Online */}
         <div className="flex-1 mb-4">
           <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-            <span className="text-xl">👥</span> Pengguna Online ({onlineUsers.length})
+            <span className="text-xl">👥</span> Pengguna Online (
+            {onlineUsers.length})
           </h3>
           <div className="bg-gray-700 p-3 rounded max-h-60 overflow-y-auto">
             {onlineUsers.length > 0 ? (
               onlineUsers.map((onlineUser, index) => (
-                <div key={onlineUser.userId || index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
+                <div
+                  key={onlineUser.userId || index}
+                  className="flex items-center mb-2 p-2 rounded hover:bg-gray-600"
+                >
                   <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                  <span>{onlineUser.displayName || onlineUser.username}</span>
+                  <span>
+                    {onlineUser.displayName || onlineUser.username}
+                  </span>
                   {onlineUser.userId === user.id && (
                     <span className="ml-2 text-xs text-gray-400">(Anda)</span>
                   )}
                 </div>
               ))
             ) : (
-              <p className="text-gray-400 text-sm">Tidak ada pengguna online</p>
+              <p className="text-gray-400 text-sm">
+                Tidak ada pengguna online
+              </p>
             )}
           </div>
         </div>
@@ -276,7 +287,9 @@ export default function ChatPage() {
           {messages.length === 0 ? (
             <div className="text-center mt-10">
               <div className="text-6xl mb-4">💬</div>
-              <p className="text-gray-500 text-lg">Mulai percakapan pertama Anda!</p>
+              <p className="text-gray-500 text-lg">
+                Mulai percakapan pertama Anda!
+              </p>
             </div>
           ) : (
             messages.map((msg, index) => (
@@ -310,14 +323,14 @@ export default function ChatPage() {
                       className="p-1 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition-colors"
                       title="Edit pesan"
                     >
-                      <span>✏️</span>
+                      ✏️
                     </button>
                     <button
                       onClick={() => handleDeleteMessage(msg._id)}
                       className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                       title="Hapus pesan"
                     >
-                      <span>🗑️</span>
+                      🗑️
                     </button>
                   </div>
                 )}
@@ -332,7 +345,10 @@ export default function ChatPage() {
           {editMessageId && (
             <div className="flex items-center justify-between mb-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
               <span className="text-sm">Sedang mengedit pesan...</span>
-              <button onClick={cancelEdit} className="text-yellow-800 hover:text-yellow-900 text-sm">
+              <button
+                onClick={cancelEdit}
+                className="text-yellow-800 hover:text-yellow-900 text-sm"
+              >
                 Batalkan
               </button>
             </div>
@@ -341,7 +357,9 @@ export default function ChatPage() {
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder={editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."}
+              placeholder={
+                editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."
+              }
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => {
