@@ -2,19 +2,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
-import {
-  FaTrash,
-  FaEdit,
-  FaSignOutAlt,
-  FaUser,
-  FaPaperPlane,
-  FaUsers,
-  FaSpinner,
-} from "react-icons/fa";
+import { FaTrash, FaEdit, FaSignOutAlt, FaUser, FaPaperPlane, FaUsers, FaSpinner } from "react-icons/fa";
+import sanitizeHtml from "sanitize-html";
+import axios from "axios";
 
 // URL backend Socket.IO
 // Ganti URL ini dengan URL backend Heroku-mu saat deployment
 const SOCKET_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
+const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout() {
   const [socket, setSocket] = useState(null);
@@ -30,21 +25,15 @@ export default function ChatLayout() {
 
   // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
-    let userData = null;
-    let token = null;
+    const token = localStorage.getItem("chat-app-token");
+    const userData = localStorage.getItem("chat-user");
+
+    if (!token || !userData) {
+      setHasAuthError(true);
+      return;
+    }
 
     try {
-      token = localStorage.getItem("chat-app-token");
-      userData = localStorage.getItem("chat-user");
-      
-      console.log("Token ditemukan:", !!token);
-      console.log("Data pengguna ditemukan:", !!userData);
-
-      if (!token || !userData) {
-        setHasAuthError(true);
-        return;
-      }
-
       const userObj = JSON.parse(userData);
       setUser(userObj);
 
@@ -54,12 +43,10 @@ export default function ChatLayout() {
 
       newSocket.on("connect", () => {
         setIsConnected(true);
-        console.log("🔗 Terhubung ke server Socket.IO");
       });
 
       newSocket.on("disconnect", () => {
         setIsConnected(false);
-        console.log("❌ Terputus dari server Socket.IO");
       });
       
       newSocket.on("error", (msg) => {
@@ -68,11 +55,9 @@ export default function ChatLayout() {
 
       setSocket(newSocket);
 
-      // Clean up on component unmount
       return () => {
         newSocket.disconnect();
       };
-
     } catch (error) {
       console.error("❌ Gagal memuat data pengguna:", error.message);
       setHasAuthError(true);
@@ -83,7 +68,6 @@ export default function ChatLayout() {
   useEffect(() => {
     if (!socket || !user) return;
 
-    // Mendengarkan pesan dari backend
     const handleReceiveMessage = (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
@@ -130,21 +114,26 @@ export default function ChatLayout() {
       });
       setEditMessageId(null);
     } else {
+      const sanitizedText = sanitizeHtml(message.trim(), {
+        allowedTags: [],
+        allowedAttributes: {},
+      });
+      
       const tempId = Date.now().toString();
       const newMessage = {
         tempId,
-        text: message.trim(),
+        text: sanitizedText,
         senderId: user.id,
         senderName: user.displayName,
         createdAt: new Date(),
         status: "sending",
       };
       setMessages((prev) => [...prev, newMessage]);
-      socket.emit("chat_message", { text: newMessage.text });
+      socket.emit("chat_message", { text: sanitizedText, senderName: user.displayName });
     }
 
     setMessage("");
-    setIsSending(false); // Reset isSending after emit
+    setIsSending(false); 
   };
 
   const handleDeleteMessage = (id) => socket?.emit("delete_message", id);
