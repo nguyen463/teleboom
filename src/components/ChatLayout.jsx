@@ -20,37 +20,47 @@ export default function ChatLayout({ user }) {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io(SOCKET_URL, {
-      auth: { token: localStorage.getItem("chat-app-token") },
-    });
+    // Pastikan socket diinisialisasi sekali saja
+    if (!socketRef.current) {
+      socketRef.current = io(SOCKET_URL, {
+        auth: { token: localStorage.getItem("chat-app-token") },
+      });
+    }
 
-    socketRef.current.on("connect", () => console.log("✅ Connected to socket server"));
+    const socket = socketRef.current;
 
-    socketRef.current.on("message", (msg) => {
+    socket.on("connect", () => console.log("✅ Connected to socket server"));
+
+    socket.on("message", (msg) => {
       setMessages((prev) => [...prev, msg]);
       scrollToBottom();
     });
 
-    socketRef.current.on("editMessage", ({ id, text }) => {
+    socket.on("editMessage", ({ id, text }) => {
       setMessages((prev) =>
         prev.map((msg) => (msg.id === id ? { ...msg, text } : msg))
       );
     });
 
-    socketRef.current.on("deleteMessage", (id) => {
+    socket.on("deleteMessage", (id) => {
       setMessages((prev) => prev.filter((msg) => msg.id !== id));
     });
 
-    socketRef.current.on("onlineUsers", (users) => setOnlineUsers(users));
-    socketRef.current.on("typing", (users) => setTypingUsers(users));
+    socket.on("onlineUsers", (users) => setOnlineUsers(users));
+    socket.on("typing", (users) => setTypingUsers(users));
 
-    socketRef.current.emit("getMessages");
-    socketRef.current.on("initialMessages", (msgs) => {
+    socket.emit("getMessages");
+    socket.on("initialMessages", (msgs) => {
       setMessages(msgs);
       scrollToBottom();
     });
 
-    return () => socketRef.current.disconnect();
+    return () => {
+      if (socket) {
+        socket.disconnect();
+        socketRef.current = null;
+      }
+    };
   }, []);
 
   const scrollToBottom = () => {
@@ -58,7 +68,7 @@ export default function ChatLayout({ user }) {
   };
 
   const sendMessage = () => {
-    if (!newMsg.trim()) return;
+    if (!newMsg.trim() || !socketRef.current) return;
     const msg = { text: newMsg, userId: user.id, username: user.name, id: Date.now() };
     socketRef.current.emit("sendMessage", msg);
     setNewMsg("");
@@ -70,17 +80,20 @@ export default function ChatLayout({ user }) {
   };
 
   const saveEdit = (id) => {
+    if (!socketRef.current) return;
     socketRef.current.emit("editMessage", { id, text: editText });
     setEditingId(null);
     setEditText("");
   };
 
   const handleDelete = (id) => {
+    if (!socketRef.current) return;
     socketRef.current.emit("deleteMessage", id);
   };
 
   const handleTyping = (e) => {
     setNewMsg(e.target.value);
+    if (!socketRef.current) return;
     if (e.target.value) socketRef.current.emit("typing", user.name);
     else socketRef.current.emit("stopTyping", user.name);
   };
@@ -143,6 +156,7 @@ export default function ChatLayout({ user }) {
                     <span className="text-xs font-bold opacity-80 mb-1">{msg.username}</span>
                     <span className="block text-base">{msg.text}</span>
                     <div className={`flex space-x-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                      {/* Hanya user pemilik pesan yang bisa menghapus dan mengedit */}
                       {isOwn && (
                         <>
                           <button onClick={() => handleEdit(msg)} className="text-yellow-200 hover:text-yellow-400 text-xs">
