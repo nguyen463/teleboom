@@ -6,19 +6,24 @@ import axios from "axios";
 const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function LoginPage() {
-  const [credentials, setCredentials] = useState({
-    email: "",
-    password: "",
-  });
+  // 🔹 State
+  const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
+  // 🔹 Cek token saat halaman load
   useEffect(() => {
     checkAuthStatus();
   }, []);
 
-  // 🔹 Cek status login via token
+  // 🔹 Fungsi hapus token & user
+  const removeToken = () => {
+    localStorage.removeItem("chat-app-token");
+    localStorage.removeItem("chat-user");
+  };
+
+  // 🔹 Fungsi cek status autentikasi
   const checkAuthStatus = async () => {
     const token = localStorage.getItem("chat-app-token");
     const user = localStorage.getItem("chat-user");
@@ -30,14 +35,14 @@ export default function LoginPage() {
 
     try {
       const response = await axios.get(`${API_URL}/api/auth/verify`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.data.valid) {
-        window.location.href = "/chat"; // Token valid, langsung masuk chat
+        // Token valid → langsung masuk chat
+        window.location.href = "/chat";
       } else {
+        // Token expired / invalid
         removeToken();
         setCheckingAuth(false);
       }
@@ -48,31 +53,21 @@ export default function LoginPage() {
     }
   };
 
-  // 🔹 Hapus token dan user
-  const removeToken = () => {
-    localStorage.removeItem("chat-app-token");
-    localStorage.removeItem("chat-user");
-  };
-
   // 🔹 Update input form
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setCredentials({
-      ...credentials,
-      [name]: value,
-    });
+    setCredentials({ ...credentials, [name]: value });
     setErrors({ ...errors, [name]: "" });
   };
 
   // 🔹 Validasi form
   const validateForm = () => {
     const newErrors = {};
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!credentials.email || !emailRegex.test(credentials.email)) {
       newErrors.email = "Mohon masukkan alamat email yang valid";
     }
-
     if (!credentials.password) {
       newErrors.password = "Password harus diisi";
     }
@@ -86,6 +81,8 @@ export default function LoginPage() {
     setErrors({});
     setLoading(true);
 
+    removeToken(); // Hapus token lama dulu
+
     try {
       const validationErrors = validateForm();
       if (Object.keys(validationErrors).length > 0) {
@@ -96,11 +93,11 @@ export default function LoginPage() {
 
       const response = await axios.post(`${API_URL}/api/auth/login`, credentials);
 
-      // Simpan token dan data user
+      // Simpan token & user
       localStorage.setItem("chat-app-token", response.data.token);
       localStorage.setItem("chat-user", JSON.stringify(response.data.user));
 
-      // Redirect ke halaman chat
+      // Redirect ke chat
       window.location.href = "/chat";
     } catch (err) {
       console.error("Login error:", err);
@@ -120,7 +117,7 @@ export default function LoginPage() {
     }
   };
 
-  // 🔹 Kalau masih cek token, tampilkan loading spinner
+  // 🔹 Kalau masih cek token → tampil loading spinner
   if (checkingAuth) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -154,10 +151,7 @@ export default function LoginPage() {
 
           {/* Input Email */}
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Alamat Email
             </label>
             <input
@@ -173,17 +167,12 @@ export default function LoginPage() {
               onChange={handleChange}
               disabled={loading}
             />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-            )}
+            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
           </div>
 
           {/* Input Password */}
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <input
@@ -199,9 +188,7 @@ export default function LoginPage() {
               onChange={handleChange}
               disabled={loading}
             />
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-            )}
+            {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
           </div>
 
           {/* Tombol Login */}
@@ -209,47 +196,25 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             className={`w-full py-3 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 ${
-              loading
-                ? "bg-blue-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700"
+              loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
             {loading ? (
               <div className="flex items-center justify-center">
-                <svg
-                  className="animate-spin h-5 w-5 mr-3 text-white"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                  />
+                <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                 </svg>
                 Memproses...
               </div>
-            ) : (
-              "Masuk"
-            )}
+            ) : "Masuk"}
           </button>
 
           {/* Link ke halaman register */}
           <div className="text-center">
             <p className="text-sm text-gray-600">
               Belum punya akun?{" "}
-              <a
-                href="/register"
-                className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200"
-              >
+              <a href="/register" className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200">
                 Daftar di sini
               </a>
             </p>
