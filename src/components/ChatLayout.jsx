@@ -1,180 +1,201 @@
-"use client";
-
-import { useEffect, useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, FlatList, Image, SafeAreaView, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
 import { io } from "socket.io-client";
-import { logout } from "@/app/utils/auth";
+import * as ImagePicker from 'expo-image-picker';
+import { AntDesign, Ionicons } from '@expo/vector-icons';
+import { getAuthToken, logout } from "./auth";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = "http://localhost:5000";
 
-export default function ChatLayout({ user }) {
+export default function ChatScreen({ navigation, user }) {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [editText, setEditText] = useState("");
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
 
   const socketRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const flatListRef = useRef(null);
 
   useEffect(() => {
-    // 🔹 Connect ke Socket.IO
-    socketRef.current = io(SOCKET_URL, {
-      auth: { token: localStorage.getItem("chat-app-token") },
-    });
+    // 🔹 Sambungkan ke Socket.IO
+    const token = getAuthToken();
+    socketRef.current = io(SOCKET_URL, { auth: { token } });
 
     socketRef.current.on("connect", () => console.log("✅ Connected to socket server"));
-
-    // 🔹 Terima pesan dari server
+    socketRef.current.on("initialMessages", (msgs) => setMessages(msgs));
     socketRef.current.on("message", (msg) => {
       setMessages((prev) => [...prev, msg]);
-      scrollToBottom();
+      flatListRef.current?.scrollToEnd({ animated: true });
     });
-
-    // 🔹 Terima edit & delete
-    socketRef.current.on("editMessage", ({ id, text }) => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === id ? { ...msg, text } : msg))
-      );
-    });
-    socketRef.current.on("deleteMessage", (id) => {
-      setMessages((prev) => prev.filter((msg) => msg.id !== id));
-    });
-
-    // 🔹 Terima user online
     socketRef.current.on("onlineUsers", (users) => setOnlineUsers(users));
-
-    // 🔹 Typing indicator
     socketRef.current.on("typing", (users) => setTypingUsers(users));
-
-    // 🔹 Load awal messages
-    socketRef.current.emit("getMessages");
-    socketRef.current.on("initialMessages", (msgs) => {
-      setMessages(msgs);
-      scrollToBottom();
-    });
 
     return () => socketRef.current.disconnect();
   }, []);
 
-  const scrollToBottom = () => {
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-  };
-
-  // 🔹 Kirim pesan
-  const sendMessage = () => {
+  // 🔹 Kirim pesan teks
+  const sendTextMessage = () => {
     if (!newMsg.trim()) return;
-    const msg = { text: newMsg, userId: user.id, username: user.name, id: Date.now() };
+    const msg = { text: newMsg, userId: user.id, username: user.name, timestamp: Date.now() };
     socketRef.current.emit("sendMessage", msg);
     setNewMsg("");
   };
 
-  // 🔹 Edit pesan
-  const handleEdit = (msg) => {
-    setEditingId(msg.id);
-    setEditText(msg.text);
-  };
-  const saveEdit = (id) => {
-    socketRef.current.emit("editMessage", { id, text: editText });
-    setEditingId(null);
-    setEditText("");
+  // 🔹 Kirim gambar
+  const sendImageMessage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      const uri = result.assets[0].uri;
+      const msg = { type: "image", uri, userId: user.id, username: user.name, timestamp: Date.now() };
+      socketRef.current.emit("sendImage", msg);
+    }
   };
 
-  // 🔹 Delete pesan
-  const handleDelete = (id) => {
-    socketRef.current.emit("deleteMessage", id);
-  };
-
-  // 🔹 Typing indicator
-  const handleTyping = (e) => {
-    setNewMsg(e.target.value);
-    if (e.target.value) socketRef.current.emit("typing", user.name);
+  // 🔹 Indikator mengetik
+  const handleTyping = (text) => {
+    setNewMsg(text);
+    if (text) socketRef.current.emit("typing", user.name);
     else socketRef.current.emit("stopTyping", user.name);
   };
 
+  // 🔹 Render item pesan
+  const renderMessage = ({ item }) => {
+    const isOwn = item.userId === user.id;
+    return (
+      <View style={[styles.messageBubble, isOwn ? styles.myBubble : styles.otherBubble]}>
+        <Text style={styles.username}>{item.username}</Text>
+        {item.type === "image" ? (
+          <Image source={{ uri: item.uri }} style={styles.imageMessage} />
+        ) : (
+          <Text style={isOwn ? styles.myText : styles.otherText}>{item.text}</Text>
+        )}
+        <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleTimeString()}</Text>
+      </View>
+    );
+  };
+
   return (
-    <div className="flex h-screen">
-      {/* Sidebar online users */}
-      <div className="w-64 bg-gray-100 p-4 border-r">
-        <h2 className="text-lg font-bold mb-4">Online Users</h2>
-        <ul>
-          {onlineUsers.map((u) => (
-            <li key={u} className={`mb-2 ${u === user.id ? "font-bold text-blue-600" : ""}`}>
-              {u} {typingUsers.includes(u) && <span className="text-sm text-green-500">typing...</span>}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Chat main */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="flex justify-between items-center bg-blue-600 text-white p-4 shadow">
-          <h1 className="text-xl font-bold">Chat Room</h1>
-          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600">
-            Logout
-          </button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-          {messages.map((msg) => {
-            const isOwn = msg.userId === user.id;
-            return (
-              <div
-                key={msg.id}
-                className={`max-w-lg p-2 rounded-lg ${isOwn ? "bg-blue-500 text-white ml-auto" : "bg-gray-200 text-gray-900"}`}
-              >
-                {editingId === msg.id ? (
-                  <div className="flex space-x-2">
-                    <input
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      className="flex-1 p-1 rounded border"
-                    />
-                    <button onClick={() => saveEdit(msg.id)} className="bg-green-500 px-2 rounded text-white">
-                      Save
-                    </button>
-                    <button onClick={() => setEditingId(null)} className="bg-gray-400 px-2 rounded text-white">
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex justify-between items-center">
-                    <span>{msg.username}: {msg.text}</span>
-                    {isOwn && (
-                      <div className="flex space-x-1 ml-2 text-sm">
-                        <button onClick={() => handleEdit(msg)} className="text-yellow-200 hover:text-yellow-400">
-                          Edit
-                        </button>
-                        <button onClick={() => handleDelete(msg.id)} className="text-red-400 hover:text-red-600">
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef}></div>
-        </div>
-
-        {/* Input */}
-        <div className="flex p-4 space-x-2 border-t border-gray-300">
-          <input
-            type="text"
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Chat Room</Text>
+        <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        renderItem={renderMessage}
+        keyExtractor={(item) => item.timestamp.toString()}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        style={styles.messagesContainer}
+      />
+      {typingUsers.length > 0 && (
+        <View style={styles.typingContainer}>
+          <Text style={styles.typingText}>{typingUsers.join(", ")} is typing...</Text>
+        </View>
+      )}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.inputContainerWrapper}
+      >
+        <View style={styles.inputContainer}>
+          <TouchableOpacity onPress={sendImageMessage} style={styles.mediaButton}>
+            <Ionicons name="image" size={24} color="#666" />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.input}
             placeholder="Tulis pesan..."
             value={newMsg}
-            onChange={handleTyping}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            className="flex-1 p-2 border rounded-lg"
+            onChangeText={handleTyping}
+            onSubmitEditing={sendTextMessage}
+            multiline
           />
-          <button onClick={sendMessage} className="bg-blue-600 text-white px-4 rounded-lg hover:bg-blue-700">
-            Kirim
-          </button>
-        </div>
-      </div>
-    </div>
+          <TouchableOpacity onPress={sendTextMessage} style={styles.sendButton}>
+            <Ionicons name="send" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f0f0f0" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#007AFF",
+    padding: 15,
+    paddingTop: Platform.OS === 'android' ? 15 : 0,
+  },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#fff" },
+  logoutButton: { backgroundColor: "#FF3B30", padding: 8, borderRadius: 5 },
+  logoutText: { color: "#fff" },
+  messagesContainer: { paddingHorizontal: 10, paddingVertical: 5 },
+  messageBubble: {
+    maxWidth: "80%",
+    padding: 10,
+    borderRadius: 15,
+    marginVertical: 5,
+  },
+  myBubble: {
+    backgroundColor: "#007AFF",
+    marginLeft: "auto",
+    borderTopRightRadius: 0,
+  },
+  otherBubble: {
+    backgroundColor: "#E5E5EA",
+    marginRight: "auto",
+    borderTopLeftRadius: 0,
+  },
+  username: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#666",
+    marginBottom: 2,
+  },
+  myText: { color: "#fff" },
+  otherText: { color: "#000" },
+  imageMessage: { width: 200, height: 200, borderRadius: 10 },
+  timestamp: { fontSize: 10, color: "#999", textAlign: "right", marginTop: 5 },
+  typingContainer: { paddingHorizontal: 15, paddingVertical: 5 },
+  typingText: { color: "#007AFF" },
+  inputContainerWrapper: { paddingBottom: 15 },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderColor: "#ccc",
+  },
+  input: {
+    flex: 1,
+    maxHeight: 100,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    marginRight: 10,
+  },
+  sendButton: {
+    backgroundColor: "#007AFF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mediaButton: {
+    marginRight: 10,
+  }
+});
