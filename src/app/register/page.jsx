@@ -88,6 +88,7 @@ export default function RegisterPage() {
       localStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
 
       setTimeout(() => {
+        // Mengarahkan ke halaman chat yang benar
         window.location.href = '/chat';
       }, 2000);
 
