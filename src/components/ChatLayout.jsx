@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { logout } from "@/app/utils/auth";
-import Image from "next/image";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
 
@@ -26,15 +25,10 @@ export default function ChatLayout({ user }) {
 
   useEffect(() => {
     const token = localStorage.getItem("chat-app-token");
-    if (!token) {
-      console.error("No token found");
-      return;
-    }
+    if (!token) return console.error("No token found");
 
     if (!socketRef.current) {
-      socketRef.current = io(SOCKET_URL, {
-        auth: { token },
-      });
+      socketRef.current = io(SOCKET_URL, { auth: { token } });
     }
 
     const socket = socketRef.current;
@@ -44,43 +38,51 @@ export default function ChatLayout({ user }) {
       socket.emit("getMessages");
     });
 
-    socket.on("disconnect", () => {
-      console.log("❌ Disconnected from socket server");
+    socket.on("disconnect", () => console.log("❌ Disconnected from socket server"));
+    socket.on("connect_error", (err) => console.error("Connection error:", err));
+
+    // Pesan baru
+    socket.on("message", (msg) => {
+      setMessages((prev) => [...prev, { ...msg, _id: msg._id.toString() }]);
     });
 
-    socket.on("connect_error", (err) => {
-      console.error("Connection error:", err);
+    // Edit pesan
+    socket.on("editMessage", ({ id, text }) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg._id.toString() === id ? { ...msg, text } : msg))
+      );
     });
 
-    socket.on("message", (msg) => setMessages((prev) => [...prev, msg]));
-    socket.on("editMessage", ({ id, text }) =>
-      setMessages((prev) => prev.map((msg) => (msg.id === id ? { ...msg, text } : msg)))
-    );
-    socket.on("deleteMessage", (id) => setMessages((prev) => prev.filter((msg) => msg.id !== id)));
-    socket.on("onlineUsers", (users) => setOnlineUsers(users));
-    socket.on("userTyping", (users) => setTypingUsers(users));
-    socket.on("initialMessages", (msgs) => setMessages(msgs));
+    // Hapus pesan
+    socket.on("deleteMessage", (id) => {
+      setMessages((prev) => prev.filter((msg) => msg._id.toString() !== id));
+    });
+
+    // Online users
+    socket.on("onlineUsers", setOnlineUsers);
+
+    // Typing
+    socket.on("userTyping", setTypingUsers);
+
+    // Initial messages
+    socket.on("initialMessages", (msgs) => {
+      const formatted = msgs.map((m) => ({ ...m, _id: m._id.toString() }));
+      setMessages(formatted);
+    });
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      if (socketRef.current) socketRef.current.disconnect();
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, []);
 
   useEffect(() => scrollToBottom(), [messages]);
 
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
-  // ===== Perbaikan sendMessage =====
+  // ===== Send Message =====
   const sendMessage = () => {
     if ((!newMsg.trim() && !selectedImage) || !socketRef.current) return;
 
@@ -95,29 +97,24 @@ export default function ChatLayout({ user }) {
         image: imageData,
       };
 
-      if (socketRef.current && socketRef.current.connected) {
+      if (socketRef.current.connected) {
         socketRef.current.emit("sendMessage", messageData);
         setNewMsg("");
         setSelectedImage(null);
         setImagePreview(null);
-
         socketRef.current.emit("stopTyping", user.name);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      } else {
-        console.error("Socket belum terkoneksi");
-      }
+      } else console.error("Socket belum terkoneksi");
     };
 
     if (selectedImage) {
       reader.onload = (e) => send(e.target.result);
       reader.readAsDataURL(selectedImage);
-    } else {
-      send();
-    }
+    } else send();
   };
 
   const handleEdit = (msg) => {
-    setEditingId(msg.id);
+    setEditingId(msg._id.toString());
     setEditText(msg.text);
   };
 
@@ -136,17 +133,12 @@ export default function ChatLayout({ user }) {
   const handleTyping = (e) => {
     const value = e.target.value;
     setNewMsg(value);
-
     if (!socketRef.current) return;
 
     if (value) {
       socketRef.current.emit("typing", user.name);
-
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current.emit("stopTyping", user.name);
-      }, 1000);
+      typingTimeoutRef.current = setTimeout(() => socketRef.current.emit("stopTyping", user.name), 1000);
     } else {
       socketRef.current.emit("stopTyping", user.name);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -156,12 +148,10 @@ export default function ChatLayout({ user }) {
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     if (!file.type.match("image.*")) return alert("Hanya file gambar yang diizinkan");
     if (file.size > 5 * 1024 * 1024) return alert("Ukuran file maksimal 5MB");
 
     setSelectedImage(file);
-
     const reader = new FileReader();
     reader.onload = (e) => setImagePreview(e.target.result);
     reader.readAsDataURL(file);
@@ -191,9 +181,7 @@ export default function ChatLayout({ user }) {
             </span>
           </button>
           <span className="hidden md:inline">Hai, {user.name}</span>
-          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition-colors">
-            Logout
-          </button>
+          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition-colors">Logout</button>
         </div>
       </div>
 
@@ -229,9 +217,9 @@ export default function ChatLayout({ user }) {
           messages.map((msg) => {
             const isOwn = msg.userId === user.id;
             return (
-              <div key={msg.id || msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+              <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}>
-                  {editingId === (msg.id || msg._id) ? (
+                  {editingId === msg._id ? (
                     <div className="flex flex-col space-y-2">
                       <input
                         value={editText}
@@ -240,21 +228,15 @@ export default function ChatLayout({ user }) {
                         autoFocus
                       />
                       <div className="flex space-x-2 self-end">
-                        <button onClick={() => saveEdit(msg.id || msg._id)} className="bg-green-500 px-3 py-1 rounded text-white text-sm">
-                          Simpan
-                        </button>
-                        <button onClick={() => setEditingId(null)} className="bg-gray-400 px-3 py-1 rounded text-white text-sm">
-                          Batal
-                        </button>
+                        <button onClick={() => saveEdit(msg._id)} className="bg-green-500 px-3 py-1 rounded text-white text-sm">Simpan</button>
+                        <button onClick={() => setEditingId(null)} className="bg-gray-400 px-3 py-1 rounded text-white text-sm">Batal</button>
                       </div>
                     </div>
                   ) : (
                     <div>
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-xs font-bold opacity-80">{msg.username}</span>
-                        <span className="text-xs opacity-70">
-                          {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ""}
-                        </span>
+                        <span className="text-xs opacity-70">{msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ""}</span>
                       </div>
 
                       {msg.image && (
@@ -268,12 +250,8 @@ export default function ChatLayout({ user }) {
                       <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {isOwn && (
                           <>
-                            <button onClick={() => handleEdit(msg)} className="text-xs text-blue-100 hover:text-blue-300 transition-colors">
-                              Edit
-                            </button>
-                            <button onClick={() => handleDelete(msg.id || msg._id)} className="text-xs text-red-300 hover:text-red-500 transition-colors">
-                              Hapus
-                            </button>
+                            <button onClick={() => handleEdit(msg)} className="text-xs text-blue-100 hover:text-blue-300 transition-colors">Edit</button>
+                            <button onClick={() => handleDelete(msg._id)} className="text-xs text-red-300 hover:text-red-500 transition-colors">Hapus</button>
                           </>
                         )}
                       </div>
@@ -310,12 +288,7 @@ export default function ChatLayout({ user }) {
             placeholder="Tulis pesan..."
             value={newMsg}
             onChange={handleTyping}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
+            onKeyDown={(e) => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); } }}
             className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button
@@ -323,14 +296,10 @@ export default function ChatLayout({ user }) {
             disabled={(!newMsg.trim() && !selectedImage) || isUploading}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isUploading ? (
-              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              "Kirim"
-            )}
+            {isUploading ? <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg> : "Kirim"}
           </button>
         </div>
 
@@ -341,7 +310,6 @@ export default function ChatLayout({ user }) {
             </svg>
             <input id="image-upload" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" ref={fileInputRef} />
           </label>
-
           <span className="text-sm text-gray-500">Tekan Enter untuk mengirim, Shift+Enter untuk baris baru</span>
         </div>
       </div>
