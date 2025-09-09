@@ -19,7 +19,6 @@ export default function RegisterPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Cek apakah pengguna sudah login tanpa validasi token di backend
     checkAuthStatus();
   }, []);
 
@@ -33,19 +32,41 @@ export default function RegisterPage() {
     }
 
     try {
-      // Coba akses endpoint yang memerlukan autentikasi
-      const userResponse = await axios.get(`${API_URL}/api/auth/me`, {
+      // Coba gunakan endpoint /verify terlebih dahulu
+      const response = await axios.get(`${API_URL}/api/auth/verify`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      
-      if (userResponse.data.user) {
+
+      if (response.data.valid) {
         window.location.href = '/chat';
+      } else {
+        localStorage.removeItem('chat-app-token');
+        localStorage.removeItem('chat-user');
+        setCheckingAuth(false);
       }
     } catch (error) {
-      console.error('Token validation failed:', error);
-      // Hapus token yang tidak valid
+      console.log('Token validation check:', error.response?.status);
+      
+      // Jika endpoint /verify tidak ada (404), coba gunakan endpoint /me
+      if (error.response?.status === 404) {
+        try {
+          const meResponse = await axios.get(`${API_URL}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          if (meResponse.data.user) {
+            window.location.href = '/chat';
+            return;
+          }
+        } catch (meError) {
+          console.log('Both verify and me endpoints not available');
+        }
+      }
+      
       localStorage.removeItem('chat-app-token');
       localStorage.removeItem('chat-user');
       setCheckingAuth(false);
@@ -219,7 +240,7 @@ export default function RegisterPage() {
               id="displayName"
               name="displayName"
               value={formData.displayName}
-              onChange={handleChange}
+              onChange={handleChange)
               placeholder="Masukkan nama tampilan Anda"
               className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                 errors.displayName ? 'border-red-300' : 'border-gray-300'
