@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Ganti URL ini dengan URL backend Heroku-mu saat deployment
 const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function RegisterPage() {
@@ -17,6 +16,46 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    // Cek apakah pengguna sudah login
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    const token = localStorage.getItem('chat-app-token');
+    const user = localStorage.getItem('chat-user');
+    
+    if (!token || !user) {
+      setCheckingAuth(false);
+      return;
+    }
+
+    try {
+      // Verifikasi token dengan backend
+      const response = await axios.get(`${API_URL}/api/auth/verify`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.valid) {
+        // Token valid, redirect ke chat
+        window.location.href = '/chat';
+      } else {
+        // Token tidak valid, hapus dari localStorage
+        localStorage.removeItem('chat-app-token');
+        localStorage.removeItem('chat-user');
+        setCheckingAuth(false);
+      }
+    } catch (error) {
+      console.error('Token verification failed:', error);
+      localStorage.removeItem('chat-app-token');
+      localStorage.removeItem('chat-user');
+      setCheckingAuth(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -70,57 +109,71 @@ export default function RegisterPage() {
         return;
       }
       
+      // Kirim data register ke backend
       const response = await axios.post(`${API_URL}/api/auth/register`, {
-        email: formData.email,
-        username: formData.username,
-        displayName: formData.displayName,
+        email: formData.email.trim().toLowerCase(),
+        username: formData.username.trim().toLowerCase(),
+        displayName: formData.displayName.trim(),
         password: formData.password,
       });
       
-      setSuccess('Akun berhasil dibuat! Anda akan diarahkan ke halaman chat...');
+      // Simpan token dan data user yang diterima dari register
+      localStorage.setItem('chat-app-token', response.data.token);
+      localStorage.setItem('chat-user', JSON.stringify(response.data.user));
       
-      const loginResponse = await axios.post(`${API_URL}/api/auth/login`, {
-        email: formData.email,
-        password: formData.password
-      });
+      setSuccess('Akun berhasil dibuat! Anda akan diarahkan ke halaman chat...');
 
-      localStorage.setItem('chat-app-token', loginResponse.data.token);
-      localStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
-
+      // Redirect langsung ke halaman chat setelah register berhasil
       setTimeout(() => {
-        // Mengarahkan ke halaman chat yang benar
         window.location.href = '/chat';
       }, 2000);
 
     } catch (err) {
-      let errorMessage = 'Pendaftaran gagal';
+      console.error('Registration error:', err);
+      
       if (err.response?.data?.errors) {
+        // Handle error validasi dari express-validator
         const backendErrors = {};
         err.response.data.errors.forEach((error) => {
-          backendErrors[error.path || 'general'] = error.message || error.msg;
+          if (error.param) {
+            backendErrors[error.param] = error.msg;
+          }
         });
         setErrors(backendErrors);
       } else if (err.response?.data?.message) {
-        if (err.response.data.message.includes('email is already in use')) {
-          setErrors({ email: 'Email sudah terdaftar' });
-        } else if (err.response.data.message.includes('username is already in use')) {
-          setErrors({ username: 'Nama pengguna sudah terdaftar' });
+        // Handle error message umum
+        if (err.response.data.message.includes('Email atau nama pengguna sudah terdaftar')) {
+          setErrors({ general: 'Email atau nama pengguna sudah terdaftar' });
         } else {
           setErrors({ general: err.response.data.message });
         }
       } else {
-        setErrors({ general: errorMessage });
+        setErrors({ general: 'Pendaftaran gagal. Silakan coba lagi.' });
       }
     } finally {
       setLoading(false);
     }
   };
 
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Memeriksa status autentikasi...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
         <div>
           <h1 className="text-3xl font-bold text-center text-gray-900">Buat Akun Baru</h1>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Daftar untuk mulai menggunakan aplikasi chat
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
