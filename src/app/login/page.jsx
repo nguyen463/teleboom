@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Ganti URL ini dengan URL backend Heroku-mu saat deployment
 const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function LoginPage() {
@@ -13,6 +12,46 @@ export default function LoginPage() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    // Cek apakah pengguna sudah login
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    const token = localStorage.getItem('chat-app-token');
+    const user = localStorage.getItem('chat-user');
+    
+    if (!token || !user) {
+      setCheckingAuth(false);
+      return;
+    }
+
+    try {
+      // Verifikasi token dengan backend
+      const response = await axios.get(`${API_URL}/api/auth/verify`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.valid) {
+        // Token valid, redirect ke chat
+        window.location.href = '/chat';
+      } else {
+        // Token tidak valid, hapus dari localStorage
+        localStorage.removeItem('chat-app-token');
+        localStorage.removeItem('chat-user');
+        setCheckingAuth(false);
+      }
+    } catch (error) {
+      console.error('Token verification failed:', error);
+      localStorage.removeItem('chat-app-token');
+      localStorage.removeItem('chat-user');
+      setCheckingAuth(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,7 +98,7 @@ export default function LoginPage() {
       localStorage.setItem('chat-app-token', response.data.token);
       localStorage.setItem('chat-user', JSON.stringify(response.data.user));
       
-      // Redirect ke halaman chat yang benar
+      // Redirect ke halaman chat
       window.location.href = '/chat'; 
 
     } catch (err) {
@@ -80,11 +119,25 @@ export default function LoginPage() {
     }
   };
 
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Memeriksa status autentikasi...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
         <div>
           <h1 className="text-3xl font-bold text-center text-gray-900">Masuk ke Akun Anda</h1>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Silakan masuk untuk mengakses aplikasi chat
+          </p>
         </div>
         
         <form className="space-y-6" onSubmit={handleSubmit}>
