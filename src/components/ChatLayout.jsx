@@ -1,165 +1,193 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { io } from "socket.io-client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSocket } from "../hooks/useSocket";
+import { FaTrash, FaEdit } from "react-icons/fa";
 import { logout } from "@/app/utils/auth";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
+export default function ChatLayout() {
+  const router = useRouter();
+  const socket = useSocket();
 
-export default function ChatLayout({ user }) {
-  // ... state declarations tetap sama ...
+  const [status, setStatus] = useState("Menghubungkan...");
+  const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [editMessageId, setEditMessageId] = useState(null);
 
+  // ====== KONEKSI SOCKET.IO ======
   useEffect(() => {
-    console.log("🔍 USER OBJECT:", user); // Debug user object
-    
-    // PERBAIKAN: Cek semua kemungkinan property ID yang mungkin ada
-    const userId = user?.id || user?._id || user?.userId || user?.userID;
-    console.log("🔍 EXTRACTED USER ID:", userId);
-    
-    const token = localStorage.getItem("chat-app-token");
-    if (!token) {
-      console.error("No token found");
-      return;
-    }
+    if (!socket) return;
 
-    if (!socketRef.current) {
-      console.log("🔌 Connecting to socket:", SOCKET_URL);
-      socketRef.current = io(SOCKET_URL, { 
-        auth: { token },
-        transports: ["websocket", "polling"]
-      });
-    }
-
-    const socket = socketRef.current;
-
-    // Event connection status
     socket.on("connect", () => {
-      console.log("✅ Connected to socket server");
-      setConnectionStatus("connected");
-      socket.emit("getMessages");
+      setStatus("✅ Terhubung ke server!");
+      setUserId(socket.id);
     });
-    
-    // ... rest of socket events tetap sama ...
-  }, [user]);
 
-  // ... other functions tetap sama ...
+    socket.on("disconnect", () => {
+      setStatus("❌ Terputus dari server.");
+    });
+
+    socket.on("receive_message", (data) => {
+      setMessages((prev) => [...prev, data]);
+    });
+
+    socket.on("load_messages", (allMessages) => {
+      setMessages(allMessages);
+    });
+
+    socket.on("message_deleted", (id) => {
+      setMessages((prev) => prev.filter((msg) => msg._id !== id));
+    });
+
+    socket.on("message_updated", (updatedMsg) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
+      );
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("receive_message");
+      socket.off("load_messages");
+      socket.off("message_deleted");
+      socket.off("message_updated");
+    };
+  }, [socket]);
+
+  // ====== KIRIM PESAN ======
+  const handleSendMessage = () => {
+    if (message.trim() === "") return;
+
+    if (editMessageId) {
+      socket.emit("edit_message", { id: editMessageId, newText: message });
+      setEditMessageId(null);
+    } else {
+      socket.emit("chat_message", { text: message, id: socket.id });
+    }
+
+    setMessage("");
+  };
+
+  // ====== HAPUS PESAN ======
+  const handleDeleteMessage = (id) => {
+    if (confirm("Yakin mau hapus pesan ini?")) {
+      socket.emit("delete_message", id);
+    }
+  };
+
+  // ====== EDIT PESAN ======
+  const handleEditMessage = (msg) => {
+    setMessage(msg.text);
+    setEditMessageId(msg._id);
+  };
+
+  // ====== LOGOUT ======
+  const handleLogout = () => {
+    localStorage.removeItem("chat-app-token");
+    router.push("/login");
+  };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      {/* Header */}
-      <div className="flex justify-between items-center bg-blue-600 text-white p-4 shadow-md">
-        <h1 className="text-xl font-bold">Chat Room</h1>
-        <div className="flex items-center space-x-4">
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className="w-1/4 bg-gray-800 text-white p-4">
+        <h2 className="text-xl font-bold mb-4">Users</h2>
+        <p className="text-gray-400">Status: {status}</p>
+      </div>
+
+      {/* Area Chat */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="flex justify-between items-center bg-white p-4 border-b">
+          <h1 className="text-xl font-bold text-gray-800">💬 Chat Room</h1>
           <button
-            onClick={() => setShowOnlineUsers(!showOnlineUsers)}
-            className="relative p-2 rounded-full hover:bg-blue-700 transition-colors"
+            onClick={handleLogout}
+            className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-green-600 rounded-full">
-              {onlineUsers.length}
-            </span>
+            Logout
           </button>
-          <span className="hidden md:inline">Hai, {user?.name || user?.username || 'User'}</span>
-          <span className={`h-3 w-3 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
-          <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition-colors">Logout</button>
-        </div>
-      </div>
+        </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-500">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-              <p>Belum ada pesan. Mulai percakapan!</p>
-            </div>
-          </div>
-        ) : (
-          messages.map((msg) => {
-            // PERBAIKAN: Extract user ID dari berbagai kemungkinan property
-            const userId = user?.id || user?._id || user?.userId || user?.userID;
-            
-            // PERBAIKAN: Logic isOwn yang lebih robust
-            const isOwn = userId && msg.senderId && 
-              (msg.senderId.toString() === userId.toString());
+        {/* Daftar Pesan */}
+        <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
+          {messages.length === 0 ? (
+            <p className="text-gray-500 text-center mt-4">
+              Kirim pesan pertama Anda!
+            </p>
+          ) : (
+            messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`relative mb-3 p-3 rounded-lg max-w-xs shadow-md ${
+                  msg.id === userId
+                    ? "bg-blue-500 text-white ml-auto"
+                    : "bg-gray-200 text-gray-800"
+                }`}
+              >
+                {/* Isi Pesan */}
+                <p className="text-sm">
+                  <span className="font-semibold">
+                    {msg.id
+                      ? msg.id === userId
+                        ? "Anda"
+                        : msg.id.slice(0, 5)
+                      : "Anonim"}
+                  </span>
+                  : {msg.text}
+                </p>
 
-            console.log("🔍 MESSAGE DEBUG:", {
-              messageId: msg._id,
-              msgSenderId: msg.senderId,
-              userId: userId,
-              isOwn: isOwn,
-              userObject: user // Log seluruh user object untuk debugging
-            });
-
-            return (
-              <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}>
-                  {editingId === msg._id ? (
-                    <div className="flex flex-col space-y-2">
-                      <input
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        onKeyDown={handleEditKeyPress}
-                        className="flex-1 p-2 rounded border text-black"
-                        autoFocus
-                      />
-                      <div className="flex space-x-2 self-end">
-                        <button onClick={saveEdit} className="bg-green-500 px-3 py-1 rounded text-white text-sm">Simpan</button>
-                        <button onClick={() => { setEditingId(null); setEditText(""); }} className="bg-gray-400 px-3 py-1 rounded text-white text-sm">Batal</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-xs font-bold opacity-80">{msg.senderName}</span>
-                        <span className="text-xs opacity-70">
-                          {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ''}
-                          {msg.updatedAt && ' (diedit)'}
-                        </span>
-                      </div>
-
-                      {msg.image && (
-                        <div className="my-2">
-                          <img src={msg.image} alt="Gambar pesan" className="max-w-full rounded-lg max-h-64 object-cover" />
-                        </div>
-                      )}
-
-                      {msg.text && <span className="block text-base">{msg.text}</span>}
-
-                      {/* Tombol edit/hapus hanya muncul untuk pesan milik sendiri */}
-                      <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                        {isOwn && (
-                          <>
-                            <button 
-                              onClick={() => handleEdit(msg)} 
-                              className="text-xs text-blue-100 hover:text-blue-300 transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(msg._id)} 
-                              className="text-xs text-red-300 hover:text-red-500 transition-colors"
-                            >
-                              Hapus
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Tombol Edit & Hapus */}
+                {msg.id === userId && (
+                  <div className="absolute -top-2 -right-10 flex gap-2">
+                    <button
+                      onClick={() => handleEditMessage(msg)}
+                      className="text-yellow-400 hover:text-yellow-600"
+                      title="Edit pesan"
+                    >
+                      <FaEdit size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMessage(msg._id)}
+                      className="text-red-500 hover:text-red-700"
+                      title="Hapus pesan"
+                    >
+                      <FaTrash size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef}></div>
-      </div>
+            ))
+          )}
+        </main>
 
-      {/* ... rest of the component tetap sama ... */}
+        {/* Input Pesan */}
+        <footer className="bg-white p-4 border-t flex gap-2">
+          <input
+            type="text"
+            placeholder={
+              editMessageId ? "Edit pesan..." : "Ketik pesan..."
+            }
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSendMessage();
+            }}
+            className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          {/* Tombol Send */}
+          <button
+            onClick={handleSendMessage}
+            disabled={!message.trim()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {editMessageId ? "Update" : "Send"}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }
