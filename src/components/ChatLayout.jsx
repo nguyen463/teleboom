@@ -12,11 +12,11 @@ export default function ChatLayout({ user }) {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
   const [darkMode, setDarkMode] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Connect ke socket
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
       auth: { token: localStorage.getItem("chat-app-token") },
@@ -35,6 +35,10 @@ export default function ChatLayout({ user }) {
       scrollToBottom();
     });
 
+    socketRef.current.on("onlineUsers", (users) => {
+      setOnlineUsers(users); // array of userId yang online
+    });
+
     return () => socketRef.current.disconnect();
   }, []);
 
@@ -44,7 +48,13 @@ export default function ChatLayout({ user }) {
 
   const sendMessage = () => {
     if (!newMsg.trim()) return;
-    const msg = { text: newMsg, userId: user.id, id: Date.now(), username: user.name };
+    const msg = {
+      text: newMsg,
+      userId: user.id,
+      id: Date.now(),
+      username: user.name,
+      avatar: user.avatar || "/default-avatar.png",
+    };
     socketRef.current.emit("sendMessage", msg);
     setNewMsg("");
   };
@@ -67,6 +77,8 @@ export default function ChatLayout({ user }) {
   };
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
+
+  const isOnline = (userId) => onlineUsers.includes(userId);
 
   return (
     <div className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"} flex flex-col h-screen`}>
@@ -96,11 +108,24 @@ export default function ChatLayout({ user }) {
           const isOwn = msg.userId === user.id;
           return (
             <div key={msg.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+              
+              {/* Avatar & Online indicator */}
+              {!isOwn && (
+                <div className="flex flex-col items-center mr-2">
+                  <div className="relative">
+                    <img src={msg.avatar || "/default-avatar.png"} alt="avatar" className="w-8 h-8 rounded-full" />
+                    {isOnline(msg.userId) && (
+                      <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 border-2 border-white rounded-full"></span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Message bubble */}
               <div className={`relative max-w-lg p-3 rounded-lg ${isOwn ? "bg-blue-500 text-white" : darkMode ? "bg-gray-700 text-gray-100" : "bg-gray-200 text-gray-900"}`}>
-                {/* Username for other users */}
+                
                 {!isOwn && <div className="text-xs font-semibold mb-1">{msg.username}</div>}
 
-                {/* Message text */}
                 {editingId === msg.id ? (
                   <div className="flex space-x-2">
                     <input
