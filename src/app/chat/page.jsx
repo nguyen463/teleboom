@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import ChatLayout from '@/components/ChatLayout';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import ChatLayout from "@/components/ChatLayout";
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
@@ -10,34 +10,27 @@ export default function ChatPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = sessionStorage.getItem('chat-app-token');
-    const userData = sessionStorage.getItem('chat-user');
+    const token = localStorage.getItem("chat-app-token");
+    const userData = localStorage.getItem("chat-user");
 
-    // Kalau tidak ada token → lempar ke login
     if (!token || !userData) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
-    // 🔹 Panggil endpoint verify untuk memastikan token valid
     const verifyToken = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify`,
-          {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${token}`, // ✅ kirim token
-            },
-          }
-        );
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         const data = await res.json();
+
         if (!data.valid) {
-          console.warn("Token tidak valid:", data.message);
-          sessionStorage.removeItem('chat-app-token');
-          sessionStorage.removeItem('chat-user');
-          router.push('/login');
+          localStorage.removeItem("chat-app-token");
+          localStorage.removeItem("chat-user");
+          router.push("/login");
           return;
         }
 
@@ -45,7 +38,9 @@ export default function ChatPage() {
         setLoading(false);
       } catch (err) {
         console.error("❌ Gagal verifikasi token:", err);
-        router.push('/login');
+        localStorage.removeItem("chat-app-token");
+        localStorage.removeItem("chat-user");
+        router.push("/login");
       }
     };
 
