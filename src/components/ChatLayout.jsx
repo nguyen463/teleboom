@@ -4,15 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import { logout } from "@/app/utils/auth"; // <- @ mengacu ke src/
 
-export default function ChatLayout({ user }) {
-  return (
-    <div>
-      <button onClick={logout} className="bg-red-500 text-white px-3 py-1 rounded">
-        Logout
-      </button>
-    </div>
-  );
-}
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
 
 export default function ChatLayout({ user }) {
