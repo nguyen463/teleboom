@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { logout } from "@/app/utils/auth";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout({ user }) {
   const [messages, setMessages] = useState([]);
@@ -25,6 +25,8 @@ export default function ChatLayout({ user }) {
   const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
+    console.log("🔍 USER OBJECT:", user); // Debug user object
+    
     const token = localStorage.getItem("chat-app-token");
     if (!token) {
       console.error("No token found");
@@ -32,6 +34,7 @@ export default function ChatLayout({ user }) {
     }
 
     if (!socketRef.current) {
+      console.log("🔌 Connecting to socket:", SOCKET_URL);
       socketRef.current = io(SOCKET_URL, { 
         auth: { token },
         transports: ["websocket", "polling"]
@@ -44,7 +47,6 @@ export default function ChatLayout({ user }) {
     socket.on("connect", () => {
       console.log("✅ Connected to socket server");
       setConnectionStatus("connected");
-      // Minta pesan setelah terkoneksi
       socket.emit("getMessages");
     });
     
@@ -60,26 +62,29 @@ export default function ChatLayout({ user }) {
 
     // Event untuk menerima semua pesan saat pertama connect
     socket.on("allMessages", (messages) => {
-      console.log("Received all messages:", messages);
+      console.log("🔍 ALL MESSAGES FROM SERVER:", messages);
       const formatted = messages.map(m => ({ 
         ...m, 
-        _id: m._id ? m._id.toString() : Math.random().toString() 
+        _id: m._id ? m._id.toString() : Math.random().toString(),
+        // Pastikan senderId juga string
+        senderId: m.senderId ? m.senderId.toString() : ""
       }));
       setMessages(formatted);
     });
 
     // Event untuk menerima pesan baru
     socket.on("newMessage", (msg) => {
-      console.log("Received new message:", msg);
+      console.log("🔍 NEW MESSAGE FROM SERVER:", msg);
       setMessages(prev => [...prev, { 
         ...msg, 
-        _id: msg._id ? msg._id.toString() : Math.random().toString() 
+        _id: msg._id ? msg._id.toString() : Math.random().toString(),
+        senderId: msg.senderId ? msg.senderId.toString() : ""
       }]);
     });
 
     // Event untuk menerima pesan yang di-edit
     socket.on("editMessage", (data) => {
-      console.log("Message edited:", data);
+      console.log("✏️ MESSAGE EDITED:", data);
       setMessages(prev => prev.map(m => 
         (m._id === data.id ? {...m, text: data.text, updatedAt: data.updatedAt} : m)
       ));
@@ -87,19 +92,19 @@ export default function ChatLayout({ user }) {
 
     // Event untuk menerima pesan yang dihapus
     socket.on("deleteMessage", (id) => {
-      console.log("Message deleted:", id);
+      console.log("🗑️ MESSAGE DELETED:", id);
       setMessages(prev => prev.filter(m => m._id !== id.toString()));
     });
 
     // Event untuk menerima daftar user online
     socket.on("onlineUsers", (users) => {
-      console.log("Online users:", users);
+      console.log("👥 ONLINE USERS:", users);
       setOnlineUsers(users);
     });
 
     // Event untuk typing indicator
     socket.on("userTyping", (userData) => {
-      console.log("User typing:", userData);
+      console.log("⌨️ USER TYPING:", userData);
       setTypingUsers(prev => {
         const userExists = prev.some(u => u.userId === userData.userId);
         return userExists ? prev : [...prev, userData];
@@ -107,13 +112,13 @@ export default function ChatLayout({ user }) {
     });
 
     socket.on("userStoppedTyping", (userData) => {
-      console.log("User stopped typing:", userData);
+      console.log("💤 USER STOPPED TYPING:", userData);
       setTypingUsers(prev => prev.filter(u => u.userId !== userData.userId));
     });
 
     // Event untuk error
     socket.on("error", (errorMsg) => {
-      console.error("Socket error:", errorMsg);
+      console.error("❌ SOCKET ERROR:", errorMsg);
       alert(`Error: ${errorMsg}`);
     });
 
@@ -125,7 +130,7 @@ export default function ChatLayout({ user }) {
         clearTimeout(typingTimeoutRef.current);
       }
     };
-  }, []);
+  }, [user]); // Tambahkan user sebagai dependency
 
   useEffect(() => {
     scrollToBottom();
@@ -183,9 +188,8 @@ export default function ChatLayout({ user }) {
   const saveEdit = () => {
     if (!socketRef.current || !editText.trim() || !editingId) return;
     
-    console.log("Editing message:", editingId, "with text:", editText);
+    console.log("📝 EDITING MESSAGE:", editingId, "with text:", editText);
     
-    // Pastikan ID dikirim sebagai string
     socketRef.current.emit("editMessage", { 
       id: editingId.toString(), 
       text: editText.trim() 
@@ -199,12 +203,10 @@ export default function ChatLayout({ user }) {
   const handleDelete = (id) => {
     if (!socketRef.current) return;
     
-    console.log("Deleting message:", id);
+    console.log("🗑️ DELETING MESSAGE:", id);
     
-    // Konfirmasi sebelum menghapus
     if (!window.confirm("Apakah Anda yakin ingin menghapus pesan ini?")) return;
     
-    // Pastikan ID dikirim sebagai string
     socketRef.current.emit("deleteMessage", id.toString());
   };
 
@@ -260,9 +262,6 @@ export default function ChatLayout({ user }) {
     }
   };
 
-  // Debug: Log user data untuk memastikan struktur benar
-  console.log("User data:", user);
-  
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       {/* Header */}
@@ -280,7 +279,7 @@ export default function ChatLayout({ user }) {
               {onlineUsers.length}
             </span>
           </button>
-          <span className="hidden md:inline">Hai, {user.name}</span>
+          <span className="hidden md:inline">Hai, {user?.name}</span>
           <span className={`h-3 w-3 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
           <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition-colors">Logout</button>
         </div>
@@ -294,7 +293,7 @@ export default function ChatLayout({ user }) {
             {onlineUsers.map((userData) => (
               <div key={userData.userId} className="flex items-center bg-blue-100 px-3 py-1 rounded-full">
                 <span className="h-2 w-2 bg-green-500 rounded-full mr-2"></span>
-                <span className={`text-sm ${userData.userId === user.id ? "font-bold text-blue-600" : "text-gray-700"}`}>
+                <span className={`text-sm ${userData.userId === user?.id ? "font-bold text-blue-600" : "text-gray-700"}`}>
                   {userData.displayName || userData.username}
                   {typingUsers.some(u => u.userId === userData.userId) && (
                     <span className="text-xs text-green-500"> (mengetik...)</span>
@@ -326,20 +325,23 @@ export default function ChatLayout({ user }) {
           </div>
         ) : (
           messages.map((msg) => {
-            // PERBAIKAN: Pastikan perbandingan ID benar
-            // Cek apakah user.id ada dan konversi ke string untuk perbandingan
-            const isOwn = user && user.id && msg.senderId && (msg.senderId.toString() === user.id.toString());
-            
-            console.log("Message debug:", {
+            // PERBAIKAN: Logic isOwn yang lebih robust
+            const isOwn = user && user.id && msg.senderId && 
+              (msg.senderId.toString() === user.id.toString() || 
+               msg.senderId === user.id.toString() || 
+               msg.senderId.toString() === user.id);
+
+            console.log("🔍 MESSAGE DEBUG:", {
+              messageId: msg._id,
               msgSenderId: msg.senderId,
-              userId: user.id,
+              userId: user?.id,
               isOwn: isOwn,
               types: {
                 msgSenderIdType: typeof msg.senderId,
-                userIdType: typeof user.id
+                userIdType: typeof user?.id
               }
             });
-            
+
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}>
@@ -375,7 +377,7 @@ export default function ChatLayout({ user }) {
 
                       {msg.text && <span className="block text-base">{msg.text}</span>}
 
-                      {/* PERBAIKAN: Tombol edit/hapus hanya muncul untuk pesan milik sendiri */}
+                      {/* Tombol edit/hapus hanya muncul untuk pesan milik sendiri */}
                       <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {isOwn && (
                           <>
