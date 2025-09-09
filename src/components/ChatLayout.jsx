@@ -1,283 +1,317 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSocket } from "../hooks/useSocket";
-import { FaTrash, FaEdit, FaPaperPlane, FaSignOutAlt, FaUser } from "react-icons/fa";
+import { useEffect, useState, useRef } from "react";
+import { io } from "socket.io-client";
+import {
+  FaTrash,
+  FaEdit,
+  FaSignOutAlt,
+  FaUser,
+  FaPaperPlane,
+  FaUsers,
+  FaSpinner,
+} from "react-icons/fa";
+
+// URL backend Socket.IO
+// Ganti URL ini dengan URL backend Heroku-mu saat deployment
+const SOCKET_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout() {
-  const router = useRouter();
-  const socket = useSocket();
-
-  const [status, setStatus] = useState("Menghubungkan...");
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [userId, setUserId] = useState(null);
   const [editMessageId, setEditMessageId] = useState(null);
   const [user, setUser] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const messagesEndRef = useRef(null);
+  const [hasAuthError, setHasAuthError] = useState(false);
 
-  // Load user data from localStorage
+  // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
-    const userData = localStorage.getItem("chat-user");
-    if (userData) {
-      setUser(JSON.parse(userData));
+    let userData = null;
+    let token = null;
+
+    try {
+      token = localStorage.getItem("chat-app-token");
+      userData = localStorage.getItem("chat-user");
+      
+      console.log("Token ditemukan:", !!token);
+      console.log("Data pengguna ditemukan:", !!userData);
+
+      if (!token || !userData) {
+        setHasAuthError(true);
+        return;
+      }
+
+      const userObj = JSON.parse(userData);
+      setUser(userObj);
+
+      const newSocket = io(SOCKET_URL, {
+        auth: { token },
+      });
+
+      newSocket.on("connect", () => {
+        setIsConnected(true);
+        console.log("🔗 Terhubung ke server Socket.IO");
+      });
+
+      newSocket.on("disconnect", () => {
+        setIsConnected(false);
+        console.log("❌ Terputus dari server Socket.IO");
+      });
+      
+      newSocket.on("error", (msg) => {
+          console.error("❌ Socket Error:", msg);
+      });
+
+      setSocket(newSocket);
+
+      // Clean up on component unmount
+      return () => {
+        newSocket.disconnect();
+      };
+
+    } catch (error) {
+      console.error("❌ Gagal memuat data pengguna:", error.message);
+      setHasAuthError(true);
     }
   }, []);
 
-  // ====== KONEKSI SOCKET.IO ======
+  // ===== SOCKET EVENTS =====
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !user) return;
 
-    socket.on("connect", () => {
-      setStatus("Terhubung");
-      setUserId(socket.id);
-    });
-
-    socket.on("disconnect", () => {
-      setStatus("Terputus");
-    });
-
-    socket.on("receive_message", (data) => {
-      setMessages((prev) => [...prev, data]);
-    });
-
-    socket.on("load_messages", (allMessages) => {
-      setMessages(allMessages);
-    });
-
-    socket.on("message_deleted", (id) => {
-      setMessages((prev) => prev.filter((msg) => msg._id !== id));
-    });
-
-    socket.on("message_updated", (updatedMsg) => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
-      );
-    });
-
-    return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("receive_message");
-      socket.off("load_messages");
-      socket.off("message_deleted");
-      socket.off("message_updated");
+    // Mendengarkan pesan dari backend
+    const handleReceiveMessage = (msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
+      });
     };
-  }, [socket]);
 
-  // ====== KIRIM PESAN ======
+    const handleLoadMessages = (msgs) => setMessages(msgs || []);
+    const handleDeleteMessage = (id) => setMessages((prev) => prev.filter((m) => m._id !== id));
+    const handleUpdateMessage = (updated) =>
+      setMessages((prev) => prev.map((m) => (m._id === updated._id ? updated : m)));
+    const handleOnlineUsers = (users) => setOnlineUsers(users || []);
+    
+    socket.on("receive_message", handleReceiveMessage);
+    socket.on("load_messages", handleLoadMessages);
+    socket.on("message_deleted", handleDeleteMessage);
+    socket.on("message_updated", handleUpdateMessage);
+    socket.on("online_users", handleOnlineUsers);
+    
+    return () => {
+      socket.off("receive_message", handleReceiveMessage);
+      socket.off("load_messages", handleLoadMessages);
+      socket.off("message_deleted", handleDeleteMessage);
+      socket.off("message_updated", handleUpdateMessage);
+      socket.off("online_users", handleOnlineUsers);
+    };
+  }, [socket, user]);
+
+  // ===== AUTO SCROLL =====
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // ===== KIRIM PESAN =====
   const handleSendMessage = () => {
-    if (message.trim() === "") return;
+    if (message.trim() === "" || !socket || isSending) return;
+
+    setIsSending(true);
 
     if (editMessageId) {
-      socket.emit("edit_message", { id: editMessageId, newText: message });
+      socket.emit("edit_message", {
+        id: editMessageId,
+        newText: message,
+      });
       setEditMessageId(null);
     } else {
-      socket.emit("chat_message", { 
-        text: message, 
-        id: socket.id,
-        username: user?.username || "Anonymous",
-        displayName: user?.displayName || "User"
-      });
+      const tempId = Date.now().toString();
+      const newMessage = {
+        tempId,
+        text: message.trim(),
+        senderId: user.id,
+        senderName: user.displayName,
+        createdAt: new Date(),
+        status: "sending",
+      };
+      setMessages((prev) => [...prev, newMessage]);
+      socket.emit("chat_message", { text: newMessage.text });
     }
 
     setMessage("");
+    setIsSending(false); // Reset isSending after emit
   };
 
-  // ====== HAPUS PESAN ======
-  const handleDeleteMessage = (id) => {
-    if (confirm("Yakin mau hapus pesan ini?")) {
-      socket.emit("delete_message", id);
-    }
-  };
-
-  // ====== EDIT PESAN ======
+  const handleDeleteMessage = (id) => socket?.emit("delete_message", id);
   const handleEditMessage = (msg) => {
     setMessage(msg.text);
     setEditMessageId(msg._id);
   };
+  const cancelEdit = () => {
+    setEditMessageId(null);
+    setMessage("");
+  };
 
-  // ====== LOGOUT ======
   const handleLogout = () => {
-    localStorage.removeItem("chat-app-token");
-    localStorage.removeItem("chat-user");
-    router.push("/login");
+    socket?.disconnect();
+    localStorage.clear();
+    window.location.href = "https://teleboom.vercel.app/login";
   };
 
-  // Format waktu
-  const formatTime = (timestamp) => {
-    if (!timestamp) return "";
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('id-ID', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
-
-  return (
-    <div className="flex h-screen bg-telegram-bg text-telegram-text">
-      {/* Sidebar */}
-      <div className="w-80 bg-telegram-sidebar border-r border-telegram-border">
-        {/* Header Sidebar */}
-        <div className="p-4 bg-telegram-sidebar-header border-b border-telegram-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-telegram-primary rounded-full flex items-center justify-center text-white font-bold">
-                {user?.displayName?.charAt(0) || user?.username?.charAt(0) || "U"}
-              </div>
-              <div className="ml-3">
-                <h2 className="font-semibold text-white">{user?.displayName || user?.username || "User"}</h2>
-                <p className="text-telegram-secondary text-sm">{status}</p>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 text-telegram-secondary hover:text-white hover:bg-telegram-hover rounded-lg transition-colors"
-              title="Logout"
-            >
-              <FaSignOutAlt size={18} />
-            </button>
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        <div className="p-3 border-b border-telegram-border">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Cari percakapan..."
-              className="w-full bg-telegram-input text-white placeholder-telegram-secondary px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-telegram-primary"
-            />
-          </div>
-        </div>
-
-        {/* Chat List */}
-        <div className="p-2">
-          <div className="bg-telegram-active-chat rounded-lg p-3 mb-2">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-telegram-primary rounded-full flex items-center justify-center text-white font-bold text-lg">
-                💬
-              </div>
-              <div className="ml-3 flex-1">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-semibold text-white">Chat Room</h3>
-                  <span className="text-telegram-secondary text-xs">Sekarang</span>
-                </div>
-                <p className="text-telegram-secondary text-sm truncate">
-                  {messages.length > 0 
-                    ? `${messages[messages.length - 1]?.displayName || messages[messages.length - 1]?.username}: ${messages[messages.length - 1]?.text}`
-                    : "Mulai percakapan..."
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
+  if (!user || hasAuthError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="w-full max-w-md p-8 space-y-4 text-center bg-white rounded-lg shadow-md">
+          <h2 className="text-xl font-bold text-gray-800">Sesi Habis atau Belum Login</h2>
+          <p className="text-gray-600">Silakan login kembali untuk mengakses chat.</p>
+          <a
+            href="https://teleboom.vercel.app/login"
+            className="inline-block w-full py-2 font-medium text-white transition-colors bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            Masuk
+          </a>
         </div>
       </div>
+    );
+  }
 
-      {/* Area Chat Utama */}
-      <div className="flex-1 flex flex-col bg-telegram-chat-bg">
-        {/* Header Chat */}
-        <header className="bg-telegram-chat-header border-b border-telegram-border px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-telegram-primary rounded-full flex items-center justify-center text-white font-bold mr-3">
-                💬
-              </div>
-              <div>
-                <h1 className="font-semibold text-white">TeleBoom Chat</h1>
-                <p className="text-telegram-secondary text-sm">
-                  {messages.length} pesan • {status}
-                </p>
-              </div>
-            </div>
+  return (
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className="w-1/4 bg-gray-800 text-white p-4 flex flex-col">
+        <div className="flex items-center mb-6">
+          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center mr-3">
+            {user.avatar ? (
+              <img src={user.avatar} alt={user.displayName} className="w-10 h-10 rounded-full" />
+            ) : (
+              <span className="text-white text-xl">👤</span>
+            )}
+          </div>
+          <div>
+            <h2 className="font-semibold">{user.displayName}</h2>
+            <p className="text-sm text-gray-400">@{user.username}</p>
+          </div>
+        </div>
+
+        {/* Pengguna Online */}
+        <div className="flex-1 mb-4">
+          <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+            <span className="text-xl">👥</span> Pengguna Online ({onlineUsers.length})
+          </h3>
+          <div className="bg-gray-700 p-3 rounded max-h-60 overflow-y-auto">
+            {onlineUsers.length > 0 ? (
+              onlineUsers.map((onlineUser, index) => (
+                <div key={onlineUser.userId || index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
+                  <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                  <span>{onlineUser.displayName || onlineUser.username}</span>
+                  {onlineUser.userId === user.id && (
+                    <span className="ml-2 text-xs text-gray-400">(Anda)</span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400 text-sm">Tidak ada pengguna online</p>
+            )}
+          </div>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          className="flex items-center justify-center gap-2 w-full py-2 bg-red-600 text-white rounded-md hover:bg-red-700 mt-4 transition-colors"
+        >
+          <span>➡️</span> Logout
+        </button>
+      </div>
+
+      {/* Area Chat */}
+      <div className="flex-1 flex flex-col">
+        <header className="flex justify-between items-center bg-white p-4 border-b shadow-sm">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">💬 Teleboom Chat</h1>
+            <p className="text-sm text-gray-600">
+              {isConnected ? "Online - Terhubung" : "Menghubungkan..."}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">{user.email}</span>
           </div>
         </header>
 
-        {/* Daftar Pesan */}
-        <main className="flex-1 p-6 overflow-y-auto bg-telegram-chat-bg bg-opacity-50">
+        <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
           {messages.length === 0 ? (
-            <div className="text-center mt-20">
-              <div className="w-20 h-20 bg-telegram-primary bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FaPaperPlane size={32} className="text-telegram-primary" />
-              </div>
-              <h3 className="text-telegram-secondary font-semibold mb-2">Belum ada pesan</h3>
-              <p className="text-telegram-secondary text-sm">
-                Kirim pesan pertama untuk memulai percakapan
-              </p>
+            <div className="text-center mt-10">
+              <div className="text-6xl mb-4">💬</div>
+              <p className="text-gray-500 text-lg">Mulai percakapan pertama Anda!</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex ${msg.id === userId ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`relative max-w-xs lg:max-w-md xl:max-w-lg 2xl:max-w-xl ${
-                      msg.id === userId
-                        ? "bg-telegram-my-message text-white"
-                        : "bg-telegram-their-message text-telegram-text"
-                    } rounded-2xl px-4 py-2 shadow-sm`}
-                  >
-                    {/* Header Pesan */}
-                    {msg.id !== userId && (
-                      <div className="flex items-center mb-1">
-                        <span className="font-semibold text-telegram-primary text-sm">
-                          {msg.displayName || msg.username || "Anonymous"}
-                        </span>
-                        <span className="text-telegram-secondary text-xs ml-2">
-                          {formatTime(msg.timestamp)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Isi Pesan */}
-                    <p className="text-sm leading-relaxed">{msg.text}</p>
-
-                    {/* Timestamp untuk pesan sendiri */}
-                    {msg.id === userId && (
-                      <div className="flex items-center justify-end mt-1">
-                        <span className="text-telegram-secondary text-xs">
-                          {formatTime(msg.timestamp)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Tombol Edit & Hapus untuk pesan sendiri */}
-                    {msg.id === userId && (
-                      <div className="absolute -top-2 -right-8 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEditMessage(msg)}
-                          className="p-1 bg-telegram-bg rounded text-telegram-secondary hover:text-telegram-primary"
-                          title="Edit pesan"
-                        >
-                          <FaEdit size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMessage(msg._id)}
-                          className="p-1 bg-telegram-bg rounded text-telegram-secondary hover:text-red-500"
-                          title="Hapus pesan"
-                        >
-                          <FaTrash size={12} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
+            messages.map((msg, index) => (
+              <div
+                key={msg._id || msg.tempId || index}
+                className={`relative mb-4 p-3 rounded-lg max-w-md shadow-md transition-all duration-200 ${
+                  msg.senderId === user.id
+                    ? "bg-blue-500 text-white ml-auto"
+                    : "bg-white text-gray-800 border"
+                } ${msg.status === "sending" ? "opacity-70" : ""}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-sm">
+                    {msg.senderId === user.id ? "Anda" : msg.senderName || "Anonim"}
+                  </span>
+                  <span className="text-xs opacity-70">
+                    {msg.createdAt
+                      ? new Date(msg.createdAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Baru saja"}
+                    {msg.updatedAt && " (diedit)"}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <p className="text-sm break-words">{msg.text}</p>
+                {msg.senderId === user.id && (
+                  <div className="absolute -top-2 -right-2 flex gap-1">
+                    <button
+                      onClick={() => handleEditMessage(msg)}
+                      className="p-1 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition-colors"
+                      title="Edit pesan"
+                    >
+                      <span>✏️</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMessage(msg._id)}
+                      className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      title="Hapus pesan"
+                    >
+                      <span>🗑️</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
           )}
+          <div ref={messagesEndRef} />
         </main>
 
         {/* Input Pesan */}
-        <footer className="bg-telegram-chat-header border-t border-telegram-border p-4">
-          <div className="flex items-center gap-3">
+        <footer className="bg-white p-4 border-t shadow-inner">
+          {editMessageId && (
+            <div className="flex items-center justify-between mb-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+              <span className="text-sm">Sedang mengedit pesan...</span>
+              <button onClick={cancelEdit} className="text-yellow-800 hover:text-yellow-900 text-sm">
+                Batalkan
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-2">
             <input
               type="text"
-              placeholder={
-                editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."
-              }
+              placeholder={editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => {
@@ -286,64 +320,25 @@ export default function ChatLayout() {
                   handleSendMessage();
                 }
               }}
-              className="flex-1 bg-telegram-input text-white placeholder-telegram-secondary px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-telegram-primary border-none"
+              className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              disabled={isSending}
             />
-            
+
             <button
               onClick={handleSendMessage}
-              disabled={!message.trim()}
-              className={`p-3 rounded-full transition-all duration-200 ${
-                message.trim()
-                  ? "bg-telegram-primary hover:bg-telegram-primary-hover text-white"
-                  : "bg-telegram-input text-telegram-secondary cursor-not-allowed"
-              }`}
-              title={editMessageId ? "Update pesan" : "Kirim pesan"}
+              disabled={!message.trim() || isSending}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition-colors"
             >
-              <FaPaperPlane size={18} />
+              {isSending ? (
+                <FaSpinner className="animate-spin" size={20} />
+              ) : (
+                <span>✉️</span>
+              )}
+              {editMessageId ? "Update" : "Kirim"}
             </button>
           </div>
         </footer>
       </div>
-
-      {/* CSS untuk tema Telegram */}
-      <style jsx>{`
-        :root {
-          --telegram-bg: #0f1923;
-          --telegram-sidebar: #182533;
-          --telegram-sidebar-header: #202c3d;
-          --telegram-chat-bg: #0f1923;
-          --telegram-chat-header: #202c3d;
-          --telegram-input: #2a3b4d;
-          --telegram-primary: #0088cc;
-          --telegram-primary-hover: #0077b3;
-          --telegram-secondary: #7c8b9a;
-          --telegram-text: #ffffff;
-          --telegram-my-message: #0088cc;
-          --telegram-their-message: #2a3b4d;
-          --telegram-border: #2a3b4d;
-          --telegram-hover: #2a3b4d;
-          --telegram-active-chat: #2a3b4d;
-        }
-
-        .bg-telegram-bg { background-color: var(--telegram-bg); }
-        .bg-telegram-sidebar { background-color: var(--telegram-sidebar); }
-        .bg-telegram-sidebar-header { background-color: var(--telegram-sidebar-header); }
-        .bg-telegram-chat-bg { background-color: var(--telegram-chat-bg); }
-        .bg-telegram-chat-header { background-color: var(--telegram-chat-header); }
-        .bg-telegram-input { background-color: var(--telegram-input); }
-        .bg-telegram-primary { background-color: var(--telegram-primary); }
-        .bg-telegram-primary-hover { background-color: var(--telegram-primary-hover); }
-        .bg-telegram-my-message { background-color: var(--telegram-my-message); }
-        .bg-telegram-their-message { background-color: var(--telegram-their-message); }
-        .bg-telegram-hover { background-color: var(--telegram-hover); }
-        .bg-telegram-active-chat { background-color: var(--telegram-active-chat); }
-
-        .text-telegram-text { color: var(--telegram-text); }
-        .text-telegram-secondary { color: var(--telegram-secondary); }
-        .text-telegram-primary { color: var(--telegram-primary); }
-
-        .border-telegram-border { border-color: var(--telegram-border); }
-      `}</style>
     </div>
   );
 }
