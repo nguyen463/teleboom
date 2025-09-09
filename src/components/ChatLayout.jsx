@@ -1,190 +1,328 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSocket } from "../hooks/useSocket";
-import { FaTrash, FaEdit } from "react-icons/fa";
+import { useEffect, useState, useRef } from "react";
+import { io } from "socket.io-client";
+import sanitizeHtml from "sanitize-html";
+
+// URL backend Socket.IO
+const SOCKET_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
+const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout() {
-  const router = useRouter();
-  const socket = useSocket();
-
-  const [status, setStatus] = useState("Menghubungkan...");
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [userId, setUserId] = useState(null);
   const [editMessageId, setEditMessageId] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const messagesEndRef = useRef(null);
+  const [hasAuthError, setHasAuthError] = useState(false);
 
-  // ====== KONEKSI SOCKET.IO ======
+  // ===== CEK LOGIN & KONEKSI SOCKET =====
   useEffect(() => {
-    if (!socket) return;
+    const token = localStorage.getItem("chat-app-token");
+    const userData = localStorage.getItem("chat-user");
 
-    socket.on("connect", () => {
-      setStatus("✅ Terhubung ke server!");
-      setUserId(socket.id);
-    });
+    if (!token || !userData) {
+      setHasAuthError(true);
+      return;
+    }
 
-    socket.on("disconnect", () => {
-      setStatus("❌ Terputus dari server.");
-    });
+    try {
+      const userObj = JSON.parse(userData);
+      setUser(userObj);
 
-    socket.on("receive_message", (data) => {
-      setMessages((prev) => [...prev, data]);
-    });
+      const newSocket = io(SOCKET_URL, {
+        auth: { token },
+      });
 
-    socket.on("load_messages", (allMessages) => {
-      setMessages(allMessages);
-    });
+      newSocket.on("connect", () => {
+        setIsConnected(true);
+      });
 
-    socket.on("message_deleted", (id) => {
-      setMessages((prev) => prev.filter((msg) => msg._id !== id));
-    });
+      newSocket.on("disconnect", () => {
+        setIsConnected(false);
+      });
+      
+      newSocket.on("error", (msg) => {
+          console.error("❌ Socket Error:", msg);
+      });
 
-    socket.on("message_updated", (updatedMsg) => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg._id === updatedMsg._id ? updatedMsg : msg))
-      );
-    });
+      setSocket(newSocket);
 
-    return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("receive_message");
-      socket.off("load_messages");
-      socket.off("message_deleted");
-      socket.off("message_updated");
+      return () => {
+        newSocket.disconnect();
+      };
+    } catch (error) {
+      console.error("❌ Gagal memuat data pengguna:", error.message);
+      setHasAuthError(true);
+    }
+  }, []);
+
+  // ===== SOCKET EVENTS =====
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleReceiveMessage = (msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        return [...prev, msg];
+      });
     };
-  }, [socket]);
 
-  // ====== KIRIM PESAN ======
+    const handleLoadMessages = (msgs) => setMessages(msgs || []);
+    const handleDeleteMessage = (id) => setMessages((prev) => prev.filter((m) => m._id !== id));
+    const handleUpdateMessage = (updated) =>
+      setMessages((prev) => prev.map((m) => (m._id === updated._id ? updated : m)));
+    const handleOnlineUsers = (users) => setOnlineUsers(users || []);
+    
+    socket.on("receive_message", handleReceiveMessage);
+    socket.on("load_messages", handleLoadMessages);
+    socket.on("message_deleted", handleDeleteMessage);
+    socket.on("message_updated", handleUpdateMessage);
+    socket.on("online_users", handleOnlineUsers);
+    
+    return () => {
+      socket.off("receive_message", handleReceiveMessage);
+      socket.off("load_messages", handleLoadMessages);
+      socket.off("message_deleted", handleDeleteMessage);
+      socket.off("message_updated", handleUpdateMessage);
+      socket.off("online_users", handleOnlineUsers);
+    };
+  }, [socket, user]);
+
+  // ===== AUTO SCROLL =====
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // ===== KIRIM PESAN =====
   const handleSendMessage = () => {
-    if (message.trim() === "") return;
+    if (message.trim() === "" || !socket || isSending) return;
+
+    setIsSending(true);
 
     if (editMessageId) {
-      socket.emit("edit_message", { id: editMessageId, newText: message });
+      socket.emit("edit_message", {
+        id: editMessageId,
+        newText: message,
+      });
       setEditMessageId(null);
     } else {
-      socket.emit("chat_message", { text: message, id: socket.id });
+      const sanitizedText = sanitizeHtml(message.trim(), {
+        allowedTags: [],
+        allowedAttributes: {},
+      });
+      
+      const tempId = Date.now().toString();
+      const newMessage = {
+        tempId,
+        text: sanitizedText,
+        senderId: user.id,
+        senderName: user.displayName,
+        createdAt: new Date(),
+        status: "sending",
+      };
+      setMessages((prev) => [...prev, newMessage]);
+      socket.emit("chat_message", { text: sanitizedText, senderName: user.displayName });
     }
 
     setMessage("");
+    setIsSending(false); 
   };
 
-  // ====== HAPUS PESAN ======
-  const handleDeleteMessage = (id) => {
-    if (confirm("Yakin mau hapus pesan ini?")) {
-      socket.emit("delete_message", id);
-    }
-  };
-
-  // ====== EDIT PESAN ======
+  const handleDeleteMessage = (id) => socket?.emit("delete_message", id);
   const handleEditMessage = (msg) => {
     setMessage(msg.text);
     setEditMessageId(msg._id);
   };
-
-  // ====== LOGOUT ======
-  const handleLogout = () => {
-    localStorage.removeItem("chat-app-token");
-    router.push("/login");
+  const cancelEdit = () => {
+    setEditMessageId(null);
+    setMessage("");
   };
+
+  const handleLogout = () => {
+    socket?.disconnect();
+    localStorage.clear();
+    window.location.href = "https://teleboom.vercel.app/login";
+  };
+
+  if (!user || hasAuthError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="w-full max-w-md p-8 space-y-4 text-center bg-white rounded-lg shadow-md">
+          <h2 className="text-xl font-bold text-gray-800">Sesi Habis atau Belum Login</h2>
+          <p className="text-gray-600">Silakan login kembali untuk mengakses chat.</p>
+          <a
+            href="https://teleboom.vercel.app/login"
+            className="inline-block w-full py-2 font-medium text-white transition-colors bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            Masuk
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-1/4 bg-gray-800 text-white p-4">
-        <h2 className="text-xl font-bold mb-4">Users</h2>
-        <p className="text-gray-400">Status: {status}</p>
+      <div className="w-1/4 bg-gray-800 text-white p-4 flex flex-col">
+        <div className="flex items-center mb-6">
+          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center mr-3">
+            {user.avatar ? (
+              <img src={user.avatar} alt={user.displayName} className="w-10 h-10 rounded-full" />
+            ) : (
+              <span className="text-white text-xl">👤</span>
+            )}
+          </div>
+          <div>
+            <h2 className="font-semibold">{user.displayName}</h2>
+            <p className="text-sm text-gray-400">@{user.username}</p>
+          </div>
+        </div>
+
+        {/* Pengguna Online */}
+        <div className="flex-1 mb-4">
+          <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+            <span className="text-xl">👥</span> Pengguna Online ({onlineUsers.length})
+          </h3>
+          <div className="bg-gray-700 p-3 rounded max-h-60 overflow-y-auto">
+            {onlineUsers.length > 0 ? (
+              onlineUsers.map((onlineUser, index) => (
+                <div key={onlineUser.userId || index} className="flex items-center mb-2 p-2 rounded hover:bg-gray-600">
+                  <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                  <span>{onlineUser.displayName || onlineUser.username}</span>
+                  {onlineUser.userId === user.id && (
+                    <span className="ml-2 text-xs text-gray-400">(Anda)</span>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-400 text-sm">Tidak ada pengguna online</p>
+            )}
+          </div>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          className="flex items-center justify-center gap-2 w-full py-2 bg-red-600 text-white rounded-md hover:bg-red-700 mt-4 transition-colors"
+        >
+          <span>➡️</span> Logout
+        </button>
       </div>
 
       {/* Area Chat */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="flex justify-between items-center bg-white p-4 border-b">
-          <h1 className="text-xl font-bold text-gray-800">💬 Chat Room</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
-          >
-            Logout
-          </button>
+        <header className="flex justify-between items-center bg-white p-4 border-b shadow-sm">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">💬 Teleboom Chat</h1>
+            <p className="text-sm text-gray-600">
+              {isConnected ? "Online - Terhubung" : "Menghubungkan..."}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">{user.email}</span>
+          </div>
         </header>
 
-        {/* Daftar Pesan */}
         <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
           {messages.length === 0 ? (
-            <p className="text-gray-500 text-center mt-4">
-              Kirim pesan pertama Anda!
-            </p>
+            <div className="text-center mt-10">
+              <div className="text-6xl mb-4">💬</div>
+              <p className="text-gray-500 text-lg">Mulai percakapan pertama Anda!</p>
+            </div>
           ) : (
             messages.map((msg, index) => (
               <div
-                key={index}
-                className={`relative mb-3 p-3 rounded-lg max-w-xs shadow-md ${
-                  msg.id === userId
+                key={msg._id || msg.tempId || index}
+                className={`relative mb-4 p-3 rounded-lg max-w-md shadow-md transition-all duration-200 ${
+                  msg.senderId === user.id
                     ? "bg-blue-500 text-white ml-auto"
-                    : "bg-gray-200 text-gray-800"
-                }`}
+                    : "bg-white text-gray-800 border"
+                } ${msg.status === "sending" ? "opacity-70" : ""}`}
               >
-                {/* Isi Pesan */}
-                <p className="text-sm">
-                  <span className="font-semibold">
-                    {msg.id
-                      ? msg.id === userId
-                        ? "Anda"
-                        : msg.id.slice(0, 5)
-                      : "Anonim"}
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-sm">
+                    {msg.senderId === user.id ? "Anda" : msg.senderName || "Anonim"}
                   </span>
-                  : {msg.text}
-                </p>
-
-                {/* Tombol Edit & Hapus */}
-                {msg.id === userId && (
-                  <div className="absolute -top-2 -right-10 flex gap-2">
+                  <span className="text-xs opacity-70">
+                    {msg.createdAt
+                      ? new Date(msg.createdAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Baru saja"}
+                    {msg.updatedAt && " (diedit)"}
+                  </span>
+                </div>
+                <p className="text-sm break-words">{msg.text}</p>
+                {msg.senderId === user.id && (
+                  <div className="absolute -top-2 -right-2 flex gap-1">
                     <button
                       onClick={() => handleEditMessage(msg)}
-                      className="text-yellow-400 hover:text-yellow-600"
+                      className="p-1 bg-yellow-400 text-white rounded-full hover:bg-yellow-500 transition-colors"
                       title="Edit pesan"
                     >
-                      <FaEdit size={18} />
+                      <span>✏️</span>
                     </button>
                     <button
                       onClick={() => handleDeleteMessage(msg._id)}
-                      className="text-red-500 hover:text-red-700"
+                      className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                       title="Hapus pesan"
                     >
-                      <FaTrash size={18} />
+                      <span>🗑️</span>
                     </button>
                   </div>
                 )}
               </div>
             ))
           )}
+          <div ref={messagesEndRef} />
         </main>
 
         {/* Input Pesan */}
-        <footer className="bg-white p-4 border-t flex gap-2">
-          <input
-            type="text"
-            placeholder={
-              editMessageId ? "Edit pesan..." : "Ketik pesan..."
-            }
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSendMessage();
-            }}
-            className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <footer className="bg-white p-4 border-t shadow-inner">
+          {editMessageId && (
+            <div className="flex items-center justify-between mb-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+              <span className="text-sm">Sedang mengedit pesan...</span>
+              <button onClick={cancelEdit} className="text-yellow-800 hover:text-yellow-900 text-sm">
+                Batalkan
+              </button>
+            </div>
+          )}
 
-          {/* Tombol Send */}
-          <button
-            onClick={handleSendMessage}
-            disabled={!message.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {editMessageId ? "Update" : "Send"}
-          </button>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder={editMessageId ? "Edit pesan Anda..." : "Ketik pesan..."}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              disabled={isSending}
+            />
+
+            <button
+              onClick={handleSendMessage}
+              disabled={!message.trim() || isSending}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2 transition-colors"
+            >
+              {isSending ? (
+                <FaSpinner className="animate-spin" size={20} />
+              ) : (
+                <span>✉️</span>
+              )}
+              {editMessageId ? "Update" : "Kirim"}
+            </button>
+          </div>
         </footer>
       </div>
     </div>
