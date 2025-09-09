@@ -36,18 +36,22 @@ export default function LoginPage() {
       });
 
       if (response.data.valid) {
-        window.location.href = "/chat"; // Sudah login, langsung masuk chat
+        window.location.href = "/chat"; // Token valid, langsung masuk chat
       } else {
-        localStorage.removeItem("chat-app-token");
-        localStorage.removeItem("chat-user");
+        removeToken();
         setCheckingAuth(false);
       }
     } catch (error) {
       console.error("Token verification error:", error);
-      localStorage.removeItem("chat-app-token");
-      localStorage.removeItem("chat-user");
-      setCheckingAuth(false); // 🔹 Wajib biar nggak loading terus
+      removeToken();
+      setCheckingAuth(false);
     }
+  };
+
+  // 🔹 Hapus token dan user
+  const removeToken = () => {
+    localStorage.removeItem("chat-app-token");
+    localStorage.removeItem("chat-user");
   };
 
   // 🔹 Update input form
@@ -255,3 +259,10 @@ export default function LoginPage() {
     </div>
   );
 }
+
+// 🔹 Logout helper (bisa dipanggil dari halaman chat)
+export const logout = () => {
+  localStorage.removeItem("chat-app-token");
+  localStorage.removeItem("chat-user");
+  window.location.href = "/login";
+};
