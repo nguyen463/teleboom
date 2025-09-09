@@ -240,7 +240,7 @@ export default function RegisterPage() {
               id="displayName"
               name="displayName"
               value={formData.displayName}
-              onChange={handleChange)
+              onChange={handleChange} {/* PERBAIKAN DI SINI: ganti ) dengan } */}
               placeholder="Masukkan nama tampilan Anda"
               className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                 errors.displayName ? 'border-red-300' : 'border-gray-300'
