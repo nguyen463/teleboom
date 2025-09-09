@@ -19,7 +19,7 @@ export default function RegisterPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Cek apakah pengguna sudah login
+    // Cek apakah pengguna sudah login tanpa validasi token di backend
     checkAuthStatus();
   }, []);
 
@@ -33,24 +33,19 @@ export default function RegisterPage() {
     }
 
     try {
-      // Verifikasi token dengan backend
-      const response = await axios.get(`${API_URL}/api/auth/verify`, {
+      // Coba akses endpoint yang memerlukan autentikasi
+      const userResponse = await axios.get(`${API_URL}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-
-      if (response.data.valid) {
-        // Token valid, redirect ke chat
+      
+      if (userResponse.data.user) {
         window.location.href = '/chat';
-      } else {
-        // Token tidak valid, hapus dari localStorage
-        localStorage.removeItem('chat-app-token');
-        localStorage.removeItem('chat-user');
-        setCheckingAuth(false);
       }
     } catch (error) {
-      console.error('Token verification failed:', error);
+      console.error('Token validation failed:', error);
+      // Hapus token yang tidak valid
       localStorage.removeItem('chat-app-token');
       localStorage.removeItem('chat-user');
       setCheckingAuth(false);
