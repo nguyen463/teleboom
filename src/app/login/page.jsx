@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Cek apakah pengguna sudah login tanpa validasi token di backend
     checkAuthStatus();
   }, []);
 
@@ -29,52 +28,42 @@ export default function LoginPage() {
     }
 
     try {
-      // Coba validasi token dengan endpoint yang mungkin ada
-      try {
-        const response = await axios.get(`${API_URL}/api/auth/verify`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        if (response.data.valid) {
-          window.location.href = '/chat';
-          return;
-        }
-      } catch (verifyError) {
-        // Jika endpoint verify tidak ada, coba endpoint validate
-        if (verifyError.response?.status === 404) {
-          try {
-            const validateResponse = await axios.get(`${API_URL}/api/auth/validate`, {
-              headers: {
-                Authorization: `Bearer ${token}`
-              }
-            });
-            
-            if (validateResponse.data.valid) {
-              window.location.href = '/chat';
-              return;
-            }
-          } catch (validateError) {
-            console.log('Both verify and validate endpoints not available');
-          }
-        }
-      }
-
-      // Jika tidak ada endpoint validasi, gunakan pendekatan alternatif
-      // Coba akses endpoint yang memerlukan autentikasi
-      const userResponse = await axios.get(`${API_URL}/api/auth/me`, {
+      // Coba gunakan endpoint /verify terlebih dahulu
+      const response = await axios.get(`${API_URL}/api/auth/verify`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      
-      if (userResponse.data.user) {
+
+      if (response.data.valid) {
         window.location.href = '/chat';
+      } else {
+        localStorage.removeItem('chat-app-token');
+        localStorage.removeItem('chat-user');
+        setCheckingAuth(false);
       }
     } catch (error) {
-      console.error('Token validation failed:', error);
-      // Hapus token yang tidak valid
+      console.log('Token validation check:', error.response?.status);
+      
+      // Jika endpoint /verify tidak ada (404), coba gunakan endpoint /me
+      if (error.response?.status === 404) {
+        try {
+          const meResponse = await axios.get(`${API_URL}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          if (meResponse.data.user) {
+            window.location.href = '/chat';
+            return;
+          }
+        } catch (meError) {
+          console.log('Both verify and me endpoints not available');
+        }
+      }
+      
+      // Jika semua endpoint gagal, hapus token dan tampilkan halaman login
       localStorage.removeItem('chat-app-token');
       localStorage.removeItem('chat-user');
       setCheckingAuth(false);
