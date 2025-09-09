@@ -27,6 +27,7 @@ export default function LoginPage() {
     setError('');
 
     try {
+      // Validasi input
       if (!credentials.email.trim() || !credentials.password.trim()) {
         throw new Error('Mohon isi semua kolom.');
       }
