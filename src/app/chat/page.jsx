@@ -10,6 +10,7 @@ export default function ChatPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Check if user is logged in
     const token = sessionStorage.getItem('chat-app-token');
     const userData = sessionStorage.getItem('chat-user');
     
@@ -17,7 +18,7 @@ export default function ChatPage() {
       router.push('/login');
       return;
     }
-
+    
     setUser(JSON.parse(userData));
     setLoading(false);
   }, [router]);
@@ -33,11 +34,5 @@ export default function ChatPage() {
     );
   }
 
-  // Kirim user dan token ke ChatLayout
-  return (
-    <ChatLayout
-      user={user}
-      token={sessionStorage.getItem("chat-app-token")}
-    />
-  );
-}
+  return <ChatLayout />;
+} 
