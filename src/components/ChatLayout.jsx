@@ -25,17 +25,22 @@ export default function ChatLayout({ user }) {
   const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
-    console.log("🔍 USER OBJECT:", user); // Debug user object
-    
+    console.log("🔍 USER OBJECT:", user);
+
     const token = localStorage.getItem("chat-app-token");
     if (!token) {
       console.error("No token found");
       return;
     }
 
+    if (!user || !user.id) {
+      console.log("⏳ Waiting for user object to be loaded...");
+      return;
+    }
+
     if (!socketRef.current) {
       console.log("🔌 Connecting to socket:", SOCKET_URL);
-      socketRef.current = io(SOCKET_URL, { 
+      socketRef.current = io(SOCKET_URL, {
         auth: { token },
         transports: ["websocket", "polling"]
       });
@@ -63,10 +68,10 @@ export default function ChatLayout({ user }) {
     // Event untuk menerima semua pesan saat pertama connect
     socket.on("allMessages", (messages) => {
       console.log("🔍 ALL MESSAGES FROM SERVER:", messages);
-      const formatted = messages.map(m => ({ 
-        ...m, 
+      const formatted = messages.map(m => ({
+        ...m,
+        // Pastikan _id dan senderId selalu string
         _id: m._id ? m._id.toString() : Math.random().toString(),
-        // Pastikan senderId juga string
         senderId: m.senderId ? m.senderId.toString() : ""
       }));
       setMessages(formatted);
@@ -75,8 +80,8 @@ export default function ChatLayout({ user }) {
     // Event untuk menerima pesan baru
     socket.on("newMessage", (msg) => {
       console.log("🔍 NEW MESSAGE FROM SERVER:", msg);
-      setMessages(prev => [...prev, { 
-        ...msg, 
+      setMessages(prev => [...prev, {
+        ...msg,
         _id: msg._id ? msg._id.toString() : Math.random().toString(),
         senderId: msg.senderId ? msg.senderId.toString() : ""
       }]);
@@ -85,9 +90,12 @@ export default function ChatLayout({ user }) {
     // Event untuk menerima pesan yang di-edit
     socket.on("editMessage", (data) => {
       console.log("✏️ MESSAGE EDITED:", data);
-      setMessages(prev => prev.map(m => 
-        (m._id === data.id ? {...m, text: data.text, updatedAt: data.updatedAt} : m)
+      setMessages(prev => prev.map(m =>
+        (m._id === data.id.toString() ? {...m, text: data.text, updatedAt: data.updatedAt} : m)
       ));
+      // Reset state editing
+      setEditingId(null);
+      setEditText("");
     });
 
     // Event untuk menerima pesan yang dihapus
@@ -130,7 +138,7 @@ export default function ChatLayout({ user }) {
         clearTimeout(typingTimeoutRef.current);
       }
     };
-  }, [user]); // Tambahkan user sebagai dependency
+  }, [user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -190,9 +198,9 @@ export default function ChatLayout({ user }) {
     
     console.log("📝 EDITING MESSAGE:", editingId, "with text:", editText);
     
-    socketRef.current.emit("editMessage", { 
-      id: editingId.toString(), 
-      text: editText.trim() 
+    socketRef.current.emit("editMessage", {
+      id: editingId,
+      text: editText.trim()
     });
     
     setEditingId(null);
@@ -207,7 +215,7 @@ export default function ChatLayout({ user }) {
     
     if (!window.confirm("Apakah Anda yakin ingin menghapus pesan ini?")) return;
     
-    socketRef.current.emit("deleteMessage", id.toString());
+    socketRef.current.emit("deleteMessage", id);
   };
 
   const handleTyping = (e) => {
@@ -326,10 +334,7 @@ export default function ChatLayout({ user }) {
         ) : (
           messages.map((msg) => {
             // PERBAIKAN: Logic isOwn yang lebih robust
-            const isOwn = user && user.id && msg.senderId && 
-              (msg.senderId.toString() === user.id.toString() || 
-               msg.senderId === user.id.toString() || 
-               msg.senderId.toString() === user.id);
+            const isOwn = user?.id && msg.senderId && msg.senderId.toString() === user.id.toString();
 
             console.log("🔍 MESSAGE DEBUG:", {
               messageId: msg._id,
@@ -381,14 +386,14 @@ export default function ChatLayout({ user }) {
                       <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {isOwn && (
                           <>
-                            <button 
-                              onClick={() => handleEdit(msg)} 
+                            <button
+                              onClick={() => handleEdit(msg)}
                               className="text-xs text-blue-100 hover:text-blue-300 transition-colors"
                             >
                               Edit
                             </button>
-                            <button 
-                              onClick={() => handleDelete(msg._id)} 
+                            <button
+                              onClick={() => handleDelete(msg._id)}
                               className="text-xs text-red-300 hover:text-red-500 transition-colors"
                             >
                               Hapus
@@ -429,11 +434,11 @@ export default function ChatLayout({ user }) {
             placeholder="Tulis pesan..."
             value={newMsg}
             onChange={handleTyping}
-            onKeyDown={(e) => { 
-              if(e.key === "Enter" && !e.shiftKey){ 
-                e.preventDefault(); 
-                sendMessage(); 
-              } 
+            onKeyDown={(e) => {
+              if(e.key === "Enter" && !e.shiftKey){
+                e.preventDefault();
+                sendMessage();
+              }
             }}
             className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
