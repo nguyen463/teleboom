@@ -25,7 +25,6 @@ export default function ChatLayout({ user }) {
   const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
-    // Inisialisasi socket dengan token yang benar
     const token = localStorage.getItem("chat-app-token");
     if (!token) {
       console.error("No token found");
@@ -34,9 +33,7 @@ export default function ChatLayout({ user }) {
 
     if (!socketRef.current) {
       socketRef.current = io(SOCKET_URL, {
-        auth: {
-          token: token
-        }
+        auth: { token },
       });
     }
 
@@ -44,7 +41,6 @@ export default function ChatLayout({ user }) {
 
     socket.on("connect", () => {
       console.log("✅ Connected to socket server");
-      // Request messages setelah terkoneksi
       socket.emit("getMessages");
     });
 
@@ -56,32 +52,14 @@ export default function ChatLayout({ user }) {
       console.error("Connection error:", err);
     });
 
-    // Event listeners untuk pesan
-    socket.on("message", (msg) => {
-      setMessages((prev) => [...prev, msg]);
-    });
-
-    socket.on("editMessage", ({ id, text }) => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === id ? { ...msg, text } : msg))
-      );
-    });
-
-    socket.on("deleteMessage", (id) => {
-      setMessages((prev) => prev.filter((msg) => msg.id !== id));
-    });
-
-    socket.on("onlineUsers", (users) => {
-      setOnlineUsers(users);
-    });
-
-    socket.on("userTyping", (users) => {
-      setTypingUsers(users);
-    });
-
-    socket.on("initialMessages", (msgs) => {
-      setMessages(msgs);
-    });
+    socket.on("message", (msg) => setMessages((prev) => [...prev, msg]));
+    socket.on("editMessage", ({ id, text }) =>
+      setMessages((prev) => prev.map((msg) => (msg.id === id ? { ...msg, text } : msg)))
+    );
+    socket.on("deleteMessage", (id) => setMessages((prev) => prev.filter((msg) => msg.id !== id)));
+    socket.on("onlineUsers", (users) => setOnlineUsers(users));
+    socket.on("userTyping", (users) => setTypingUsers(users));
+    socket.on("initialMessages", (msgs) => setMessages(msgs));
 
     return () => {
       if (socketRef.current) {
@@ -94,10 +72,7 @@ export default function ChatLayout({ user }) {
     };
   }, []);
 
-  // Scroll ke bawah ketika messages berubah
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  useEffect(() => scrollToBottom(), [messages]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -105,26 +80,39 @@ export default function ChatLayout({ user }) {
     }, 100);
   };
 
+  // ===== Perbaikan sendMessage =====
   const sendMessage = () => {
     if ((!newMsg.trim() && !selectedImage) || !socketRef.current) return;
-    
-    const messageData = {
-      text: newMsg.trim(),
-      userId: user.id,
-      username: user.name,
-      timestamp: new Date().toISOString(),
-      image: selectedImage
+
+    const reader = new FileReader();
+
+    const send = (imageData = null) => {
+      const messageData = {
+        text: newMsg.trim(),
+        userId: user.id,
+        username: user.name,
+        timestamp: new Date().toISOString(),
+        image: imageData,
+      };
+
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit("sendMessage", messageData);
+        setNewMsg("");
+        setSelectedImage(null);
+        setImagePreview(null);
+
+        socketRef.current.emit("stopTyping", user.name);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      } else {
+        console.error("Socket belum terkoneksi");
+      }
     };
-    
-    socketRef.current.emit("sendMessage", messageData);
-    setNewMsg("");
-    setSelectedImage(null);
-    setImagePreview(null);
-    
-    // Menghentikan status typing
-    socketRef.current.emit("stopTyping", user.name);
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
+
+    if (selectedImage) {
+      reader.onload = (e) => send(e.target.result);
+      reader.readAsDataURL(selectedImage);
+    } else {
+      send();
     }
   };
 
@@ -148,59 +136,41 @@ export default function ChatLayout({ user }) {
   const handleTyping = (e) => {
     const value = e.target.value;
     setNewMsg(value);
-    
+
     if (!socketRef.current) return;
-    
-    // Mengirim status typing
+
     if (value) {
       socketRef.current.emit("typing", user.name);
-      
-      // Clear previous timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      
-      // Set timeout untuk menghentikan status typing
+
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
       typingTimeoutRef.current = setTimeout(() => {
         socketRef.current.emit("stopTyping", user.name);
       }, 1000);
     } else {
       socketRef.current.emit("stopTyping", user.name);
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     }
   };
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    if (!file.type.match('image.*')) {
-      alert('Hanya file gambar yang diizinkan');
-      return;
-    }
-    
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5MB');
-      return;
-    }
-    
+
+    if (!file.type.match("image.*")) return alert("Hanya file gambar yang diizinkan");
+    if (file.size > 5 * 1024 * 1024) return alert("Ukuran file maksimal 5MB");
+
     setSelectedImage(file);
-    
+
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target.result);
-    };
+    reader.onload = (e) => setImagePreview(e.target.result);
     reader.readAsDataURL(file);
   };
 
   const removeImage = () => {
     setSelectedImage(null);
     setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -209,8 +179,8 @@ export default function ChatLayout({ user }) {
       <div className="flex justify-between items-center bg-blue-600 text-white p-4 shadow-md">
         <h1 className="text-xl font-bold">Chat Room</h1>
         <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => setShowOnlineUsers(!showOnlineUsers)} 
+          <button
+            onClick={() => setShowOnlineUsers(!showOnlineUsers)}
             className="relative p-2 rounded-full hover:bg-blue-700 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -260,9 +230,7 @@ export default function ChatLayout({ user }) {
             const isOwn = msg.userId === user.id;
             return (
               <div key={msg.id || msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}
-                >
+                <div className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}>
                   {editingId === (msg.id || msg._id) ? (
                     <div className="flex flex-col space-y-2">
                       <input
@@ -288,32 +256,22 @@ export default function ChatLayout({ user }) {
                           {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ""}
                         </span>
                       </div>
-                      
-                      {msg.image ? (
+
+                      {msg.image && (
                         <div className="my-2">
-                          <img 
-                            src={msg.image} 
-                            alt="Gambar pesan" 
-                            className="max-w-full rounded-lg max-h-64 object-cover"
-                          />
+                          <img src={msg.image} alt="Gambar pesan" className="max-w-full rounded-lg max-h-64 object-cover" />
                         </div>
-                      ) : null}
-                      
+                      )}
+
                       {msg.text && <span className="block text-base">{msg.text}</span>}
-                      
+
                       <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {isOwn && (
                           <>
-                            <button 
-                              onClick={() => handleEdit(msg)} 
-                              className="text-xs text-blue-100 hover:text-blue-300 transition-colors"
-                            >
+                            <button onClick={() => handleEdit(msg)} className="text-xs text-blue-100 hover:text-blue-300 transition-colors">
                               Edit
                             </button>
-                            <button 
-                              onClick={() => handleDelete(msg.id || msg._id)} 
-                              className="text-xs text-red-300 hover:text-red-500 transition-colors"
-                            >
+                            <button onClick={() => handleDelete(msg.id || msg._id)} className="text-xs text-red-300 hover:text-red-500 transition-colors">
                               Hapus
                             </button>
                           </>
@@ -336,10 +294,7 @@ export default function ChatLayout({ user }) {
             <img src={imagePreview} alt="Preview" className="h-12 w-12 object-cover rounded" />
             <span className="text-sm text-gray-600">Gambar terpilih</span>
           </div>
-          <button 
-            onClick={removeImage}
-            className="text-red-500 hover:text-red-700"
-          >
+          <button onClick={removeImage} className="text-red-500 hover:text-red-700">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
@@ -363,8 +318,8 @@ export default function ChatLayout({ user }) {
             }}
             className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <button 
-            onClick={sendMessage} 
+          <button
+            onClick={sendMessage}
             disabled={(!newMsg.trim() && !selectedImage) || isUploading}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
@@ -374,29 +329,20 @@ export default function ChatLayout({ user }) {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             ) : (
-              'Kirim'
+              "Kirim"
             )}
           </button>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <label htmlFor="image-upload" className="cursor-pointer text-gray-600 hover:text-blue-600 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <input
-              id="image-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              className="hidden"
-              ref={fileInputRef}
-            />
+            <input id="image-upload" type="file" accept="image/*" onChange={handleImageSelect} className="hidden" ref={fileInputRef} />
           </label>
-          
-          <span className="text-sm text-gray-500">
-            Tekan Enter untuk mengirim, Shift+Enter untuk baris baru
-          </span>
+
+          <span className="text-sm text-gray-500">Tekan Enter untuk mengirim, Shift+Enter untuk baris baru</span>
         </div>
       </div>
 
