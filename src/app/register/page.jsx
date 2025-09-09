@@ -1,19 +1,15 @@
-// pages/RegisterPage.js
 "use client";
 
 import { useState } from 'react';
 import axios from 'axios';
-import { useRouter } from 'next/navigation';
-import sanitizeHtml from 'sanitize-html';
 
 // Ganti URL ini dengan URL backend Heroku-mu saat deployment
 const API_URL = "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
-    username: '', // Tambahkan username ke state
+    username: '',
     displayName: '',
     password: '',
     confirmPassword: '',
@@ -25,32 +21,27 @@ export default function RegisterPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    // Clear specific field error when user starts typing
     setErrors({ ...errors, [name]: '' });
   };
 
   const validateForm = () => {
     const newErrors = {};
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email || !emailRegex.test(formData.email)) {
       newErrors.email = 'Mohon masukkan alamat email yang valid';
     }
 
-    // Username validation (3-30 characters, alphanumeric and underscore)
     if (!formData.username || formData.username.length < 3 || formData.username.length > 30) {
       newErrors.username = 'Nama pengguna harus antara 3-30 karakter';
     } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
       newErrors.username = 'Nama pengguna hanya boleh berisi huruf, angka, dan underscore';
     }
 
-    // DisplayName validation (3-50 characters)
     if (!formData.displayName || formData.displayName.length < 3 || formData.displayName.length > 50) {
       newErrors.displayName = 'Nama tampilan harus antara 3-50 karakter';
     }
 
-    // Password validation (min 8 chars, with uppercase, lowercase, and number)
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
     if (!formData.password || formData.password.length < 8) {
       newErrors.password = 'Password minimal 8 karakter';
@@ -58,7 +49,6 @@ export default function RegisterPage() {
       newErrors.password = 'Password harus mengandung huruf besar, kecil, dan angka';
     }
 
-    // Confirm password
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Password tidak cocok';
     }
@@ -73,42 +63,43 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Client-side validation
       const validationErrors = validateForm();
       if (Object.keys(validationErrors).length > 0) {
         setErrors(validationErrors);
         setLoading(false);
         return;
       }
+      
+      const response = await axios.post(`${API_URL}/api/auth/register`, {
+        email: formData.email,
+        username: formData.username,
+        displayName: formData.displayName,
+        password: formData.password,
+      });
+      
+      setSuccess('Akun berhasil dibuat! Anda akan diarahkan ke halaman chat...');
+      
+      const loginResponse = await axios.post(`${API_URL}/api/auth/login`, {
+        email: formData.email,
+        password: formData.password
+      });
 
-      // Sanitize inputs
-      const sanitizedData = {
-        email: sanitizeHtml(formData.email.toLowerCase().trim()),
-        username: sanitizeHtml(formData.username.trim()), // Tambahkan sanitasi untuk username
-        displayName: sanitizeHtml(formData.displayName.trim()),
-        password: formData.password, // Password tidak perlu sanitasi karena akan di-hash di backend
-      };
+      localStorage.setItem('chat-app-token', loginResponse.data.token);
+      localStorage.setItem('chat-user', JSON.stringify(loginResponse.data.user));
 
-      const response = await axios.post(`${API_URL}/api/auth/register`, sanitizedData);
-
-      setSuccess('Akun berhasil dibuat! Anda akan diarahkan ke halaman login...');
-
-      // Redirect to login page after 2 seconds
       setTimeout(() => {
-        router.push('/login');
+        window.location.href = '/chat';
       }, 2000);
+
     } catch (err) {
       let errorMessage = 'Pendaftaran gagal';
       if (err.response?.data?.errors) {
-        // Handle validation errors from backend
         const backendErrors = {};
         err.response.data.errors.forEach((error) => {
-          // Map backend error messages to corresponding fields
           backendErrors[error.path || 'general'] = error.message || error.msg;
         });
         setErrors(backendErrors);
       } else if (err.response?.data?.message) {
-        // Handle specific error messages from backend
         if (err.response.data.message.includes('email is already in use')) {
           setErrors({ email: 'Email sudah terdaftar' });
         } else if (err.response.data.message.includes('username is already in use')) {
