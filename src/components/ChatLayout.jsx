@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 import { logout } from "@/app/utils/auth";
 import Image from "next/image";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
 
 export default function ChatLayout({ user }) {
   const [messages, setMessages] = useState([]);
@@ -15,9 +15,13 @@ export default function ChatLayout({ user }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [showOnlineUsers, setShowOnlineUsers] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -28,12 +32,13 @@ export default function ChatLayout({ user }) {
       return;
     }
 
-    socketRef.current = io(SOCKET_URL, {
-      auth: {
-        token: token
-      },
-      transports: ["websocket", "polling"]
-    });
+    if (!socketRef.current) {
+      socketRef.current = io(SOCKET_URL, {
+        auth: {
+          token: token
+        }
+      });
+    }
 
     const socket = socketRef.current;
 
@@ -81,6 +86,7 @@ export default function ChatLayout({ user }) {
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -100,17 +106,20 @@ export default function ChatLayout({ user }) {
   };
 
   const sendMessage = () => {
-    if (!newMsg.trim() || !socketRef.current) return;
+    if ((!newMsg.trim() && !selectedImage) || !socketRef.current) return;
     
     const messageData = {
       text: newMsg.trim(),
       userId: user.id,
       username: user.name,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      image: selectedImage
     };
     
     socketRef.current.emit("sendMessage", messageData);
     setNewMsg("");
+    setSelectedImage(null);
+    setImagePreview(null);
     
     // Menghentikan status typing
     socketRef.current.emit("stopTyping", user.name);
@@ -160,6 +169,37 @@ export default function ChatLayout({ user }) {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
+    }
+  };
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.match('image.*')) {
+      alert('Hanya file gambar yang diizinkan');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file maksimal 5MB');
+      return;
+    }
+    
+    setSelectedImage(file);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -248,7 +288,19 @@ export default function ChatLayout({ user }) {
                           {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ""}
                         </span>
                       </div>
-                      <span className="block text-base">{msg.text}</span>
+                      
+                      {msg.image ? (
+                        <div className="my-2">
+                          <img 
+                            src={msg.image} 
+                            alt="Gambar pesan" 
+                            className="max-w-full rounded-lg max-h-64 object-cover"
+                          />
+                        </div>
+                      ) : null}
+                      
+                      {msg.text && <span className="block text-base">{msg.text}</span>}
+                      
                       <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {isOwn && (
                           <>
@@ -277,28 +329,75 @@ export default function ChatLayout({ user }) {
         <div ref={messagesEndRef}></div>
       </div>
 
+      {/* Image Preview */}
+      {imagePreview && (
+        <div className="bg-gray-100 border-t p-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <img src={imagePreview} alt="Preview" className="h-12 w-12 object-cover rounded" />
+            <span className="text-sm text-gray-600">Gambar terpilih</span>
+          </div>
+          <button 
+            onClick={removeImage}
+            className="text-red-500 hover:text-red-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Input area */}
-      <div className="flex p-4 space-x-2 border-t border-gray-300 bg-white">
-        <input
-          type="text"
-          placeholder="Tulis pesan..."
-          value={newMsg}
-          onChange={handleTyping}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-          className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button 
-          onClick={sendMessage} 
-          disabled={!newMsg.trim()}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          Kirim
-        </button>
+      <div className="flex flex-col p-4 space-y-2 border-t border-gray-300 bg-white">
+        <div className="flex space-x-2">
+          <input
+            type="text"
+            placeholder="Tulis pesan..."
+            value={newMsg}
+            onChange={handleTyping}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button 
+            onClick={sendMessage} 
+            disabled={(!newMsg.trim() && !selectedImage) || isUploading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isUploading ? (
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              'Kirim'
+            )}
+          </button>
+        </div>
+        
+        <div className="flex items-center space-x-3">
+          <label htmlFor="image-upload" className="cursor-pointer text-gray-600 hover:text-blue-600 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <input
+              id="image-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+              ref={fileInputRef}
+            />
+          </label>
+          
+          <span className="text-sm text-gray-500">
+            Tekan Enter untuk mengirim, Shift+Enter untuk baris baru
+          </span>
+        </div>
       </div>
 
       {/* Typing indicator */}
