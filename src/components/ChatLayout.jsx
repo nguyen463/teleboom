@@ -42,11 +42,23 @@ export default function ChatLayout({ user }) {
       console.log("🔌 Connecting to socket:", SOCKET_URL);
       socketRef.current = io(SOCKET_URL, {
         auth: { token },
-        transports: ["websocket", "polling"]
+        transports: ["websocket", "polling"],
+        // ✅ PERBAIKAN: Tambahkan opsi ping/pong untuk Heroku
+        pingTimeout: 60000,
+        pingInterval: 25000
       });
     }
 
     const socket = socketRef.current;
+
+    // ✅ PERBAIKAN: Tambahkan event listener untuk ping/pong
+    socket.on("ping", () => {
+      console.log("🐧 Ping received");
+    });
+
+    socket.on("pong", (ms) => {
+      console.log("🏓 Pong received:", ms, "ms");
+    });
 
     // Event connection status
     socket.on("connect", () => {
@@ -55,9 +67,31 @@ export default function ChatLayout({ user }) {
       socket.emit("getMessages");
     });
     
-    socket.on("disconnect", () => {
-      console.log("❌ Disconnected from socket server");
+    // ✅ PERBAIKAN: Handle disconnect dengan reason
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Disconnected from socket server. Reason:", reason);
       setConnectionStatus("disconnected");
+      
+      // ✅ PERBAIKAN: Auto-reconnect untuk certain reasons
+      if (reason === "io server disconnect" || reason === "transport close") {
+        setTimeout(() => {
+          if (socketRef.current) {
+            socketRef.current.connect();
+          }
+        }, 1000);
+      }
+    });
+
+    // ✅ PERBAIKAN: Handle reconnect events
+    socket.on("reconnect", (attemptNumber) => {
+      console.log("🔁 Reconnected to server. Attempt:", attemptNumber);
+      setConnectionStatus("connected");
+      socket.emit("getMessages"); // Re-request messages
+    });
+
+    socket.on("reconnect_error", (error) => {
+      console.error("❌ Reconnection error:", error);
+      setConnectionStatus("error");
     });
     
     socket.on("connect_error", (err) => {
@@ -139,6 +173,22 @@ export default function ChatLayout({ user }) {
       }
     };
   }, [user]);
+
+  // ✅ PERBAIKAN: Tambahkan useEffect untuk handle page visibility
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
+        console.log("Page visible, reconnecting socket...");
+        socketRef.current.connect();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -288,7 +338,21 @@ export default function ChatLayout({ user }) {
             </span>
           </button>
           <span className="hidden md:inline">Hai, {user?.name}</span>
-          <span className={`h-3 w-3 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'}`}></span>
+          
+          {/* ✅ PERBAIKAN: Connection status indicator */}
+          <div className="flex items-center space-x-2">
+            <span className={`h-3 w-3 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' : 
+              connectionStatus === 'connecting' ? 'bg-yellow-500' : 
+              'bg-red-500'
+            }`}></span>
+            <span className="text-sm text-white">
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'connecting' ? 'Connecting...' : 
+               'Disconnected'}
+            </span>
+          </div>
+          
           <button onClick={logout} className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 transition-colors">Logout</button>
         </div>
       </div>
