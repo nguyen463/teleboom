@@ -1,211 +1,124 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
-export default function useSocket(user) {
-  const [socket, setSocket] = useState(null);
+export default function ChatLayout({ user }) {
   const [messages, setMessages] = useState([]);
+  const [newMsg, setNewMsg] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState("");
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
-  const [isSending, setIsSending] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState("connecting");
-  const typingTimeoutRef = useRef(null);
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  // Inisialisasi socket
   useEffect(() => {
-    if (!user || !user.id) return;
+    if (!user?.token) return;
 
-    const s = io(SOCKET_URL, {
-      transports: ["websocket", "polling"], // Tambahkan polling sebagai fallback
-      autoConnect: true,
-      auth: {
-        token: user.token // Server mengharapkan token, bukan userId dan username
-      }
-    });
+    const socket = io(SOCKET_URL, { auth: { token: user.token } });
+    socketRef.current = socket;
 
-    setSocket(s);
+    socket.on("allMessages", setMessages);
+    socket.on("newMessage", msg => setMessages(prev => [...prev, msg]));
+    socket.on("editMessage", updatedMsg => {
+      setMessages(prev => prev.map(m => m._id === updatedMsg.id ? {...m, text: updatedMsg.text, updatedAt: updatedMsg.updatedAt} : m));
+    });
+    socket.on("deleteMessage", id => setMessages(prev => prev.filter(m => m._id !== id)));
+    socket.on("onlineUsers", setOnlineUsers);
+    socket.on("userTyping", userData => setTypingUsers(prev => [...prev.filter(u => u.userId !== userData.userId), userData]));
+    socket.on("userStoppedTyping", userData => setTypingUsers(prev => prev.filter(u => u.userId !== userData.userId)));
 
-    // Event connection status
-    s.on("connect", () => {
-      console.log("Connected to server");
-      setConnectionStatus("connected");
-    });
-    
-    s.on("disconnect", () => {
-      console.log("Disconnected from server");
-      setConnectionStatus("disconnected");
-    });
-    
-    s.on("connect_error", (err) => {
-      console.error("Connection error:", err);
-      setConnectionStatus("error");
-    });
-
-    // Event untuk menerima semua pesan saat pertama connect
-    s.on("allMessages", (messages) => {
-      console.log("Received all messages:", messages);
-      setMessages(messages);
-    });
-
-    // Event untuk menerima pesan baru - PERBAIKAN: Sesuai dengan event server
-    s.on("newMessage", (msg) => {
-      console.log("Received new message:", msg);
-      setMessages(prev => [...prev, msg]);
-    });
-
-    // Event untuk menerima pesan yang di-edit - PERBAIKAN: Sesuai dengan event server
-    s.on("editMessage", (updatedMsg) => {
-      console.log("Message edited:", updatedMsg);
-      setMessages(prev => prev.map(m => 
-        (m._id === updatedMsg.id ? {...m, text: updatedMsg.text, updatedAt: updatedMsg.updatedAt} : m)
-      ));
-    });
-
-    // Event untuk menerima pesan yang dihapus - PERBAIKAN: Sesuai dengan event server
-    s.on("deleteMessage", (id) => {
-      console.log("Message deleted:", id);
-      setMessages(prev => prev.filter(m => m._id !== id));
-    });
-
-    // Event untuk menerima daftar user online
-    s.on("onlineUsers", (users) => {
-      console.log("Online users:", users);
-      setOnlineUsers(users);
-    });
-
-    // Event untuk typing indicator - PERBAIKAN: Sesuai dengan event server
-    s.on("userTyping", (userData) => {
-      console.log("User typing:", userData);
-      setTypingUsers(prev => {
-        // Cek jika user sudah ada dalam daftar
-        const userExists = prev.some(u => u.userId === userData.userId);
-        return userExists ? prev : [...prev, userData];
-      });
-    });
-
-    s.on("userStoppedTyping", (userData) => {
-      console.log("User stopped typing:", userData);
-      setTypingUsers(prev => prev.filter(u => u.userId !== userData.userId));
-    });
-
-    // Event untuk error
-    s.on("error", (errorMsg) => {
-      console.error("Socket error:", errorMsg);
-    });
-
-    return () => {
-      s.disconnect();
-      setSocket(null);
-    };
+    return () => socket.disconnect();
   }, [user]);
 
-  // Fungsi kirim pesan - PERBAIKAN: Sesuai dengan struktur yang diharapkan server
-  const sendMessage = useCallback(
-    async (text, imageFile = null) => {
-      if (!socket || (!text?.trim() && !imageFile)) return;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-      setIsSending(true);
+  const sendMessage = () => {
+    if (!newMsg.trim() || !socketRef.current) return;
+    socketRef.current.emit("sendMessage", { text: newMsg.trim() });
+    setNewMsg("");
+    socketRef.current.emit("stopTyping");
+  };
 
-      try {
-        // Jika ada gambar, convert ke base64
-        let imageBase64 = null;
-        if (imageFile) {
-          imageBase64 = await fileToBase64(imageFile);
-        }
+  const startTyping = () => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("typing");
+  };
 
-        // PERBAIKAN: Sesuaikan dengan struktur data yang diharapkan server
-        socket.emit("sendMessage", {
-          text: text?.trim() || "",
-          image: imageBase64
-          // Server sudah tahu userId dari token auth
-        });
+  const stopTyping = () => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("stopTyping");
+  };
 
-      } catch (error) {
-        console.error("Error sending message:", error);
-      } finally {
-        setIsSending(false);
-      }
-    },
-    [socket]
+  const handleEdit = (msg) => {
+    setEditingId(msg._id);
+    setEditText(msg.text);
+  };
+
+  const saveEdit = () => {
+    if (!editText.trim() || !socketRef.current || !editingId) return;
+    socketRef.current.emit("editMessage", { id: editingId, text: editText.trim() });
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const handleDelete = (id) => {
+    if (!socketRef.current) return;
+    if (!window.confirm("Hapus pesan ini?")) return;
+    socketRef.current.emit("deleteMessage", id);
+  };
+
+  return (
+    <div className="flex flex-col h-screen">
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.map(msg => (
+          <div key={msg._id} className={`${msg.senderId === user.id ? "text-right" : ""} mb-2`}>
+            <div className="text-xs">{msg.senderName} {msg.updatedAt && "(diedit)"}</div>
+            {editingId === msg._id ? (
+              <div>
+                <input value={editText} onChange={e => setEditText(e.target.value)} />
+                <button onClick={saveEdit}>Simpan</button>
+              </div>
+            ) : (
+              <div>{msg.text}</div>
+            )}
+            {msg.senderId === user.id && editingId !== msg._id && (
+              <div>
+                <button onClick={() => handleEdit(msg)}>Edit</button>
+                <button onClick={() => handleDelete(msg._id)}>Hapus</button>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={messagesEndRef}></div>
+      </div>
+
+      <div className="p-4 flex space-x-2 border-t">
+        <input
+          type="text"
+          value={newMsg}
+          onChange={e => setNewMsg(e.target.value)}
+          onKeyDown={e => { if(e.key === "Enter") sendMessage(); else startTyping(); }}
+          onBlur={stopTyping}
+          placeholder="Tulis pesan..."
+          className="flex-1 border p-2 rounded"
+        />
+        <button onClick={sendMessage} className="bg-blue-500 text-white px-4 rounded">Kirim</button>
+      </div>
+
+      <div className="p-2 text-sm text-gray-500">
+        Online: {onlineUsers.map(u => u.displayName).join(", ")}
+      </div>
+      {typingUsers.length > 0 && (
+        <div className="p-2 text-sm text-gray-500">
+          {typingUsers.map(u => u.displayName).join(", ")} sedang mengetik...
+        </div>
+      )}
+    </div>
   );
-
-  // Helper konversi file ke base64
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // Typing indicator - PERBAIKAN: Sesuai dengan event server
-  const startTyping = useCallback(() => {
-    if (!socket) return;
-
-    socket.emit("typing");
-    
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-    
-    // Set timeout untuk stop typing
-    typingTimeoutRef.current = setTimeout(() => {
-      stopTyping();
-    }, 3000);
-  }, [socket]);
-
-  const stopTyping = useCallback(() => {
-    if (!socket) return;
-    
-    socket.emit("stopTyping");
-    
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-  }, [socket]);
-
-  // Fungsi untuk edit pesan
-  const editMessage = useCallback((messageId, newText) => {
-    if (!socket || !newText?.trim()) return;
-    
-    socket.emit("editMessage", {
-      id: messageId,
-      text: newText.trim()
-    });
-  }, [socket]);
-
-  // Fungsi untuk hapus pesan
-  const deleteMessage = useCallback((messageId) => {
-    if (!socket) return;
-    
-    socket.emit("deleteMessage", messageId);
-  }, [socket]);
-
-  // Fungsi untuk memuat pesan tambahan
-  const loadMoreMessages = useCallback((limit = 50, skip = 0) => {
-    if (!socket) return;
-    
-    socket.emit("getMessages", { limit, skip });
-  }, [socket]);
-
-  return {
-    socket,
-    messages,
-    onlineUsers,
-    typingUsers,
-    sendMessage,
-    editMessage,
-    deleteMessage,
-    loadMoreMessages,
-    startTyping,
-    stopTyping,
-    isSending,
-    connectionStatus
-  };
 }
