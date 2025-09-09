@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 import { logout } from "@/app/utils/auth";
 import Image from "next/image";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout({ user }) {
   const [messages, setMessages] = useState([]);
