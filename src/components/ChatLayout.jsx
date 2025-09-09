@@ -44,6 +44,8 @@ export default function ChatLayout({ user }) {
     socket.on("connect", () => {
       console.log("✅ Connected to socket server");
       setConnectionStatus("connected");
+      // Minta pesan setelah terkoneksi
+      socket.emit("getMessages");
     });
     
     socket.on("disconnect", () => {
@@ -56,7 +58,7 @@ export default function ChatLayout({ user }) {
       setConnectionStatus("error");
     });
 
-    // Event untuk menerima semua pesan saat pertama connect - PERBAIKAN: Sesuai server
+    // Event untuk menerima semua pesan saat pertama connect
     socket.on("allMessages", (messages) => {
       console.log("Received all messages:", messages);
       const formatted = messages.map(m => ({ 
@@ -66,7 +68,7 @@ export default function ChatLayout({ user }) {
       setMessages(formatted);
     });
 
-    // Event untuk menerima pesan baru - PERBAIKAN: Sesuai server
+    // Event untuk menerima pesan baru
     socket.on("newMessage", (msg) => {
       console.log("Received new message:", msg);
       setMessages(prev => [...prev, { 
@@ -75,7 +77,7 @@ export default function ChatLayout({ user }) {
       }]);
     });
 
-    // Event untuk menerima pesan yang di-edit - PERBAIKAN: Sesuai server
+    // Event untuk menerima pesan yang di-edit
     socket.on("editMessage", (data) => {
       console.log("Message edited:", data);
       setMessages(prev => prev.map(m => 
@@ -86,20 +88,19 @@ export default function ChatLayout({ user }) {
     // Event untuk menerima pesan yang dihapus
     socket.on("deleteMessage", (id) => {
       console.log("Message deleted:", id);
-      setMessages(prev => prev.filter(m => m._id !== id));
+      setMessages(prev => prev.filter(m => m._id !== id.toString()));
     });
 
-    // Event untuk menerima daftar user online - PERBAIKAN: Sesuai server
+    // Event untuk menerima daftar user online
     socket.on("onlineUsers", (users) => {
       console.log("Online users:", users);
       setOnlineUsers(users);
     });
 
-    // Event untuk typing indicator - PERBAIKAN: Sesuai server
+    // Event untuk typing indicator
     socket.on("userTyping", (userData) => {
       console.log("User typing:", userData);
       setTypingUsers(prev => {
-        // Cek jika user sudah ada dalam daftar
         const userExists = prev.some(u => u.userId === userData.userId);
         return userExists ? prev : [...prev, userData];
       });
@@ -113,6 +114,7 @@ export default function ChatLayout({ user }) {
     // Event untuk error
     socket.on("error", (errorMsg) => {
       console.error("Socket error:", errorMsg);
+      alert(`Error: ${errorMsg}`);
     });
 
     return () => {
@@ -144,7 +146,6 @@ export default function ChatLayout({ user }) {
     setIsUploading(true);
 
     const send = (imageData = null) => {
-      // PERBAIKAN: Sesuaikan dengan struktur data yang diharapkan server
       const messageData = {
         text: newMsg.trim(),
         image: imageData
@@ -172,21 +173,39 @@ export default function ChatLayout({ user }) {
     }
   };
 
+  // PERBAIKAN: Fungsi edit pesan
   const handleEdit = (msg) => {
     setEditingId(msg._id);
     setEditText(msg.text);
   };
 
-  const saveEdit = (id) => {
-    if (!socketRef.current || !editText.trim()) return;
-    socketRef.current.emit("editMessage", { id, text: editText.trim() });
+  // PERBAIKAN: Fungsi simpan edit
+  const saveEdit = () => {
+    if (!socketRef.current || !editText.trim() || !editingId) return;
+    
+    console.log("Editing message:", editingId, "with text:", editText);
+    
+    // Pastikan ID dikirim sebagai string
+    socketRef.current.emit("editMessage", { 
+      id: editingId.toString(), 
+      text: editText.trim() 
+    });
+    
     setEditingId(null);
     setEditText("");
   };
 
+  // PERBAIKAN: Fungsi hapus pesan
   const handleDelete = (id) => {
     if (!socketRef.current) return;
-    socketRef.current.emit("deleteMessage", id);
+    
+    console.log("Deleting message:", id);
+    
+    // Konfirmasi sebelum menghapus
+    if (!window.confirm("Apakah Anda yakin ingin menghapus pesan ini?")) return;
+    
+    // Pastikan ID dikirim sebagai string
+    socketRef.current.emit("deleteMessage", id.toString());
   };
 
   const handleTyping = (e) => {
@@ -228,6 +247,17 @@ export default function ChatLayout({ user }) {
     setSelectedImage(null);
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // PERBAIKAN: Fungsi untuk menangani key press di input edit
+  const handleEditKeyPress = (e, id) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEdit();
+    } else if (e.key === 'Escape') {
+      setEditingId(null);
+      setEditText("");
+    }
   };
 
   return (
@@ -302,12 +332,13 @@ export default function ChatLayout({ user }) {
                       <input
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => handleEditKeyPress(e, msg._id)}
                         className="flex-1 p-2 rounded border text-black"
                         autoFocus
                       />
                       <div className="flex space-x-2 self-end">
-                        <button onClick={() => saveEdit(msg._id)} className="bg-green-500 px-3 py-1 rounded text-white text-sm">Simpan</button>
-                        <button onClick={() => setEditingId(null)} className="bg-gray-400 px-3 py-1 rounded text-white text-sm">Batal</button>
+                        <button onClick={saveEdit} className="bg-green-500 px-3 py-1 rounded text-white text-sm">Simpan</button>
+                        <button onClick={() => { setEditingId(null); setEditText(""); }} className="bg-gray-400 px-3 py-1 rounded text-white text-sm">Batal</button>
                       </div>
                     </div>
                   ) : (
@@ -316,6 +347,7 @@ export default function ChatLayout({ user }) {
                         <span className="text-xs font-bold opacity-80">{msg.senderName}</span>
                         <span className="text-xs opacity-70">
                           {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ''}
+                          {msg.updatedAt && ' (diedit)'}
                         </span>
                       </div>
 
