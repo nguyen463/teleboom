@@ -33,17 +33,17 @@ export default function ChatLayout({ user }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
-  // Normalize message data
+  // Normalisasi data pesan untuk memastikan senderId dan _id adalah string
   const normalizeMessage = useCallback((msg) => ({
     ...msg,
     _id: msg._id?.toString() || Math.random().toString(),
     senderId: msg.senderId?.toString() || "",
   }), []);
 
-  // Initialize socket
+  // Inisialisasi socket dengan konfigurasi reconnection
   const initializeSocket = useCallback(() => {
     if (!user?.token) {
-      setError("No authentication token. Redirecting to login...");
+      setError("Token autentikasi tidak ditemukan. Mengalihkan ke login...");
       setTimeout(() => router.push("/login"), 2000);
       return null;
     }
@@ -65,7 +65,7 @@ export default function ChatLayout({ user }) {
 
     socket.on("disconnect", (reason) => {
       setConnectionStatus("disconnected");
-      setError("Disconnected from server. Attempting to reconnect...");
+      setError("Terputus dari server. Mencoba menyambungkan kembali...");
     });
 
     socket.on("reconnect", () => {
@@ -76,14 +76,14 @@ export default function ChatLayout({ user }) {
 
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
-      setError("Connection failed: " + err.message);
-      toast.error("Connection failed: " + err.message);
+      setError("Koneksi gagal: " + err.message);
+      toast.error("Koneksi gagal: " + err.message);
     });
 
     socket.on("allMessages", (msgs) => {
       const normalized = msgs.map(normalizeMessage);
       setMessages((prev) => (page === 0 ? normalized.reverse() : [...normalized.reverse(), ...prev]));
-      setHasMore(msgs.length === 20); // Adjust based on limit
+      setHasMore(msgs.length === 20);
     });
 
     socket.on("newMessage", (msg) => {
@@ -121,7 +121,7 @@ export default function ChatLayout({ user }) {
     socket.on("error", (errorMsg) => {
       setError(errorMsg);
       toast.error(`Error: ${errorMsg}`);
-      if (errorMsg.includes("authentication") || errorMsg.includes("token")) {
+      if (errorMsg.includes("autentikasi") || errorMsg.includes("token")) {
         setTimeout(() => router.push("/login"), 2000);
       }
     });
@@ -129,10 +129,11 @@ export default function ChatLayout({ user }) {
     return socket;
   }, [user, router, normalizeMessage, page]);
 
-  // Initialize socket and validate user
+  // Inisialisasi socket dan validasi pengguna
   useEffect(() => {
+    console.log("🔍 Objek pengguna:", user);
     if (!user || !user.id || !user.token) {
-      setError("User not authenticated. Redirecting to login...");
+      setError("Pengguna tidak terautentikasi. Mengalihkan ke login...");
       setIsLoading(false);
       setTimeout(() => router.push("/login"), 2000);
       return;
@@ -147,14 +148,14 @@ export default function ChatLayout({ user }) {
     };
   }, [user, initializeSocket]);
 
-  // Scroll to bottom
+  // Gulir ke pesan terbaru
   useEffect(() => {
     if (messagesEndRef.current && page === 0) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, page]);
 
-  // Infinite scroll
+  // Infinite scroll untuk memuat pesan lama
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -170,7 +171,7 @@ export default function ChatLayout({ user }) {
     return () => container.removeEventListener("scroll", handleScroll);
   }, [hasMore, isLoading, page]);
 
-  // Send message
+  // Kirim pesan (teks atau gambar)
   const sendMessage = useCallback(() => {
     if ((!newMsg.trim() && !selectedImage) || !socketRef.current || isUploading) return;
 
@@ -198,8 +199,8 @@ export default function ChatLayout({ user }) {
         });
       };
       reader.onerror = () => {
-        setError("Failed to read image file.");
-        toast.error("Failed to read image file.");
+        setError("Gagal membaca file gambar.");
+        toast.error("Gagal membaca file gambar.");
         setIsUploading(false);
       };
       reader.readAsDataURL(selectedImage);
@@ -217,7 +218,7 @@ export default function ChatLayout({ user }) {
     }
   }, [newMsg, selectedImage, isUploading]);
 
-  // Typing handlers
+  // Penanganan mengetik
   const handleTyping = useCallback((e) => {
     const value = e.target.value;
     setNewMsg(value);
@@ -235,18 +236,18 @@ export default function ChatLayout({ user }) {
     }
   }, []);
 
-  // Image upload
+  // Unggah gambar
   const handleImageSelect = useCallback((e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.match("image.*")) {
-      setError("Only image files are allowed.");
-      toast.error("Only image files are allowed.");
+      setError("Hanya file gambar yang diizinkan.");
+      toast.error("Hanya file gambar yang diizinkan.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError("File size must be less than 5MB.");
-      toast.error("File size must be less than 5MB.");
+      setError("Ukuran file maksimal 5MB.");
+      toast.error("Ukuran file maksimal 5MB.");
       return;
     }
 
@@ -254,8 +255,8 @@ export default function ChatLayout({ user }) {
     const reader = new FileReader();
     reader.onload = (e) => setImagePreview(e.target.result);
     reader.onerror = () => {
-      setError("Failed to preview image.");
-      toast.error("Failed to preview image.");
+      setError("Gagal memuat pratinjau gambar.");
+      toast.error("Gagal memuat pratinjau gambar.");
     };
     reader.readAsDataURL(file);
   }, []);
@@ -266,7 +267,7 @@ export default function ChatLayout({ user }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  // Edit message
+  // Edit pesan
   const handleEdit = useCallback((msg) => {
     setEditingId(msg._id);
     setEditText(msg.text);
@@ -302,7 +303,7 @@ export default function ChatLayout({ user }) {
     router.push("/login");
   };
 
-  // Loading state
+  // Status loading
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen bg-gray-100 justify-center items-center">
@@ -312,20 +313,27 @@ export default function ChatLayout({ user }) {
           fill="none"
           viewBox="0 0 24 24"
         >
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
           <path
             className="opacity-75"
             fill="currentColor"
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
           ></path>
         </svg>
-        <p className="mt-2 text-gray-600">Loading chat...</p>
+        <p className="mt-2 text-gray-600">Memuat obrolan...</p>
       </div>
     );
   }
 
-  // Error state
-  if (error && error.includes("Redirecting to login")) {
+  // Status error
+  if (error && error.includes("Mengalihkan ke login")) {
     return (
       <div className="flex flex-col h-screen bg-gray-100 justify-center items-center">
         <div className="bg-red-100 text-red-800 p-4 rounded-lg text-center">
@@ -334,7 +342,7 @@ export default function ChatLayout({ user }) {
             onClick={() => router.push("/login")}
             className="ml-2 text-red-600 underline"
           >
-            Go to Login
+            Ke Halaman Login
           </button>
         </div>
       </div>
@@ -344,11 +352,30 @@ export default function ChatLayout({ user }) {
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <ToastContainer position="top-right" autoClose={3000} />
-      
-      {/* Header with Menu */}
+
+      {/* Header dengan Menu */}
       <div className="flex justify-between items-center bg-blue-600 text-white p-4 shadow-md">
-        <h1 className="text-xl font-bold">Chat Room</h1>
+        <h1 className="text-xl font-bold">Ruang Obrolan</h1>
         <div className="flex items-center space-x-4">
+          <span className="hidden md:inline">Hai, {user?.displayName || user?.username}</span>
+          <div className="flex items-center space-x-2">
+            <span
+              className={`h-3 w-3 rounded-full ${
+                connectionStatus === "connected"
+                  ? "bg-green-500"
+                  : connectionStatus === "connecting"
+                  ? "bg-yellow-500"
+                  : "bg-red-500"
+              }`}
+            ></span>
+            <span className="text-sm">
+              {connectionStatus === "connected"
+                ? "Terhubung"
+                : connectionStatus === "connecting"
+                ? "Menghubungkan..."
+                : "Terputus"}
+            </span>
+          </div>
           <button
             onClick={() => setShowMenu(!showMenu)}
             className="p-2 rounded-full hover:bg-blue-700 transition-colors"
@@ -375,33 +402,37 @@ export default function ChatLayout({ user }) {
       {showMenu && (
         <div className="bg-white shadow-md p-4 absolute top-16 right-4 z-10 rounded-lg">
           <div className="flex flex-col space-y-2">
-            <span className="text-gray-700 font-bold">Hai, {user?.displayName || user?.username}</span>
+            <span className="text-gray-700 font-bold">
+              Hai, {user?.displayName || user?.username}
+            </span>
             <button
               onClick={() => router.push("/profile")}
               className="text-left text-blue-600 hover:text-blue-800"
             >
-              Profile
+              Profil
             </button>
             <button
               onClick={() => router.push("/settings")}
               className="text-left text-blue-600 hover:text-blue-800"
             >
-              Settings
+              Pengaturan
             </button>
             <button
               onClick={handleLogout}
               className="text-left text-red-600 hover:text-red-800"
             >
-              Logout
+              Keluar
             </button>
           </div>
         </div>
       )}
 
-      {/* Online Users Panel */}
+      {/* Panel Pengguna Online */}
       {showOnlineUsers && (
         <div className="bg-white border-b shadow-sm p-4">
-          <h3 className="font-bold text-gray-700 mb-2">Online Users ({onlineUsers.length})</h3>
+          <h3 className="font-bold text-gray-700 mb-2">
+            Pengguna Online ({onlineUsers.length})
+          </h3>
           <div className="flex flex-wrap gap-2">
             {onlineUsers.map((userData) => (
               <div
@@ -421,7 +452,7 @@ export default function ChatLayout({ user }) {
         </div>
       )}
 
-      {/* Connection Status */}
+      {/* Status Koneksi */}
       <div
         className={`p-2 text-center text-sm flex items-center justify-center space-x-2 ${
           connectionStatus === "connected"
@@ -442,14 +473,14 @@ export default function ChatLayout({ user }) {
         ></span>
         <span>
           {connectionStatus === "connected"
-            ? "Connected"
+            ? "Terhubung"
             : connectionStatus === "connecting"
-            ? "Connecting..."
-            : "Disconnected"}
+            ? "Menghubungkan..."
+            : "Terputus"}
         </span>
       </div>
 
-      {/* Messages */}
+      {/* Pesan */}
       <div
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
@@ -478,6 +509,17 @@ export default function ChatLayout({ user }) {
           messages.map((msg) => {
             const isOwn = user?.id && msg.senderId && msg.senderId.toString() === user.id.toString();
 
+            console.log("🔍 DEBUG PESAN:", {
+              messageId: msg._id,
+              msgSenderId: msg.senderId,
+              userId: user?.id,
+              isOwn,
+              types: {
+                msgSenderIdType: typeof msg.senderId,
+                userIdType: typeof user?.id,
+              },
+            });
+
             return (
               <div
                 key={msg._id}
@@ -491,7 +533,7 @@ export default function ChatLayout({ user }) {
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-bold opacity-80">{msg.senderName}</span>
                     <span className="text-xs opacity-70">
-                      {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString() : ""}
+                      {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
                       {msg.updatedAt && " (diedit)"}
                     </span>
                   </div>
@@ -569,11 +611,11 @@ export default function ChatLayout({ user }) {
         <div ref={messagesEndRef}></div>
       </div>
 
-      {/* Image Preview */}
+      {/* Pratinjau Gambar */}
       {imagePreview && (
         <div className="bg-gray-100 border-t p-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <img src={imagePreview} alt="Preview" className="h-12 w-12 object-cover rounded" />
+            <img src={imagePreview} alt="Pratinjau" className="h-12 w-12 object-cover rounded" />
             <span className="text-sm text-gray-600">Gambar terpilih</span>
           </div>
           <button onClick={removeImage} className="text-red-500 hover:text-red-700">
@@ -593,7 +635,7 @@ export default function ChatLayout({ user }) {
         </div>
       )}
 
-      {/* Input Area */}
+      {/* Area Input */}
       <div className="flex flex-col p-4 space-y-2 border-t border-gray-300 bg-white">
         <div className="flex space-x-2">
           <input
@@ -694,7 +736,7 @@ export default function ChatLayout({ user }) {
         </div>
       </div>
 
-      {/* Typing Indicator */}
+      {/* Indikator Mengetik */}
       {typingUsers.length > 0 && (
         <div className="bg-white border-t px-4 py-2 text-sm text-gray-500 animate-pulse">
           {typingUsers.map((u) => u.displayName || u.username).join(", ")} sedang mengetik...
