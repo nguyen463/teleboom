@@ -27,7 +27,6 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Validasi input
       if (!credentials.email.trim() || !credentials.password.trim()) {
         throw new Error('Mohon isi semua kolom.');
       }
@@ -45,7 +44,8 @@ export default function LoginPage() {
       localStorage.setItem('chat-app-token', response.data.token);
       localStorage.setItem('chat-user', JSON.stringify(response.data.user));
       
-      window.location.href = '/'; 
+      // Redirect ke halaman chat yang benar
+      window.location.href = '/chat'; 
 
     } catch (err) {
       console.error('Login error:', err);
