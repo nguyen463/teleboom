@@ -29,7 +29,7 @@ export default function LoginPage() {
     const user = localStorage.getItem("chat-user");
 
     if (!token || !user) {
-      setCheckingAuth(false);
+      setCheckingAuth(false); // penting supaya form login muncul
       return;
     }
 
@@ -39,16 +39,14 @@ export default function LoginPage() {
       });
 
       if (response.data.valid) {
-        // Token valid → langsung masuk chat
-        window.location.href = "/chat";
+        window.location.href = "/chat"; // Token valid → langsung masuk chat
       } else {
-        // Token expired / invalid
-        removeToken();
+        removeToken(); // Token expired/invalid → hapus
         setCheckingAuth(false);
       }
     } catch (error) {
       console.error("Token verification error:", error);
-      removeToken();
+      removeToken(); // Token error → hapus
       setCheckingAuth(false);
     }
   };
@@ -81,7 +79,7 @@ export default function LoginPage() {
     setErrors({});
     setLoading(true);
 
-    removeToken(); // Hapus token lama dulu
+    removeToken(); // hapus token lama dulu supaya login baru bisa
 
     try {
       const validationErrors = validateForm();
@@ -93,7 +91,7 @@ export default function LoginPage() {
 
       const response = await axios.post(`${API_URL}/api/auth/login`, credentials);
 
-      // Simpan token & user
+      // Simpan token & user baru
       localStorage.setItem("chat-app-token", response.data.token);
       localStorage.setItem("chat-user", JSON.stringify(response.data.user));
 
@@ -229,5 +227,5 @@ export default function LoginPage() {
 export const logout = () => {
   localStorage.removeItem("chat-app-token");
   localStorage.removeItem("chat-user");
-  window.location.href = "/login";
+  window.location.href = "/login"; // reload halaman supaya bisa login lagi
 };
