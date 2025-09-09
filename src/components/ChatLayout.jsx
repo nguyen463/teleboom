@@ -173,13 +173,13 @@ export default function ChatLayout({ user }) {
     }
   };
 
-  // PERBAIKAN: Fungsi edit pesan
+  // Fungsi edit pesan
   const handleEdit = (msg) => {
     setEditingId(msg._id);
     setEditText(msg.text);
   };
 
-  // PERBAIKAN: Fungsi simpan edit
+  // Fungsi simpan edit
   const saveEdit = () => {
     if (!socketRef.current || !editText.trim() || !editingId) return;
     
@@ -195,7 +195,7 @@ export default function ChatLayout({ user }) {
     setEditText("");
   };
 
-  // PERBAIKAN: Fungsi hapus pesan
+  // Fungsi hapus pesan
   const handleDelete = (id) => {
     if (!socketRef.current) return;
     
@@ -249,8 +249,8 @@ export default function ChatLayout({ user }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // PERBAIKAN: Fungsi untuk menangani key press di input edit
-  const handleEditKeyPress = (e, id) => {
+  // Fungsi untuk menangani key press di input edit
+  const handleEditKeyPress = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       saveEdit();
@@ -260,6 +260,9 @@ export default function ChatLayout({ user }) {
     }
   };
 
+  // Debug: Log user data untuk memastikan struktur benar
+  console.log("User data:", user);
+  
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       {/* Header */}
@@ -323,7 +326,20 @@ export default function ChatLayout({ user }) {
           </div>
         ) : (
           messages.map((msg) => {
-            const isOwn = msg.senderId === user.id;
+            // PERBAIKAN: Pastikan perbandingan ID benar
+            // Cek apakah user.id ada dan konversi ke string untuk perbandingan
+            const isOwn = user && user.id && msg.senderId && (msg.senderId.toString() === user.id.toString());
+            
+            console.log("Message debug:", {
+              msgSenderId: msg.senderId,
+              userId: user.id,
+              isOwn: isOwn,
+              types: {
+                msgSenderIdType: typeof msg.senderId,
+                userIdType: typeof user.id
+              }
+            });
+            
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-lg p-3 rounded-2xl shadow-sm ${isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"}`}>
@@ -332,7 +348,7 @@ export default function ChatLayout({ user }) {
                       <input
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
-                        onKeyDown={(e) => handleEditKeyPress(e, msg._id)}
+                        onKeyDown={handleEditKeyPress}
                         className="flex-1 p-2 rounded border text-black"
                         autoFocus
                       />
@@ -359,11 +375,22 @@ export default function ChatLayout({ user }) {
 
                       {msg.text && <span className="block text-base">{msg.text}</span>}
 
+                      {/* PERBAIKAN: Tombol edit/hapus hanya muncul untuk pesan milik sendiri */}
                       <div className={`flex space-x-2 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         {isOwn && (
                           <>
-                            <button onClick={() => handleEdit(msg)} className="text-xs text-blue-100 hover:text-blue-300 transition-colors">Edit</button>
-                            <button onClick={() => handleDelete(msg._id)} className="text-xs text-red-300 hover:text-red-500 transition-colors">Hapus</button>
+                            <button 
+                              onClick={() => handleEdit(msg)} 
+                              className="text-xs text-blue-100 hover:text-blue-300 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(msg._id)} 
+                              className="text-xs text-red-300 hover:text-red-500 transition-colors"
+                            >
+                              Hapus
+                            </button>
                           </>
                         )}
                       </div>
