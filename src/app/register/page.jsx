@@ -1,3 +1,4 @@
+// pages/RegisterPage.js
 "use client";
 
 import { useState } from 'react';
@@ -12,6 +13,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
+    username: '', // Tambahkan username ke state
     displayName: '',
     password: '',
     confirmPassword: '',
@@ -29,11 +31,18 @@ export default function RegisterPage() {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email || !emailRegex.test(formData.email)) {
       newErrors.email = 'Mohon masukkan alamat email yang valid';
+    }
+
+    // Username validation (3-30 characters, alphanumeric and underscore)
+    if (!formData.username || formData.username.length < 3 || formData.username.length > 30) {
+      newErrors.username = 'Nama pengguna harus antara 3-30 karakter';
+    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      newErrors.username = 'Nama pengguna hanya boleh berisi huruf, angka, dan underscore';
     }
 
     // DisplayName validation (3-50 characters)
@@ -75,48 +84,39 @@ export default function RegisterPage() {
       // Sanitize inputs
       const sanitizedData = {
         email: sanitizeHtml(formData.email.toLowerCase().trim()),
+        username: sanitizeHtml(formData.username.trim()), // Tambahkan sanitasi untuk username
         displayName: sanitizeHtml(formData.displayName.trim()),
-        password: formData.password // Password tidak perlu sanitasi karena akan di-hash di backend
+        password: formData.password, // Password tidak perlu sanitasi karena akan di-hash di backend
       };
 
-      const response = await axios.post(
-        `${API_URL}/api/auth/register`,
-        sanitizedData
-      );
+      const response = await axios.post(`${API_URL}/api/auth/register`, sanitizedData);
 
       setSuccess('Akun berhasil dibuat! Anda akan diarahkan ke halaman login...');
-      
+
       // Redirect to login page after 2 seconds
       setTimeout(() => {
         router.push('/login');
       }, 2000);
-
     } catch (err) {
       let errorMessage = 'Pendaftaran gagal';
       if (err.response?.data?.errors) {
         // Handle validation errors from backend
         const backendErrors = {};
-        err.response.data.errors.forEach(error => {
-          backendErrors[error.path] = error.msg;
+        err.response.data.errors.forEach((error) => {
+          // Map backend error messages to corresponding fields
+          backendErrors[error.path || 'general'] = error.message || error.msg;
         });
         setErrors(backendErrors);
-      } else if (err.response?.data?.errorCode) {
-        // Handle specific error codes from backend
-        switch (err.response.data.errorCode) {
-          case 'EMAIL_EXISTS':
-            setErrors({ email: 'Email sudah terdaftar' });
-            break;
-          case 'SERVER_ERROR':
-            errorMessage = 'Terjadi error di server';
-            break;
-          default:
-            errorMessage = err.response?.data?.message || err.message;
+      } else if (err.response?.data?.message) {
+        // Handle specific error messages from backend
+        if (err.response.data.message.includes('email is already in use')) {
+          setErrors({ email: 'Email sudah terdaftar' });
+        } else if (err.response.data.message.includes('username is already in use')) {
+          setErrors({ username: 'Nama pengguna sudah terdaftar' });
+        } else {
+          setErrors({ general: err.response.data.message });
         }
       } else {
-        errorMessage = err.message;
-      }
-
-      if (!err.response?.data?.errors) {
         setErrors({ general: errorMessage });
       }
     } finally {
@@ -148,9 +148,26 @@ export default function RegisterPage() {
               }`}
               disabled={loading}
             />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-            )}
+            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              Nama Pengguna
+            </label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              placeholder="Masukkan nama pengguna"
+              className={`w-full px-4 py-2 text-gray-900 bg-gray-50 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.username ? 'border-red-300' : 'border-gray-300'
+              }`}
+              disabled={loading}
+            />
+            {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username}</p>}
           </div>
 
           <div>
@@ -190,13 +207,14 @@ export default function RegisterPage() {
               }`}
               disabled={loading}
             />
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password}</p>
-            )}
+            {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="confirmPassword"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Konfirmasi Password
             </label>
             <input
@@ -220,15 +238,24 @@ export default function RegisterPage() {
             type="submit"
             disabled={loading}
             className={`w-full py-3 px-4 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 ${
-              loading 
-                ? 'bg-blue-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700'
+              loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {loading ? (
               <div className="flex items-center justify-center">
-                <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <svg
+                  className="animate-spin h-5 w-5 mr-3 text-white"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="none"
+                  />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
                 Membuat Akun...
@@ -254,7 +281,10 @@ export default function RegisterPage() {
         <div className="text-center">
           <p className="text-sm text-gray-600">
             Sudah punya akun?{' '}
-            <a href="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200">
+            <a
+              href="/login"
+              className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200"
+            >
               Masuk di sini
             </a>
           </p>
