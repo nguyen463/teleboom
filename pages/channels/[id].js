@@ -2,7 +2,7 @@
 // pages/channels/[id].js
 import { useRouter } from "next/router";
 import { useMemo, useEffect } from "react";
-import ChatLayout from "../../components/ChatLayout";
+import ChatLayout from "../../src/components/ChatLayout";
 import axios from "axios";
 
 export default function ChannelPage() {
