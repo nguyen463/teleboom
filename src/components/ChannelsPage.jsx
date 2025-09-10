@@ -1,11 +1,12 @@
-
-import { useState, useMemo } from "react";
+// components/ChannelsPage.jsx
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/router";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
 
 export default function ChannelsPage() {
   const router = useRouter();
+  const { id } = router.query;
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const rawUser = JSON.parse(localStorage.getItem("chat-app-user") || "{}");
 
@@ -19,9 +20,23 @@ export default function ChannelsPage() {
     [rawUser.id, rawUser.username, rawUser.displayName]
   );
 
+  // Sinkronkan selectedChannelId dengan URL
+  useEffect(() => {
+    if (id && id !== selectedChannelId) {
+      setSelectedChannelId(id);
+    }
+  }, [id, selectedChannelId]);
+
+  // Validasi user
+  useEffect(() => {
+    if (!user?.token) {
+      router.push("/login");
+    }
+  }, [user, router]);
+
   const handleSelectChannel = (channelId) => {
     setSelectedChannelId(channelId);
-    router.push(`/channels/${channelId}`);
+    router.push(`/channels/${channelId}`, undefined, { shallow: true });
   };
 
   return (
