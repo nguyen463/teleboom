@@ -1,29 +1,38 @@
+// frontend/pages/channels/[id].js
+"use client";
 
-// pages/channels/[id].js
 import { useRouter } from "next/router";
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import ChatLayout from "../../src/components/ChatLayout";
 import axios from "axios";
 
 export default function ChannelPage() {
   const router = useRouter();
   const { id } = router.query;
-  const rawUser = JSON.parse(localStorage.getItem("chat-app-user") || "{}");
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const user = useMemo(
-    () => ({
-      id: rawUser.id,
-      username: rawUser.username,
-      displayName: rawUser.displayName,
-      token: localStorage.getItem("chat-app-token"),
-    }),
-    [rawUser.id, rawUser.username, rawUser.displayName]
-  );
+  // Ambil data pengguna dari localStorage di sisi klien
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const rawUser = JSON.parse(localStorage.getItem("chat-app-user") || "{}");
+      const token = localStorage.getItem("chat-app-token");
+      setUser({
+        id: rawUser.id,
+        username: rawUser.username,
+        displayName: rawUser.displayName,
+        token,
+      });
+      setIsLoading(false);
+    }
+  }, []);
 
-  // Validasi channelId
+  // Validasi channelId dan autentikasi
   useEffect(() => {
     if (!id || !user?.token) {
-      router.push("/login");
+      if (!isLoading) {
+        router.push("/login");
+      }
       return;
     }
 
@@ -42,13 +51,21 @@ export default function ChannelPage() {
           router.push("/channels");
         }
       } catch (error) {
-        router.push("/login");
+        const errorMsg = error.response?.data?.message || "Gagal memvalidasi channel";
+        if (errorMsg.includes("token") || errorMsg.includes("autentikasi")) {
+          router.push("/login");
+        } else {
+          router.push("/channels");
+        }
       }
     };
-    validateChannel();
-  }, [id, user, router]);
 
-  if (!id || !user?.token) {
+    if (user?.token) {
+      validateChannel();
+    }
+  }, [id, user, router, isLoading]);
+
+  if (isLoading || !id || !user?.token) {
     return null;
   }
 
