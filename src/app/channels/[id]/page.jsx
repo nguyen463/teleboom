@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ChatLayout from "@/components/ChatLayout";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/app/utils/auth';
 
 export default function ChannelPage({ params }) {
   const { user, loading, logout } = useAuth();
