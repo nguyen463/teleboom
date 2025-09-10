@@ -1,16 +1,18 @@
-
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import axios from "axios";
 
 export default function ChannelSelector({ onSelectChannel }) {
   const [channels, setChannels] = useState([]);
   const [error, setError] = useState(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchChannels = async () => {
       const token = localStorage.getItem("chat-app-token");
       if (!token) {
         setError("Token tidak ditemukan. Silakan login kembali.");
+        setTimeout(() => router.push("/login"), 2000);
         return;
       }
 
@@ -18,15 +20,20 @@ export default function ChannelSelector({ onSelectChannel }) {
         const response = await axios.get("/api/channels", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setChannels(response.data);
+        const channels = response.data.filter(
+          (channel) => channel._id && (channel.name || channel.isPrivate)
+        );
+        setChannels(channels);
         setError(null);
       } catch (error) {
         setError(error.response?.data?.message || "Gagal mengambil channel");
-        console.error("🔍 Gagal mengambil channel:", error);
+        if (process.env.NODE_ENV !== "production") {
+          console.error("🔍 Gagal mengambil channel:", error);
+        }
       }
     };
     fetchChannels();
-  }, []);
+  }, [router]);
 
   return (
     <div className="p-4 bg-gray-200">
