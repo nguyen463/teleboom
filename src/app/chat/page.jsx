@@ -1,53 +1,19 @@
-// frontend/src/app/chat/page.jsx
 "use client";
 
-import { useEffect, useState } from "react";
+import ChannelSelector from "@/components/ChannelSelector";
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import ChannelSelector from "@/components/ChannelSelector"; // Asumsi komponen ini ada
-import axios from "axios";
 
 export default function ChatPage() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("chat-app-token");
-    const userData = localStorage.getItem("chat-user");
-
-    if (!token || !userData) {
+    if (!loading && !user) {
       router.push("/login");
-      return;
     }
-
-    const verifyToken = async () => {
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const data = await res.json();
-
-        if (!data.valid) {
-          localStorage.removeItem("chat-app-token");
-          localStorage.removeItem("chat-user");
-          router.push("/login");
-          return;
-        }
-
-        setUser(JSON.parse(userData));
-        setLoading(false);
-      } catch (err) {
-        console.error("❌ Gagal verifikasi token:", err);
-        localStorage.removeItem("chat-app-token");
-        localStorage.removeItem("chat-user");
-        router.push("/login");
-      }
-    };
-
-    verifyToken();
-  }, [router]);
+  }, [loading, user, router]);
 
   if (loading) {
     return (
@@ -60,5 +26,15 @@ export default function ChatPage() {
     );
   }
 
-  return <ChannelSelector user={user} />;
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="flex h-screen">
+      <div className="w-1/4 bg-gray-100">
+        <ChannelSelector user={user} />
+      </div>
+    </div>
+  );
 }
