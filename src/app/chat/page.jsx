@@ -1,8 +1,10 @@
+// frontend/src/app/chat/page.jsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import ChatLayout from "@/components/ChatLayout";
+import ChannelSelector from "@/components/ChannelSelector"; // Asumsi komponen ini ada
+import axios from "axios";
 
 export default function ChatPage() {
   const [user, setUser] = useState(null);
@@ -58,5 +60,5 @@ export default function ChatPage() {
     );
   }
 
-  return <ChatLayout user={user} />;
+  return <ChannelSelector user={user} />;
 }
