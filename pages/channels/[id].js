@@ -2,7 +2,7 @@
 "use client";
 
 import { useRouter } from "next/router";
-import { useMemo, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import ChatLayout from "../../src/components/ChatLayout";
 import axios from "axios";
 
@@ -15,7 +15,7 @@ export default function ChannelPage() {
   // Ambil data pengguna dari localStorage di sisi klien
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const rawUser = JSON.parse(localStorage.getItem("chat-app-user") || "{}");
+      const rawUser = JSON.parse(localStorage.getItem("chat-user") || "{}");
       const token = localStorage.getItem("chat-app-token");
       setUser({
         id: rawUser.id,
@@ -48,14 +48,14 @@ export default function ChannelPage() {
           (channel) => channel._id === id
         );
         if (!validChannel) {
-          router.push("/channels");
+          router.push("/chat");
         }
       } catch (error) {
         const errorMsg = error.response?.data?.message || "Gagal memvalidasi channel";
         if (errorMsg.includes("token") || errorMsg.includes("autentikasi")) {
           router.push("/login");
         } else {
-          router.push("/channels");
+          router.push("/chat");
         }
       }
     };
