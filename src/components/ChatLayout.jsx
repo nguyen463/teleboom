@@ -1,3 +1,4 @@
+// components/ChatLayout.jsx
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
@@ -6,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-backend-3589c6b4d316.herokuapp.com";
 
 export default function ChatLayout({ user, channelId }) {
   const [messages, setMessages] = useState([]);
@@ -22,7 +23,6 @@ export default function ChatLayout({ user, channelId }) {
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showMenu, setShowMenu] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
@@ -33,7 +33,7 @@ export default function ChatLayout({ user, channelId }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
-  // Sanitasi user (hanya field aman)
+  // Sanitasi user
   const safeUser = useMemo(() => ({
     id: user?.id,
     displayName: user?.displayName,
@@ -56,7 +56,8 @@ export default function ChatLayout({ user, channelId }) {
   const initializeSocket = useCallback(() => {
     if (!safeUser?.token || !channelId) {
       setError("Token atau channelId tidak ditemukan. Mengalihkan...");
-      setTimeout(() => router.push("/login"), 2000);
+      setIsLoading(false);
+      setTimeout(() => router.push("/channels"), 2000);
       return null;
     }
 
@@ -72,6 +73,7 @@ export default function ChatLayout({ user, channelId }) {
     socket.on("connect", () => {
       setConnectionStatus("connected");
       setError(null);
+      setIsLoading(false);
       if (process.env.NODE_ENV !== "production") {
         console.log("🔍 Socket terhubung, ID:", socket.id);
       }
@@ -89,6 +91,7 @@ export default function ChatLayout({ user, channelId }) {
     socket.on("reconnect", () => {
       setConnectionStatus("connected");
       setError(null);
+      setIsLoading(false);
       if (process.env.NODE_ENV !== "production") {
         console.log("🔍 Socket tersambung kembali");
       }
@@ -98,10 +101,12 @@ export default function ChatLayout({ user, channelId }) {
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
       setError("Koneksi gagal: " + err.message);
+      setIsLoading(false);
       toast.error("Koneksi gagal: " + err.message);
       if (process.env.NODE_ENV !== "production") {
         console.log("🔍 Socket connect_error:", err.message);
       }
+      setTimeout(() => router.push("/channels"), 2000);
     });
 
     socket.on("allMessages", (msgs) => {
@@ -112,6 +117,7 @@ export default function ChatLayout({ user, channelId }) {
         page === 0 ? normalized.reverse() : [...normalized.reverse(), ...prev]
       );
       setHasMore(msgs.length === 20);
+      setIsLoading(false);
       if (process.env.NODE_ENV !== "production") {
         console.log("🔍 Menerima allMessages:", normalized.length + " pesan");
       }
@@ -156,31 +162,38 @@ export default function ChatLayout({ user, channelId }) {
     });
 
     socket.on("userTyping", (userData) => {
-      setTypingUsers((prev) =>
-        prev.some((u) => u.userId === userData.userId)
-          ? prev
-          : [...prev, userData]
-      );
-      if (process.env.NODE_ENV !== "production") {
-        console.log("🔍 Menerima userTyping");
+      if (userData.channelId === channelId) {
+        setTypingUsers((prev) =>
+          prev.some((u) => u.userId === userData.userId)
+            ? prev
+            : [...prev, userData]
+        );
+        if (process.env.NODE_ENV !== "production") {
+          console.log("🔍 Menerima userTyping");
+        }
       }
     });
 
     socket.on("userStoppedTyping", (userData) => {
-      setTypingUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
-      if (process.env.NODE_ENV !== "production") {
-        console.log("🔍 Menerima userStoppedTyping");
+      if (userData.channelId === channelId) {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
+        if (process.env.NODE_ENV !== "production") {
+          console.log("🔍 Menerima userStoppedTyping");
+        }
       }
     });
 
     socket.on("error", (errorMsg) => {
       setError(errorMsg);
+      setIsLoading(false);
       toast.error(`Error: ${errorMsg}`);
       if (process.env.NODE_ENV !== "production") {
         console.log("🔍 Menerima error:", errorMsg);
       }
       if (errorMsg.includes("autentikasi") || errorMsg.includes("token")) {
         setTimeout(() => router.push("/login"), 2000);
+      } else if (errorMsg.includes("channel")) {
+        setTimeout(() => router.push("/channels"), 2000);
       }
     });
 
@@ -190,9 +203,9 @@ export default function ChatLayout({ user, channelId }) {
   // Inisialisasi socket dan validasi pengguna
   useEffect(() => {
     if (!safeUser || !safeUser.id || !safeUser.token || !channelId) {
-      setError("Pengguna tidak terautentikasi atau channel tidak valid. Mengalihkan ke login...");
+      setError("Pengguna tidak terautentikasi atau channel tidak valid. Mengalihkan ke daftar channel...");
       setIsLoading(false);
-      setTimeout(() => router.push("/login"), 2000);
+      setTimeout(() => router.push("/channels"), 2000);
       return;
     }
 
@@ -205,8 +218,6 @@ export default function ChatLayout({ user, channelId }) {
     }
 
     socketRef.current = initializeSocket();
-    setIsLoading(false);
-
     return () => {
       socketRef.current?.disconnect();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -231,7 +242,6 @@ export default function ChatLayout({ user, channelId }) {
         const newSkip = (page + 1) * 20;
         socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip });
         setPage((prev) => prev + 1);
-        setIsLoading(false);
       }
     };
 
@@ -366,7 +376,11 @@ export default function ChatLayout({ user, channelId }) {
   );
 
   if (!channelId) {
-    return <div className="p-4 text-gray-500">Channel tidak valid. Mengalihkan...</div>;
+    return (
+      <div className="p-4 text-gray-500">
+        Channel tidak valid. Mengalihkan...
+      </div>
+    );
   }
 
   // Render
