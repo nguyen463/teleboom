@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { io } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
@@ -33,6 +33,14 @@ export default function ChatLayout({ user, channelId }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
+  // Sanitasi user (hanya field aman)
+  const safeUser = useMemo(() => ({
+    id: user?.id,
+    displayName: user?.displayName,
+    username: user?.username,
+    token: user?.token,
+  }), [user]);
+
   // Normalisasi data pesan
   const normalizeMessage = useCallback(
     (msg) => ({
@@ -46,14 +54,14 @@ export default function ChatLayout({ user, channelId }) {
 
   // Inisialisasi socket
   const initializeSocket = useCallback(() => {
-    if (!user?.token) {
-      setError("Token autentikasi tidak ditemukan. Mengalihkan ke login...");
+    if (!safeUser?.token || !channelId) {
+      setError("Token atau channelId tidak ditemukan. Mengalihkan...");
       setTimeout(() => router.push("/login"), 2000);
       return null;
     }
 
     const socket = io(SOCKET_URL, {
-      auth: { token: user.token },
+      auth: { token: safeUser.token },
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -64,20 +72,26 @@ export default function ChatLayout({ user, channelId }) {
     socket.on("connect", () => {
       setConnectionStatus("connected");
       setError(null);
-      console.log("🔍 Socket terhubung, ID:", socket.id);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Socket terhubung, ID:", socket.id);
+      }
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 });
     });
 
     socket.on("disconnect", (reason) => {
       setConnectionStatus("disconnected");
       setError("Terputus dari server. Mencoba menyambungkan kembali...");
-      console.log("🔍 Socket terputus:", reason);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Socket terputus:", reason);
+      }
     });
 
     socket.on("reconnect", () => {
       setConnectionStatus("connected");
       setError(null);
-      console.log("🔍 Socket tersambung kembali");
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Socket tersambung kembali");
+      }
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 });
     });
 
@@ -85,7 +99,9 @@ export default function ChatLayout({ user, channelId }) {
       setConnectionStatus("error");
       setError("Koneksi gagal: " + err.message);
       toast.error("Koneksi gagal: " + err.message);
-      console.log("🔍 Socket connect_error:", err.message);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Socket connect_error:", err.message);
+      }
     });
 
     socket.on("allMessages", (msgs) => {
@@ -96,13 +112,17 @@ export default function ChatLayout({ user, channelId }) {
         page === 0 ? normalized.reverse() : [...normalized.reverse(), ...prev]
       );
       setHasMore(msgs.length === 20);
-      console.log("🔍 Menerima allMessages:", normalized);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Menerima allMessages:", normalized.length + " pesan");
+      }
     });
 
     socket.on("newMessage", (msg) => {
       if (msg.channelId.toString() === channelId) {
         setMessages((prev) => [...prev, normalizeMessage(msg)]);
-        console.log("🔍 Menerima newMessage:", msg);
+        if (process.env.NODE_ENV !== "production") {
+          console.log("🔍 Menerima newMessage");
+        }
       }
     });
 
@@ -115,18 +135,24 @@ export default function ChatLayout({ user, channelId }) {
         );
         setEditingId(null);
         setEditText("");
-        console.log("🔍 Menerima editMessage:", msg);
+        if (process.env.NODE_ENV !== "production") {
+          console.log("🔍 Menerima editMessage");
+        }
       }
     });
 
     socket.on("deleteMessage", (id) => {
       setMessages((prev) => prev.filter((m) => m._id !== id));
-      console.log("🔍 Menerima deleteMessage:", id);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Menerima deleteMessage");
+      }
     });
 
     socket.on("onlineUsers", (users) => {
       setOnlineUsers(users);
-      console.log("🔍 Menerima onlineUsers:", users);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Menerima onlineUsers:", users.length + " user");
+      }
     });
 
     socket.on("userTyping", (userData) => {
@@ -135,34 +161,47 @@ export default function ChatLayout({ user, channelId }) {
           ? prev
           : [...prev, userData]
       );
-      console.log("🔍 Menerima userTyping:", userData);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Menerima userTyping");
+      }
     });
 
     socket.on("userStoppedTyping", (userData) => {
       setTypingUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
-      console.log("🔍 Menerima userStoppedTyping:", userData);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Menerima userStoppedTyping");
+      }
     });
 
     socket.on("error", (errorMsg) => {
       setError(errorMsg);
       toast.error(`Error: ${errorMsg}`);
-      console.log("🔍 Menerima error:", errorMsg);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 Menerima error:", errorMsg);
+      }
       if (errorMsg.includes("autentikasi") || errorMsg.includes("token")) {
         setTimeout(() => router.push("/login"), 2000);
       }
     });
 
     return socket;
-  }, [user, router, normalizeMessage, page, channelId]);
+  }, [safeUser, router, normalizeMessage, page, channelId]);
 
   // Inisialisasi socket dan validasi pengguna
   useEffect(() => {
-    console.log("🔍 Objek pengguna:", user, "Channel ID:", channelId);
-    if (!user || !user.id || !user.token || !channelId) {
+    if (!safeUser || !safeUser.id || !safeUser.token || !channelId) {
       setError("Pengguna tidak terautentikasi atau channel tidak valid. Mengalihkan ke login...");
       setIsLoading(false);
       setTimeout(() => router.push("/login"), 2000);
       return;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🔍 Inisialisasi chat", {
+        userId: safeUser.id,
+        displayName: safeUser.displayName,
+        channelId,
+      });
     }
 
     socketRef.current = initializeSocket();
@@ -172,7 +211,7 @@ export default function ChatLayout({ user, channelId }) {
       socketRef.current?.disconnect();
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [user, channelId, initializeSocket]);
+  }, [safeUser, channelId, initializeSocket]);
 
   // Gulir ke pesan terbaru
   useEffect(() => {
@@ -189,8 +228,9 @@ export default function ChatLayout({ user, channelId }) {
     const handleScroll = () => {
       if (container.scrollTop === 0 && hasMore && !isLoading) {
         setIsLoading(true);
+        const newSkip = (page + 1) * 20;
+        socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip });
         setPage((prev) => prev + 1);
-        socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: (page + 1) * 20 });
         setIsLoading(false);
       }
     };
@@ -201,7 +241,7 @@ export default function ChatLayout({ user, channelId }) {
 
   // Kirim pesan
   const sendMessage = useCallback(() => {
-    if (!socketRef.current || (!newMsg.trim() && !selectedImage) || isUploading) return;
+    if (!socketRef.current || (!newMsg.trim() && !selectedImage) || isUploading || !channelId) return;
 
     setIsUploading(true);
     const messageData = {
@@ -210,7 +250,9 @@ export default function ChatLayout({ user, channelId }) {
       channelId,
     };
 
-    console.log("🔍 Mengirim pesan:", messageData);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🔍 Mengirim pesan:", { text: messageData.text ? "Ada" : "Kosong", channelId });
+    }
 
     if (selectedImage) {
       const reader = new FileReader();
@@ -254,7 +296,7 @@ export default function ChatLayout({ user, channelId }) {
     (e) => {
       const value = e.target.value;
       setNewMsg(value);
-      if (!socketRef.current) return;
+      if (!socketRef.current || !channelId) return;
 
       if (value) {
         socketRef.current.emit("typing", { channelId });
@@ -300,7 +342,7 @@ export default function ChatLayout({ user, channelId }) {
   };
 
   const saveEdit = useCallback(() => {
-    if (!socketRef.current || !editText.trim()) return;
+    if (!socketRef.current || !editText.trim() || !editingId || !channelId) return;
     socketRef.current.emit("editMessage", { id: editingId, text: editText, channelId }, (response) => {
       if (response?.error) {
         setError(response.error);
@@ -323,13 +365,17 @@ export default function ChatLayout({ user, channelId }) {
     []
   );
 
+  if (!channelId) {
+    return <div className="p-4 text-gray-500">Channel tidak valid. Mengalihkan...</div>;
+  }
+
   // Render
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <ToastContainer position="top-right" autoClose={3000} />
       <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
-          <span className="hidden md:inline">Hai, {user?.displayName || user?.username}</span>
+          <span className="hidden md:inline">Hai, {safeUser?.displayName || safeUser?.username}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
         </div>
         <div className="relative">
@@ -441,7 +487,7 @@ export default function ChatLayout({ user, channelId }) {
           </div>
         ) : (
           messages.map((msg) => {
-            const isOwn = user?.id && msg.senderId && msg.senderId.toString() === user.id.toString();
+            const isOwn = safeUser?.id && msg.senderId && msg.senderId.toString() === safeUser.id.toString();
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
