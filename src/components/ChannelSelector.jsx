@@ -1,63 +1,90 @@
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
+// frontend/src/components/ChannelSelector.jsx
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 
-export default function ChannelSelector({ onSelectChannel }) {
+export default function ChannelSelector({ user }) {
   const [channels, setChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
     const fetchChannels = async () => {
-      const token = localStorage.getItem("chat-app-token");
-      if (!token) {
-        setError("Token tidak ditemukan. Silakan login kembali.");
-        setTimeout(() => router.push("/login"), 2000);
-        return;
-      }
-
       try {
-        const response = await axios.get("/api/channels", {
-          headers: { Authorization: `Bearer ${token}` },
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/channels`, {
+          headers: { Authorization: `Bearer ${user.token}` },
         });
-        const channels = response.data.filter(
-          (channel) => channel._id && (channel.name || channel.isPrivate)
-        );
-        setChannels(channels);
-        setError(null);
-      } catch (error) {
-        setError(error.response?.data?.message || "Gagal mengambil channel");
-        if (process.env.NODE_ENV !== "production") {
-          console.error("🔍 Gagal mengambil channel:", error);
+        setChannels(response.data);
+        setLoading(false);
+      } catch (err) {
+        console.error("❌ Gagal mengambil channels:", err);
+        setError("Gagal memuat daftar channel. Silakan coba lagi.");
+        setLoading(false);
+        if (err.response?.data?.message?.includes("token") || err.response?.data?.message?.includes("autentikasi")) {
+          router.push("/login");
         }
       }
     };
-    fetchChannels();
-  }, [router]);
+
+    if (user?.token) {
+      fetchChannels();
+    }
+  }, [user, router]);
+
+  const handleChannelClick = (channelId) => {
+    router.push(`/channels/${channelId}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Memuat channels...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center text-red-600">{error}</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 bg-gray-200">
-      {error && <div className="text-red-600 mb-2">{error}</div>}
-      <h2 className="font-bold mb-2">Pilih Channel</h2>
-      <div className="space-y-2">
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold mb-4">Pilih Channel</h1>
         {channels.length === 0 ? (
-          <p className="text-gray-500">Belum ada channel.</p>
+          <p className="text-gray-600">Belum ada channel. Buat channel baru!</p>
         ) : (
-          channels.map((channel) => (
-            <button
-              key={channel._id}
-              onClick={() => onSelectChannel(channel._id)}
-              className="block w-full text-left p-2 bg-white rounded-md hover:bg-gray-100"
-            >
-              {channel.name || "DM"} {channel.isPrivate && "(Pribadi)"}
-              {channel.lastMessage && (
-                <span className="text-sm text-gray-500 block">
-                  Pesan terakhir: {channel.lastMessage.text || "Gambar"}
-                </span>
-              )}
-            </button>
-          ))
+          <ul className="space-y-2">
+            {channels.map((channel) => (
+              <li
+                key={channel._id}
+                className="p-4 bg-white rounded-md shadow hover:bg-gray-50 cursor-pointer"
+                onClick={() => handleChannelClick(channel._id)}
+              >
+                <h2 className="text-lg font-medium">{channel.name}</h2>
+                <p className="text-sm text-gray-600">
+                  {channel.isPrivate ? "Private" : "Public"} • {channel.members.length} anggota
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
+        <button
+          onClick={() => router.push("/create-channel")} // Asumsi ada rute untuk membuat channel
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Buat Channel Baru
+        </button>
       </div>
     </div>
   );
