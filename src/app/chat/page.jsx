@@ -1,7 +1,7 @@
 "use client";
 
 import ChannelSelector from "@/components/ChannelSelector";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/app/utils/auth';
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
