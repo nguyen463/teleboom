@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import ChannelSelector from "@/components/ChannelSelector";
 import ChatLayout from "@/components/ChatLayout";
 import { useAuth } from "../utils/auth";
