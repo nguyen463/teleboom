@@ -26,6 +26,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [hasMore, setHasMore] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState("light");
+  const [forceUpdate, setForceUpdate] = useState(0);
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -45,6 +46,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
     document.documentElement.setAttribute("data-theme", newTheme);
+    setForceUpdate(prev => prev + 1);
   };
 
   useEffect(() => {
@@ -381,8 +383,14 @@ export default function ChatLayout({ user, channelId, logout }) {
   }
 
   return (
-    <div key={theme} className="flex flex-col h-screen bg-background text-foreground font-sans">
-      <ToastContainer position="top-right" autoClose={3000} />
+    <div key={`${theme}-${forceUpdate}`} className="flex flex-col h-screen bg-background text-foreground font-sans">
+      <ToastContainer 
+        position="top-right" 
+        autoClose={3000}
+        theme={theme}
+        toastClassName="bg-background text-foreground border-border border"
+        progressClassName={theme === "dark" ? "bg-primary" : "bg-primary"}
+      />
       <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hi, {userDisplayName}</span>
@@ -427,7 +435,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                 onClick={() => {
                   logout();
                 }}
-                className="block w-full text-left px-4 py-2 hover:bg-red-500 hover:text-white transition-colors text-red-600"
+                className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
               >
                 Logout
               </button>
@@ -450,7 +458,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       )}
 
       {error && (
-        <div className="bg-red-500 text-primary-foreground p-2 text-center">{error}</div>
+        <div className="bg-destructive text-destructive-foreground p-2 text-center">{error}</div>
       )}
 
       <div
@@ -482,7 +490,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-muted">
+            <div className="text-center text-muted-foreground">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-12 w-12 mx-auto mb-2"
@@ -544,13 +552,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                             setEditText("");
                           }
                         }}
-                        className="flex-1 p-2 rounded border-border bg-muted text-foreground"
+                        className="flex-1 p-2 rounded border-border bg-background text-foreground"
                         autoFocus
                       />
                       <div className="flex space-x-2 self-end">
                         <button
                           onClick={saveEdit}
-                          className="bg-green-500 px-3 py-1 rounded text-primary-foreground text-sm"
+                          className="bg-primary px-3 py-1 rounded text-primary-foreground text-sm"
                         >
                           Save
                         </button>
@@ -576,7 +584,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                         </button>
                         <button
                           onClick={() => handleDelete(msg._id)}
-                          className="text-xs text-red-500 hover:opacity-80 transition-colors"
+                          className="text-xs text-destructive hover:opacity-80 transition-colors"
                         >
                           Delete
                         </button>
@@ -600,7 +608,7 @@ export default function ChatLayout({ user, channelId, logout }) {
               setImagePreview(null);
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
-            className="mt-2 text-sm text-red-500"
+            className="mt-2 text-sm text-destructive"
           >
             Remove Image
           </button>
@@ -609,7 +617,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
       <div className="p-4 bg-secondary">
         {typingUsers.length > 0 && (
-          <div className="text-sm text-muted mb-2">
+          <div className="text-sm text-muted-foreground mb-2">
             {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
           </div>
         )}
