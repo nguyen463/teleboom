@@ -139,6 +139,10 @@ export default function ChannelsPage() {
     fetchChannels();
   };
 
+  const handleCreateChannel = () => {
+    router.push("/channels/new");
+  };
+
   const logout = () => {
     localStorage.removeItem("chat-app-user");
     localStorage.removeItem("chat-app-token");
@@ -164,6 +168,8 @@ export default function ChannelsPage() {
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
           onRefetch={refetchChannels}
+          onCreateChannel={handleCreateChannel}
+          onLogout={logout}
           error={error}
         />
       </div>
@@ -172,8 +178,8 @@ export default function ChannelsPage() {
           <ChatLayout 
             user={user} 
             channelId={selectedChannelId} 
-            logout={logout} 
-            key={selectedChannelId} // Pastikan remount saat channel berubah
+            onLogout={logout} 
+            key={selectedChannelId}
           />
         ) : (
           <div className="flex items-center justify-center h-full bg-gray-50">
@@ -206,7 +212,12 @@ export default function ChannelsPage() {
                     </svg>
                   </div>
                   <p className="text-gray-500 mb-2">Belum ada channel</p>
-                  <p className="text-gray-400 text-sm">Gunakan tombol di sidebar untuk membuat channel baru.</p>
+                  <button
+                    onClick={handleCreateChannel}
+                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors mt-2"
+                  >
+                    Buat Channel Pertama
+                  </button>
                 </>
               ) : (
                 <>
