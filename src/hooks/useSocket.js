@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout({ user }) {
   const [messages, setMessages] = useState([]);
