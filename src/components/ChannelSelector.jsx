@@ -18,20 +18,29 @@ export default function ChannelSelector({ user, onSelectChannel }) {
       setError(null);
 
       try {
-        // Pastikan URL lengkap: backend + /api/channels
+        // Gunakan API URL lengkap + /api/channels
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com/api";
 
         const response = await axios.get(`${API_URL}/channels`, {
-          headers: { Authorization: `Bearer ${user.token}` },
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+          },
         });
 
-        setChannels(response.data || []);
+        // Pastikan data channel array
+        if (Array.isArray(response.data)) {
+          setChannels(response.data);
+        } else if (Array.isArray(response.data.channels)) {
+          setChannels(response.data.channels);
+        } else {
+          setChannels([]);
+        }
       } catch (err) {
         console.error("❌ Gagal mengambil channels:", err);
         setError("Gagal memuat daftar channel. Silakan coba lagi.");
 
-        // Redirect ke login kalau token invalid / expired
-        const msg = err.response?.data?.message?.toLowerCase() || "";
+        // Jika token invalid atau expired, redirect ke login
+        const msg = (err.response?.data?.message || "").toLowerCase();
         if (msg.includes("token") || msg.includes("autentikasi") || err.response?.status === 401) {
           localStorage.removeItem("chat-app-user");
           localStorage.removeItem("chat-app-token");
