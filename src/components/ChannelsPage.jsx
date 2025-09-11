@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
 
 export default function ChannelsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const id = searchParams.get("id");
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
@@ -16,6 +17,7 @@ export default function ChannelsPage() {
   const [loading, setLoading] = useState(true);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const manualSelectionRef = useRef(false); // Track if selection was manual to avoid URL override loops
 
   // Ambil user dari localStorage
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function ChannelsPage() {
           headers: { Authorization: `Bearer ${user.token}` },
         });
       } catch (firstError) {
-        console.warn("First endpoint failed, trying alternative...");
+        console.warn("First endpoint failed, trying alternative...", firstError);
         response = await fetch(`${API_URL}/channels`, {
           headers: { Authorization: `Bearer ${user.token}` },
         });
@@ -91,20 +93,16 @@ export default function ChannelsPage() {
       
       setChannels(channelsData);
 
-      // Auto-select channel berdasarkan query parameter
-      if (id && channelsData.length > 0) {
+      // Auto-select channel berdasarkan query parameter (only if no manual selection)
+      if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(ch => 
           ch._id === id || ch.id === id
         );
         if (channelExists) {
           setSelectedChannelId(id);
-        } else if (channelsData.length > 0) {
-          // Jika channel dari query param tidak ditemukan, pilih channel pertama
+        } else if (channelsData.length > 0 && !selectedChannelId) {
           setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
         }
-      } else if (channelsData.length > 0 && !selectedChannelId) {
-        // Jika tidak ada query param, pilih channel pertama
-        setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
       }
     } catch (err) {
       console.error("Error fetching channels:", err);
@@ -112,43 +110,55 @@ export default function ChannelsPage() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, router, selectedChannelId]);
+  }, [user, id]); // Removed selectedChannelId to prevent loops
 
   // Call fetch setelah user ready
   useEffect(() => {
     if (user && !channels.length) {
       fetchChannels();
     }
-  }, [user, channels.length, fetchChannels]);
+  }, [user, fetchChannels]);
 
-  // Sinkronkan selectedChannelId dengan query param
+  // Sinkronkan selectedChannelId dengan query param (one-way from URL if no manual select)
   useEffect(() => {
-    if (id && id !== selectedChannelId) {
+    if (id && id !== selectedChannelId && !manualSelectionRef.current) {
       setSelectedChannelId(id);
     }
   }, [id, selectedChannelId]);
 
-  const handleSelectChannel = (channelId) => {
+  const handleSelectChannel = useCallback((channelId) => {
+    manualSelectionRef.current = true;
     setSelectedChannelId(channelId);
-    // Update URL tanpa reload halaman
-    const newUrl = `/channels${channelId ? `?id=${channelId}` : ''}`;
+    
+    // Update URL menggunakan usePathname + URLSearchParams untuk consistency
+    const params = new URLSearchParams(searchParams.toString());
+    if (channelId) {
+      params.set('id', channelId);
+    } else {
+      params.delete('id');
+    }
+    const newUrl = `${pathname}?${params.toString()}`;
     router.push(newUrl, { scroll: false });
-  };
+    
+    // Reset manual flag after short delay to allow URL sync
+    setTimeout(() => { manualSelectionRef.current = false; }, 100);
+  }, [searchParams, pathname, router]);
 
-  const refetchChannels = () => {
+  const refetchChannels = useCallback(() => {
+    manualSelectionRef.current = false; // Allow auto-select on refetch
     fetchChannels();
-  };
+  }, [fetchChannels]);
 
-  const handleCreateChannel = () => {
+  const handleCreateChannel = useCallback(() => {
     console.log("Navigating to /channels/new");
     router.push("/channels/new");
-  };
+  }, [router]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("chat-app-user");
     localStorage.removeItem("chat-app-token");
     router.push("/login");
-  };
+  }, [router]);
 
   if (loading) {
     return (
@@ -174,65 +184,71 @@ export default function ChannelsPage() {
           error={error}
         />
       </div>
-      <div className="flex-1 flex flex-col">
-        {selectedChannelId ? (
-          <ChatLayout 
-            user={user} 
-            channelId={selectedChannelId} 
-            onLogout={handleLogout} 
-            key={selectedChannelId}
-          />
-        ) : (
+      <div className="flex-1 flex flex-col" role="main" aria-label="Chat area">
+        <Suspense fallback={
           <div className="flex items-center justify-center h-full bg-gray-50">
-            <div className="text-center p-6 max-w-md">
-              {channelsLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                  <p className="text-gray-500">Memuat channels...</p>
-                </>
-              ) : error ? (
-                <>
-                  <div className="mx-auto mb-4 w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-red-500 mb-2">{error}</p>
-                  <button 
-                    onClick={refetchChannels}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                  >
-                    Coba Lagi
-                  </button>
-                </>
-              ) : channels.length === 0 ? (
-                <>
-                  <div className="mx-auto mb-4 w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-500 mb-2">Belum ada channel</p>
-                  <button
-                    onClick={handleCreateChannel}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors mt-2"
-                  >
-                    Buat Channel Pertama
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="mx-auto mb-4 w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
-                    </svg>
-                  </div>
-                  <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
-                </>
-              )}
-            </div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
-        )}
+        }>
+          {selectedChannelId ? (
+            <ChatLayout 
+              user={user} 
+              channelId={selectedChannelId} 
+              onLogout={handleLogout} 
+              key={selectedChannelId}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gray-50">
+              <div className="text-center p-6 max-w-md">
+                {channelsLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Memuat channels...</p>
+                  </>
+                ) : error ? (
+                  <>
+                    <div className="mx-auto mb-4 w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-red-500 mb-2">{error}</p>
+                    <button 
+                      onClick={refetchChannels}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      Coba Lagi
+                    </button>
+                  </>
+                ) : channels.length === 0 ? (
+                  <>
+                    <div className="mx-auto mb-4 w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-500 mb-2">Belum ada channel</p>
+                    <button
+                      onClick={handleCreateChannel}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      Buat Channel Pertama
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="mx-auto mb-4 w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                      </svg>
+                    </div>
+                    <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </Suspense>
       </div>
     </div>
   );
