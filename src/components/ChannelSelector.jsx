@@ -13,25 +13,32 @@ export default function ChannelSelector({ user, onSelectChannel }) {
   useEffect(() => {
     const fetchChannels = async () => {
       if (!user?.token) return;
+
       setLoading(true);
+      setError(null);
+
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/channels`,
-          { headers: { Authorization: `Bearer ${user.token}` } }
-        );
+        // Pastikan URL lengkap: backend + /api/channels
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com/api";
+
+        const response = await axios.get(`${API_URL}/channels`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+
         setChannels(response.data || []);
-        setLoading(false);
       } catch (err) {
         console.error("❌ Gagal mengambil channels:", err);
         setError("Gagal memuat daftar channel. Silakan coba lagi.");
-        setLoading(false);
-        // redirect ke login kalau token invalid
-        if (
-          err.response?.data?.message?.includes("token") ||
-          err.response?.data?.message?.includes("autentikasi")
-        ) {
+
+        // Redirect ke login kalau token invalid / expired
+        const msg = err.response?.data?.message?.toLowerCase() || "";
+        if (msg.includes("token") || msg.includes("autentikasi") || err.response?.status === 401) {
+          localStorage.removeItem("chat-app-user");
+          localStorage.removeItem("chat-app-token");
           router.push("/login");
         }
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -77,7 +84,7 @@ export default function ChannelSelector({ user, onSelectChannel }) {
               >
                 <h2 className="text-lg font-medium">{channel.name}</h2>
                 <p className="text-sm text-gray-600">
-                  {channel.isPrivate ? "Private" : "Public"} • {channel.members.length} anggota
+                  {channel.isPrivate ? "Private" : "Public"} • {channel.members?.length || 0} anggota
                 </p>
               </li>
             ))}
