@@ -140,6 +140,7 @@ export default function ChannelsPage() {
   };
 
   const handleCreateChannel = () => {
+    console.log("Navigating to /channels/new");
     router.push("/channels/new");
   };
 
