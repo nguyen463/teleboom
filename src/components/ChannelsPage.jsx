@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
 
 export default function ChannelsPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id"); // ambil query id dengan aman
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Ambil user dari localStorage hanya di client
   useEffect(() => {
@@ -26,9 +28,10 @@ export default function ChannelsPage() {
       ...JSON.parse(rawUser),
       token,
     });
+    setLoading(false);
   }, [router]);
 
-  // Sinkronkan selectedChannelId dengan URL
+  // Sinkronkan selectedChannelId dengan query param
   useEffect(() => {
     if (id && id !== selectedChannelId) {
       setSelectedChannelId(id);
@@ -37,7 +40,7 @@ export default function ChannelsPage() {
 
   const handleSelectChannel = (channelId) => {
     setSelectedChannelId(channelId);
-    router.push(`/channels/${channelId}`, undefined, { shallow: true });
+    router.push(`/channels?id=${channelId}`, { shallow: true });
   };
 
   const logout = () => {
@@ -46,13 +49,15 @@ export default function ChannelsPage() {
     router.push("/login");
   };
 
-  if (!user) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <p className="text-gray-500">Memeriksa autentikasi...</p>
       </div>
     );
   }
+
+  if (!user) return null; // safety check
 
   return (
     <div className="flex h-screen">
