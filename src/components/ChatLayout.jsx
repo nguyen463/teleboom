@@ -1,4 +1,3 @@
-// components/ChatLayout.jsx
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -48,41 +47,44 @@ export default function ChatLayout({ user, channelId, logout }) {
     setError(null);
     setIsLoading(true);
     
-    // Disconnect existing socket if any
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
   }, [channelId]);
 
-  // Normalisasi data pesan
+  // Normalize message data
   const normalizeMessage = useCallback(
-    (msg) => ({
-      ...msg,
-      _id: msg._id?.toString() || Math.random().toString(),
-      senderId: msg.senderId?._id ? msg.senderId._id.toString() : 
-                (msg.senderId?.toString() || ""),
-      channelId: msg.channelId?.toString() || "",
-      senderName: msg.senderId?.displayName || msg.senderId?.username || "Unknown"
-    }),
+    (msg) => {
+      const senderIdStr = msg.senderId?._id 
+        ? msg.senderId._id.toString() 
+        : (typeof msg.senderId === 'string' ? msg.senderId : '');
+      
+      return {
+        ...msg,
+        _id: msg._id?.toString() || Math.random().toString(),
+        senderId: senderIdStr,
+        channelId: msg.channelId?.toString() || "",
+        senderName: msg.senderId?.displayName || msg.senderId?.username || "Unknown"
+      };
+    },
     []
   );
 
-  // Gulir ke pesan terbaru
+  // Scroll to bottom
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Inisialisasi socket dan penanganan event
+  // Initialize socket and handle events
   useEffect(() => {
     if (!user?.token || !channelId) {
-      setError("Token atau channelId tidak ditemukan. Mengalihkan...");
+      setError("Token or channelId not found. Redirecting...");
       setIsLoading(false);
       setTimeout(() => router.push("/channels"), 2000);
       return;
     }
 
-    // Hapus koneksi sebelumnya jika ada
     if (socketRef.current) {
       socketRef.current.disconnect();
     }
@@ -98,12 +100,11 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socketRef.current = socket;
 
-    // Event Listener Socket.IO
     socket.on("connect", () => {
       setConnectionStatus("connected");
       setError(null);
       setIsLoading(true);
-      console.log("🔗 Socket terhubung, ID:", socket.id);
+      console.log("🔗 Socket connected, ID:", socket.id);
       socket.emit("joinChannel", channelId);
       
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
@@ -119,8 +120,8 @@ export default function ChatLayout({ user, channelId, logout }) {
           setIsLoading(false);
           setTimeout(() => scrollToBottom(), 100);
         } else {
-          toast.error("Format respons tidak valid");
-          setError("Format respons tidak valid");
+          toast.error("Invalid response format");
+          setError("Invalid response format");
           setIsLoading(false);
         }
       });
@@ -128,19 +129,18 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("disconnect", (reason) => {
       setConnectionStatus("disconnected");
-      setError("Terputus dari server. Mencoba menyambungkan kembali...");
-      console.log("🔍 Socket terputus:", reason);
+      setError("Disconnected from server. Attempting to reconnect...");
+      console.log("🔍 Socket disconnected:", reason);
     });
 
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
-      setError("Koneksi gagal: " + err.message);
+      setError("Connection failed: " + err.message);
       setIsLoading(false);
-      toast.error("Koneksi gagal: " + err.message);
+      toast.error("Connection failed: " + err.message);
     });
 
     socket.on("newMessage", (msg) => {
-      // Only add message if it's for the current channel
       if (msg.channelId.toString() === channelId) {
         const container = messagesContainerRef.current;
         const isScrolledToBottom = container && 
@@ -155,7 +155,6 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("editMessage", (msg) => {
-      // Only update if it's for the current channel
       if (msg.channelId.toString() === channelId) {
         setMessages((prev) =>
           prev.map((m) => (m._id === msg._id ? normalizeMessage(msg) : m))
@@ -174,12 +173,9 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("userTyping", (userData) => {
-      // Only show typing indicator for current channel
       if (userData.userId !== user.id) {
         setTypingUsers((prev) => {
-          // Hapus user jika sudah ada
           const filtered = prev.filter((u) => u.userId !== userData.userId);
-          // Tambahkan user baru jika sedang mengetik
           return userData.isTyping ? [...filtered, userData] : filtered;
         });
       }
@@ -187,7 +183,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("error", (errorMsg) => {
       toast.error(`Error: ${errorMsg.message || errorMsg}`);
-      if (errorMsg.includes("autentikasi") || errorMsg.includes("token")) {
+      if (errorMsg.includes("authentication") || errorMsg.includes("token")) {
         logout();
       } else if (errorMsg.includes("channel")) {
         router.push("/channels");
@@ -226,7 +222,6 @@ export default function ChatLayout({ user, channelId, logout }) {
             setHasMore(response.length === 20);
             setPage((prev) => prev + 1);
             
-            // Pertahankan posisi gulir
             setTimeout(() => {
               const newScrollHeight = container.scrollHeight;
               container.scrollTop = newScrollHeight - oldScrollHeight;
@@ -257,7 +252,6 @@ export default function ChatLayout({ user, channelId, logout }) {
         setNewMsg("");
         setSelectedImage(null);
         setImagePreview(null);
-        // Hentikan indikator mengetik
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current);
           typingTimeoutRef.current = null;
@@ -274,8 +268,8 @@ export default function ChatLayout({ user, channelId, logout }) {
         socketRef.current.emit("sendMessage", messageData, onMessageSent);
       };
       reader.onerror = () => {
-        setError("Gagal membaca file gambar.");
-        toast.error("Gagal membaca file gambar.");
+        setError("Failed to read image file.");
+        toast.error("Failed to read image file.");
         setIsUploading(false);
       };
       reader.readAsDataURL(selectedImage);
@@ -291,16 +285,13 @@ export default function ChatLayout({ user, channelId, logout }) {
       
       if (!socketRef.current) return;
       
-      // Kirim status mengetik
       socketRef.current.emit("typing", { 
         channelId, 
         isTyping: value.length > 0 
       });
       
-      // Hapus timeout sebelumnya
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       
-      // Set timeout untuk menghentikan indikator mengetik
       if (value.length > 0) {
         typingTimeoutRef.current = setTimeout(() => {
           socketRef.current.emit("typing", { 
@@ -317,11 +308,11 @@ export default function ChatLayout({ user, channelId, logout }) {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      toast.error("Hanya file gambar yang diizinkan.");
+      toast.error("Only image files are allowed.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Ukuran gambar terlalu besar (maks 5MB).");
+      toast.error("Image size too large (max 5MB).");
       return;
     }
     setSelectedImage(file);
@@ -356,7 +347,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     (id) => {
       if (!socketRef.current) return;
       
-      if (window.confirm("Apakah Anda yakin ingin menghapus pesan ini?")) {
+      if (window.confirm("Are you sure you want to delete this message?")) {
         socketRef.current.emit("deleteMessage", { 
           id, 
           channelId 
@@ -374,25 +365,25 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   if (!channelId) {
     return (
-      <div className="p-4 text-gray-500">
-        Channel tidak valid. Mengalihkan...
+      <div className="p-4 text-secondary-foreground">
+        Invalid channel. Redirecting...
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
+    <div className="flex flex-col h-screen bg-background text-foreground font-sans">
       <ToastContainer position="top-right" autoClose={3000} />
-      <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
+      <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
-          <span className="hidden md:inline">Hai, {userDisplayName}</span>
+          <span className="hidden md:inline">Hi, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
           <span className="text-sm opacity-75">Channel: {channelId}</span>
         </div>
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="p-2 rounded-full hover:bg-blue-700 transition-colors"
+            className="p-2 rounded-full hover:bg-primary-foreground hover:text-primary transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -410,20 +401,20 @@ export default function ChatLayout({ user, channelId, logout }) {
             </svg>
           </button>
           {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white text-gray-900 rounded-md shadow-lg z-10">
+            <div className="absolute right-0 mt-2 w-48 bg-secondary text-secondary-foreground rounded-md shadow-lg z-10">
               <button
                 onClick={() => setShowOnlineUsers(!showOnlineUsers)}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                className="block w-full text-left px-4 py-2 hover:bg-secondary-foreground hover:text-secondary transition-colors"
               >
-                {showOnlineUsers ? "Sembunyikan Pengguna Online" : "Tampilkan Pengguna Online"}
+                {showOnlineUsers ? "Hide Online Users" : "Show Online Users"}
               </button>
               <button
                 onClick={() => {
                   logout();
                 }}
-                className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
+                className="block w-full text-left px-4 py-2 hover:bg-red-600 hover:text-white transition-colors"
               >
-                Keluar
+                Logout
               </button>
             </div>
           )}
@@ -431,8 +422,8 @@ export default function ChatLayout({ user, channelId, logout }) {
       </header>
 
       {showOnlineUsers && (
-        <div className="bg-gray-200 p-4">
-          <h3 className="font-bold">Pengguna Online ({onlineUsers.length})</h3>
+        <div className="bg-secondary p-4">
+          <h3 className="font-bold">Online Users ({onlineUsers.length})</h3>
           <ul className="mt-2 space-y-1">
             {onlineUsers.map((u) => (
               <li key={u.userId} className="text-sm">
@@ -444,17 +435,17 @@ export default function ChatLayout({ user, channelId, logout }) {
       )}
 
       {error && (
-        <div className="bg-red-100 text-red-700 p-2 text-center">{error}</div>
+        <div className="bg-red-500 text-white p-2 text-center">{error}</div>
       )}
 
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background"
       >
         {isLoading && page === 0 ? (
           <div className="flex items-center justify-center h-full">
             <svg
-              className="animate-spin h-8 w-8 text-blue-600"
+              className="animate-spin h-8 w-8 text-primary"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -476,7 +467,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-500">
+            <div className="text-center text-secondary-foreground">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-12 w-12 mx-auto mb-2"
@@ -491,33 +482,39 @@ export default function ChatLayout({ user, channelId, logout }) {
                   d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
                 />
               </svg>
-              <p>Belum ada pesan di channel ini. Mulai percakapan!</p>
+              <p>No messages in this channel yet. Start the conversation!</p>
             </div>
           </div>
         ) : (
           messages.map((msg) => {
-            const isOwn = user?.id && msg.senderId && msg.senderId.toString() === user.id.toString();
+            const isOwn = user?.id && msg.senderId && 
+              msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
+            console.log('Debug ID:', {
+              userId: user?.id,
+              senderId: msg.senderId,
+              isOwn
+            });
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-lg p-3 rounded-2xl shadow-sm ${
-                    isOwn ? "bg-blue-500 text-white" : "bg-white text-gray-900 border"
+                    isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground border"
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-bold opacity-80">
-                      {msg.senderName || (isOwn ? "Anda" : "Unknown")}
+                      {msg.senderName || (isOwn ? "You" : "Unknown")}
                     </span>
                     <span className="text-xs opacity-70">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                      {msg.updatedAt && " (diedit)"}
+                      {msg.updatedAt && " (edited)"}
                     </span>
                   </div>
                   {msg.image && (
                     <div className="my-2">
                       <img
                         src={msg.image}
-                        alt="Gambar pesan"
+                        alt="Message image"
                         className="max-w-full rounded-lg max-h-64 object-cover"
                       />
                     </div>
@@ -537,7 +534,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                             setEditText("");
                           }
                         }}
-                        className="flex-1 p-2 rounded border text-black"
+                        className="flex-1 p-2 rounded border text-secondary-foreground bg-background"
                         autoFocus
                       />
                       <div className="flex space-x-2 self-end">
@@ -545,7 +542,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                           onClick={saveEdit}
                           className="bg-green-500 px-3 py-1 rounded text-white text-sm"
                         >
-                          Simpan
+                          Save
                         </button>
                         <button
                           onClick={() => {
@@ -554,16 +551,16 @@ export default function ChatLayout({ user, channelId, logout }) {
                           }}
                           className="bg-gray-400 px-3 py-1 rounded text-white text-sm"
                         >
-                          Batal
+                          Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
                     isOwn && (
-                      <div className="flex space-x-2 mt-1 justify-end">
+                      <div className="flex space-x-2 mt-1 justify-end edit-delete-buttons">
                         <button
                           onClick={() => handleEdit(msg)}
-                          className="text-xs text-blue-100 hover:text-blue-300 transition-colors"
+                          className="text-xs text-primary-foreground underline hover:text-blue-300 transition-colors"
                         >
                           Edit
                         </button>
@@ -571,7 +568,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                           onClick={() => handleDelete(msg._id)}
                           className="text-xs text-red-300 hover:text-red-500 transition-colors"
                         >
-                          Hapus
+                          Delete
                         </button>
                       </div>
                     )
@@ -585,8 +582,8 @@ export default function ChatLayout({ user, channelId, logout }) {
       </div>
 
       {imagePreview && (
-        <div className="p-4 bg-gray-200">
-          <img src={imagePreview} alt="Pratinjau" className="max-h-32 rounded-lg" />
+        <div className="p-4 bg-secondary">
+          <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
           <button
             onClick={() => {
               setSelectedImage(null);
@@ -595,15 +592,15 @@ export default function ChatLayout({ user, channelId, logout }) {
             }}
             className="mt-2 text-sm text-red-600"
           >
-            Hapus Gambar
+            Remove Image
           </button>
         </div>
       )}
 
-      <div className="p-4 bg-gray-200">
+      <div className="p-4 bg-secondary">
         {typingUsers.length > 0 && (
-          <div className="text-sm text-gray-600 mb-2">
-            {typingUsers.map((u) => u.displayName || u.username).join(", ")} sedang mengetik...
+          <div className="text-sm text-secondary-foreground mb-2">
+            {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
           </div>
         )}
         <div className="flex space-x-2">
@@ -616,7 +613,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 bg-gray-300 rounded-full hover:bg-gray-400 transition-colors"
+            className="p-2 bg-secondary-foreground text-secondary rounded-full hover:bg-gray-400 transition-colors"
             disabled={isUploading}
           >
             <svg
@@ -644,13 +641,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                 sendMessage();
               }
             }}
-            className="flex-1 p-2 rounded border text-black"
-            placeholder="Ketik pesan..."
+            className="flex-1 p-2 rounded border text-secondary-foreground bg-background"
+            placeholder="Type a message..."
             disabled={isUploading}
           />
           <button
             onClick={sendMessage}
-            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+            className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-blue-700 transition-colors"
             disabled={isUploading || (!newMsg.trim() && !selectedImage)}
           >
             <svg
