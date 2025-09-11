@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import Link from "next/link";
 
-export default function ChannelSelector({ 
-  user, 
-  channels: propChannels = [], 
-  loading: propLoading = false, 
-  onSelectChannel, 
-  onRefetch 
+export default function ChannelSelector({
+  user,
+  channels: propChannels = [],
+  loading: propLoading = false,
+  onSelectChannel,
+  onRefetch,
 }) {
   const [localChannels, setLocalChannels] = useState(propChannels);
   const [localLoading, setLocalLoading] = useState(propLoading);
@@ -18,7 +17,7 @@ export default function ChannelSelector({
   const [selectedChannel, setSelectedChannel] = useState(null);
   const router = useRouter();
 
-  // Sync dengan props dari parent
+  // Sync dengan props
   useEffect(() => {
     setLocalChannels(propChannels);
   }, [propChannels]);
@@ -27,20 +26,20 @@ export default function ChannelSelector({
     setLocalLoading(propLoading);
   }, [propLoading]);
 
-  // Helper: Transform extended JSON (extract $oid)
+  // Helper transform data
   const transformChannelData = (data) => {
     if (!data) return data;
     const transformed = { ...data };
     if (data._id && data._id.$oid) transformed._id = data._id.$oid;
     if (data.createdBy && data.createdBy.$oid) transformed.createdBy = data.createdBy.$oid;
     if (data.members && Array.isArray(data.members)) {
-      transformed.members = data.members.map(m => m.$oid || m);
+      transformed.members = data.members.map((m) => m.$oid || m);
     }
     if (data.isPrivate === undefined && data.isDM !== undefined) transformed.isPrivate = data.isDM;
     return transformed;
   };
 
-  // Fallback fetch kalau gak ada props channels
+  // Fallback fetch
   useEffect(() => {
     if (propChannels.length > 0 || !user?.token) return;
 
@@ -49,8 +48,10 @@ export default function ChannelSelector({
       setError(null);
 
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
-        
+        const API_URL =
+          process.env.NEXT_PUBLIC_API_URL ||
+          "https://teleboom-694d2bc690c3.herokuapp.com";
+
         let response;
         try {
           response = await axios.get(`${API_URL}/api/channels`, {
@@ -76,8 +77,6 @@ export default function ChannelSelector({
           channelsList = data.data.map(transformChannelData);
         } else if (data.channel) {
           channelsList = [transformChannelData(data.channel)];
-        } else {
-          channelsList = [];
         }
 
         setLocalChannels(channelsList);
@@ -90,7 +89,11 @@ export default function ChannelSelector({
         }
 
         const msg = (err.response?.data?.message || "").toLowerCase();
-        if (msg.includes("token") || msg.includes("autentikasi") || err.response?.status === 401) {
+        if (
+          msg.includes("token") ||
+          msg.includes("autentikasi") ||
+          err.response?.status === 401
+        ) {
           localStorage.removeItem("chat-app-user");
           localStorage.removeItem("chat-app-token");
           router.push("/login");
@@ -101,7 +104,7 @@ export default function ChannelSelector({
     };
 
     fetchChannels();
-  }, [user, router]);
+  }, [user, router, propChannels]);
 
   const handleChannelClick = (channelId) => {
     setSelectedChannel(channelId);
@@ -114,12 +117,15 @@ export default function ChannelSelector({
   };
 
   const handleNewChannel = (e) => {
-    e.stopPropagation(); // Mencegah event bubbling
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("✅ Tombol Buat Channel diklik");
     router.push("/channels/new");
   };
 
   const combinedLoading = propLoading || localLoading;
-  const combinedChannels = propChannels.length > 0 ? propChannels : localChannels;
+  const combinedChannels =
+    propChannels.length > 0 ? propChannels : localChannels;
 
   if (combinedLoading) {
     return (
@@ -136,7 +142,8 @@ export default function ChannelSelector({
     return (
       <div className="p-4 space-y-2">
         <p className="text-red-600 text-sm">{error}</p>
-        <button 
+        <button
+          type="button"
           onClick={handleRefetch}
           className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
         >
@@ -154,13 +161,24 @@ export default function ChannelSelector({
           {combinedChannels.length} channel
         </span>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto space-y-2 mb-4">
         {combinedChannels.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <div className="mx-auto mb-4 w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-8 w-8 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
               </svg>
             </div>
             <p className="text-sm mb-4">Belum ada channel. Buat channel baru!</p>
@@ -174,13 +192,13 @@ export default function ChannelSelector({
               const isPrivate = channel.isPrivate || channel.isDM;
               const memberCount = channel.members?.length || 0;
               const isSelected = selectedChannel === channelId;
-              
+
               return (
                 <li
                   key={channelId}
                   className={`p-3 rounded-md cursor-pointer transition-all ${
-                    isSelected 
-                      ? "bg-blue-100 border border-blue-300 shadow-sm" 
+                    isSelected
+                      ? "bg-blue-100 border border-blue-300 shadow-sm"
                       : "bg-white hover:bg-gray-50 shadow-sm"
                   }`}
                   onClick={() => handleChannelClick(channelId)}
@@ -190,14 +208,27 @@ export default function ChannelSelector({
                       {channel.name || "Direct Message"}
                       {isPrivate && (
                         <span className="ml-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4 text-gray-500"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                            />
                           </svg>
                         </span>
                       )}
                     </h3>
                     {isSelected && (
-                      <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">Aktif</span>
+                      <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                        Aktif
+                      </span>
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -209,18 +240,31 @@ export default function ChannelSelector({
           </ul>
         )}
       </div>
-      
+
       <div className="pt-2 border-t border-gray-200 space-y-2">
         <button
+          type="button"
           onClick={handleNewChannel}
           className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center justify-center"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 mr-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
           </svg>
           Buat Channel Baru
         </button>
         <button
+          type="button"
           onClick={() => {
             localStorage.removeItem("chat-app-user");
             localStorage.removeItem("chat-app-token");
@@ -228,8 +272,19 @@ export default function ChannelSelector({
           }}
           className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm flex items-center justify-center"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4 mr-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+            />
           </svg>
           Logout
         </button>
