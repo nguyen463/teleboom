@@ -14,21 +14,21 @@ export default function NewChannelPage() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState(null);
-  const [userId, setUserId] = useState(null); // Tambahkan state untuk user ID
 
-  // Ambil token dan user ID dari localStorage
+  // Ambil token dari localStorage hanya di client
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const userDataStr = localStorage.getItem("chat-app-user");
+      const userData = localStorage.getItem("chat-app-user");
       const storedToken = localStorage.getItem("chat-app-token");
       
-      if (!userDataStr && !storedToken) {
+      // Cek kedua item, karena mungkin hanya satu yang ada
+      if (!userData && !storedToken) {
         router.push("/login");
         return;
       }
       
       // Prioritaskan token dari manapun
-      const tokenToUse = storedToken || (userDataStr ? JSON.parse(userDataStr).token : null);
+      const tokenToUse = storedToken || (userData ? JSON.parse(userData).token : null);
       
       if (!tokenToUse) {
         router.push("/login");
@@ -36,18 +36,6 @@ export default function NewChannelPage() {
       }
       
       setToken(tokenToUse);
-      
-      // Ambil user ID dari user data
-      if (userDataStr) {
-        try {
-          const userData = JSON.parse(userDataStr);
-          if (userData.id || userData._id) {
-            setUserId(userData.id || userData._id);
-          }
-        } catch (error) {
-          console.error("Error parsing user data:", error);
-        }
-      }
     }
   }, [router]);
 
@@ -59,25 +47,19 @@ export default function NewChannelPage() {
       return;
     }
 
-    if (!token || !userId) {
-      toast.error("Autentikasi tidak valid. Silakan login kembali.");
+    if (!token) {
+      toast.error("Token tidak valid. Silakan login kembali.");
       return;
     }
 
     setIsLoading(true);
     try {
-      // Kirim user ID dalam request body
-      const requestData = {
-        name, 
-        isPrivate,
-        userId // Tambahkan user ID ke request body
-      };
-
+      // Coba kedua endpoint yang mungkin
       let res;
       try {
         res = await axios.post(
           `${API_URL}/api/channels`,
-          requestData,
+          { name, isPrivate },
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } catch (firstError) {
@@ -85,7 +67,7 @@ export default function NewChannelPage() {
           // Coba endpoint tanpa /api
           res = await axios.post(
             `${API_URL}/channels`,
-            requestData,
+            { name, isPrivate },
             { headers: { Authorization: `Bearer ${token}` } }
           );
         } else {
@@ -95,6 +77,7 @@ export default function NewChannelPage() {
 
       toast.success("Channel berhasil dibuat!");
       
+      // Tunggu sebentar sebelum redirect agar user bisa lihat toast
       setTimeout(() => {
         router.push(`/channels/${res.data._id || res.data.id}`);
       }, 1500);
@@ -102,6 +85,7 @@ export default function NewChannelPage() {
     } catch (err) {
       console.error("Error creating channel:", err);
       
+      // Error handling yang lebih spesifik
       let errorMessage = "Gagal membuat channel";
       
       if (err.response?.data?.message) {
@@ -114,6 +98,7 @@ export default function NewChannelPage() {
       
       toast.error(errorMessage);
       
+      // Jika token expired atau invalid, redirect ke login
       if (err.response?.status === 401) {
         localStorage.removeItem("chat-app-user");
         localStorage.removeItem("chat-app-token");
@@ -125,7 +110,7 @@ export default function NewChannelPage() {
   };
 
   // Loading sementara token belum siap
-  if (!token || !userId) {
+  if (!token) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="text-center">
@@ -209,4 +194,4 @@ export default function NewChannelPage() {
       </div>
     </div>
   );
-}
+}  
