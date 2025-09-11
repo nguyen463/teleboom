@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
@@ -16,6 +16,8 @@ export default function ChannelSelector({
   const [error, setError] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(null);
   const router = useRouter();
+  const isFetching = useRef(false);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
   // Sync dengan props
   useEffect(() => {
@@ -27,105 +29,138 @@ export default function ChannelSelector({
   }, [propLoading]);
 
   // Helper transform data
-  const transformChannelData = (data) => {
+  const transformChannelData = useCallback((data) => {
     if (!data) return data;
     const transformed = { ...data };
-    if (data._id && data._id.$oid) transformed._id = data._id.$oid;
-    if (data.createdBy && data.createdBy.$oid) transformed.createdBy = data.createdBy.$oid;
-    if (data.members && Array.isArray(data.members)) {
-      transformed.members = data.members.map((m) => m.$oid || m);
+    
+    // Handle ObjectId format
+    if (data._id && typeof data._id === 'object' && data._id.$oid) {
+      transformed._id = data._id.$oid;
     }
-    if (data.isPrivate === undefined && data.isDM !== undefined) transformed.isPrivate = data.isDM;
+    
+    if (data.createdBy && typeof data.createdBy === 'object' && data.createdBy.$oid) {
+      transformed.createdBy = data.createdBy.$oid;
+    }
+    
+    if (data.members && Array.isArray(data.members)) {
+      transformed.members = data.members.map((m) => {
+        if (typeof m === 'object' && m.$oid) return m.$oid;
+        return m;
+      });
+    }
+    
+    if (data.isPrivate === undefined && data.isDM !== undefined) {
+      transformed.isPrivate = data.isDM;
+    }
+    
     return transformed;
-  };
+  }, []);
 
-  // Fallback fetch
+  // Fallback fetch dengan debouncing
+  const fetchChannels = useCallback(async () => {
+    if (isFetching.current || !user?.token) return;
+    
+    isFetching.current = true;
+    setLocalLoading(true);
+    setError(null);
+
+    try {
+      let response;
+      try {
+        response = await axios.get(`${API_URL}/api/channels`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+          timeout: 10000 // 10 second timeout
+        });
+      } catch (firstError) {
+        if (firstError.response?.status === 404 || firstError.code === 'ECONNABORTED') {
+          response = await axios.get(`${API_URL}/channels`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+            timeout: 10000
+          });
+        } else {
+          throw firstError;
+        }
+      }
+
+      let data = response.data;
+      let channelsList = [];
+      
+      if (Array.isArray(data)) {
+        channelsList = data.map(transformChannelData);
+      } else if (Array.isArray(data.channels)) {
+        channelsList = data.channels.map(transformChannelData);
+      } else if (data.data && Array.isArray(data.data)) {
+        channelsList = data.data.map(transformChannelData);
+      } else if (data.channel) {
+        channelsList = [transformChannelData(data.channel)];
+      } else {
+        // Default case if response format is unexpected
+        channelsList = [];
+      }
+
+      setLocalChannels(channelsList);
+    } catch (err) {
+      console.error("❌ Gagal mengambil channels:", err);
+      
+      if (err.code === 'ECONNABORTED') {
+        setError("Waktu permintaan habis. Silakan coba lagi.");
+      } else if (err.response?.status >= 500) {
+        setError("Server sedang mengalami masalah. Silakan coba lagi nanti.");
+      } else {
+        setError("Gagal memuat daftar channel. Silakan coba lagi.");
+      }
+
+      const msg = (err.response?.data?.message || "").toLowerCase();
+      if (
+        msg.includes("token") ||
+        msg.includes("autentikasi") ||
+        err.response?.status === 401
+      ) {
+        localStorage.removeItem("chat-app-user");
+        localStorage.removeItem("chat-app-token");
+        router.push("/login");
+      }
+    } finally {
+      setLocalLoading(false);
+      isFetching.current = false;
+    }
+  }, [user, router, transformChannelData, API_URL]);
+
+  // Debounced fetch effect
   useEffect(() => {
     if (propChannels.length > 0 || !user?.token) return;
+    
+    const timer = setTimeout(() => {
+      fetchChannels();
+    }, 500); // Debounce 500ms
+    
+    return () => clearTimeout(timer);
+  }, [propChannels.length, user, fetchChannels]);
 
-    const fetchChannels = async () => {
-      setLocalLoading(true);
-      setError(null);
-
-      try {
-        const API_URL =
-          process.env.NEXT_PUBLIC_API_URL ||
-          "https://teleboom-694d2bc690c3.herokuapp.com";
-
-        let response;
-        try {
-          response = await axios.get(`${API_URL}/api/channels`, {
-            headers: { Authorization: `Bearer ${user.token}` },
-          });
-        } catch (firstError) {
-          if (firstError.response?.status === 404) {
-            response = await axios.get(`${API_URL}/channels`, {
-              headers: { Authorization: `Bearer ${user.token}` },
-            });
-          } else {
-            throw firstError;
-          }
-        }
-
-        let data = response.data;
-        let channelsList = [];
-        if (Array.isArray(data)) {
-          channelsList = data.map(transformChannelData);
-        } else if (Array.isArray(data.channels)) {
-          channelsList = data.channels.map(transformChannelData);
-        } else if (data.data && Array.isArray(data.data)) {
-          channelsList = data.data.map(transformChannelData);
-        } else if (data.channel) {
-          channelsList = [transformChannelData(data.channel)];
-        }
-
-        setLocalChannels(channelsList);
-      } catch (err) {
-        console.error("❌ Gagal mengambil channels:", err);
-        setError("Gagal memuat daftar channel. Silakan coba lagi.");
-
-        if (err.response?.status === 500) {
-          setTimeout(() => fetchChannels(), 2000);
-        }
-
-        const msg = (err.response?.data?.message || "").toLowerCase();
-        if (
-          msg.includes("token") ||
-          msg.includes("autentikasi") ||
-          err.response?.status === 401
-        ) {
-          localStorage.removeItem("chat-app-user");
-          localStorage.removeItem("chat-app-token");
-          router.push("/login");
-        }
-      } finally {
-        setLocalLoading(false);
-      }
-    };
-
-    fetchChannels();
-  }, [user, router, propChannels]);
-
-  const handleChannelClick = (channelId) => {
+  const handleChannelClick = useCallback((channelId) => {
     setSelectedChannel(channelId);
     if (onSelectChannel) onSelectChannel(channelId);
-  };
+  }, [onSelectChannel]);
 
-  const handleRefetch = () => {
+  const handleRefetch = useCallback(() => {
     if (onRefetch) onRefetch();
     else window.location.reload();
-  };
+  }, [onRefetch]);
 
-  const handleNewChannel = (e) => {
+  const handleNewChannel = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("✅ Tombol Buat Channel diklik");
     router.push("/channels/new");
-  };
+  }, [router]);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("chat-app-user");
+    localStorage.removeItem("chat-app-token");
+    router.push("/login");
+  }, [router]);
 
   const combinedLoading = propLoading || localLoading;
-  const combinedChannels =
-    propChannels.length > 0 ? propChannels : localChannels;
+  const combinedChannels = propChannels.length > 0 ? propChannels : localChannels;
 
   if (combinedLoading) {
     return (
@@ -144,7 +179,7 @@ export default function ChannelSelector({
         <p className="text-red-600 text-sm">{error}</p>
         <button
           type="button"
-          onClick={handleRefetch}
+          onClick={fetchChannels}
           className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
         >
           Coba Lagi
@@ -207,7 +242,7 @@ export default function ChannelSelector({
                     <h3 className="text-base font-medium text-gray-900 truncate flex items-center">
                       {channel.name || "Direct Message"}
                       {isPrivate && (
-                        <span className="ml-2">
+                        <span className="ml-2" title="Private Chat">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
                             className="h-4 w-4 text-gray-500"
@@ -245,7 +280,7 @@ export default function ChannelSelector({
         <button
           type="button"
           onClick={handleNewChannel}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center justify-center"
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm flex items-center justify-center transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -265,12 +300,8 @@ export default function ChannelSelector({
         </button>
         <button
           type="button"
-          onClick={() => {
-            localStorage.removeItem("chat-app-user");
-            localStorage.removeItem("chat-app-token");
-            router.push("/login");
-          }}
-          className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm flex items-center justify-center"
+          onClick={handleLogout}
+          className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm flex items-center justify-center transition-colors"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
