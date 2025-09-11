@@ -26,57 +26,80 @@ export default function ChannelsPage() {
       return;
     }
 
-    setUser({
-      ...JSON.parse(rawUser),
-      token,
-    });
-    setLoading(false);
+    try {
+      const userData = JSON.parse(rawUser);
+      setUser({
+        ...userData,
+        token,
+      });
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+      localStorage.removeItem("chat-app-user");
+      localStorage.removeItem("chat-app-token");
+      router.push("/login");
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
 
-  // Fetch channels (dengan debug)
+  // Fetch channels
   const fetchChannels = async () => {
-    if (!user) return;
+    if (!user?.token) return;
+    
     setChannelsLoading(true);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://teleboom-694d2bc690c3.herokuapp.com';
-      console.log("Debug: Fetching channels with token:", user.token ? "Yes" : "No");
-      const res = await fetch(`${API_URL}/api/channels`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
+      
+      // Coba endpoint yang berbeda
+      let response;
+      try {
+        response = await fetch(`${API_URL}/api/channels`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+      } catch (firstError) {
+        console.warn("First endpoint failed, trying alternative...");
+        response = await fetch(`${API_URL}/channels`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+      }
 
-      console.log("Debug: Fetch response status:", res.status);
-
-      if (!res.ok) {
-        if (res.status === 401) {
+      if (!response.ok) {
+        if (response.status === 401) {
           localStorage.removeItem("chat-app-user");
           localStorage.removeItem("chat-app-token");
           router.push("/login");
           return;
         }
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await res.json();
-      console.log("Debug: Fetched channels data:", data);
-
-      // Handle nested array kalau ada
-      const channelsData = Array.isArray(data) ? data : (data.channels || data.data || []);
+      const data = await response.json();
+      
+      // Handle berbagai format response
+      let channelsData = [];
+      if (Array.isArray(data)) {
+        channelsData = data;
+      } else if (Array.isArray(data.channels)) {
+        channelsData = data.channels;
+      } else if (Array.isArray(data.data)) {
+        channelsData = data.data;
+      } else if (data.channel) {
+        channelsData = [data.channel];
+      }
+      
       setChannels(channelsData);
-      console.log("Debug: Set channels length:", channelsData.length);
 
-      // Auto-select kalau ada query id dan channel exist
-      if (id && !selectedChannelId) {
-        const channelExists = channelsData.find(ch => ch._id === id);
+      // Auto-select channel berdasarkan query parameter
+      if (id && channelsData.length > 0) {
+        const channelExists = channelsData.find(ch => 
+          ch._id === id || ch.id === id
+        );
         if (channelExists) {
           setSelectedChannelId(id);
-          console.log("Debug: Auto-selected channel:", id);
-        } else {
-          console.warn("Debug: Channel ID from query not found:", id);
         }
       }
     } catch (err) {
       console.error("Error fetching channels:", err);
-      // Optional: toast.error("Gagal load channels"); // Tambah kalau pake toast
     } finally {
       setChannelsLoading(false);
     }
@@ -84,25 +107,26 @@ export default function ChannelsPage() {
 
   // Call fetch setelah user ready
   useEffect(() => {
-    fetchChannels();
-  }, [user, id]);
+    if (user) {
+      fetchChannels();
+    }
+  }, [user]);
 
   // Sinkronkan selectedChannelId dengan query param
   useEffect(() => {
     if (id && id !== selectedChannelId) {
       setSelectedChannelId(id);
     }
-  }, [id, selectedChannelId]);
+  }, [id]);
 
   const handleSelectChannel = (channelId) => {
-    console.log("Debug: handleSelectChannel called:", channelId);
     setSelectedChannelId(channelId);
-    router.push(`/channels?id=${channelId}`, { shallow: true });
+    // Update URL tanpa reload halaman
+    const newUrl = `/channels${channelId ? `?id=${channelId}` : ''}`;
+    router.push(newUrl, { scroll: false });
   };
 
-  // Refetch tanpa reload full page
   const refetchChannels = () => {
-    console.log("Debug: Refetch triggered");
     fetchChannels();
   };
 
@@ -115,16 +139,15 @@ export default function ChannelsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
         <p className="text-gray-500">Memeriksa autentikasi...</p>
       </div>
     );
   }
 
-  if (!user) return null;
-
   return (
-    <div className="flex h-screen">
-      <div className="w-1/4 bg-gray-100 border-r">
+    <div className="flex h-screen bg-white">
+      <div className="w-1/4 min-w-64 bg-gray-100 border-r border-gray-200">
         <ChannelSelector 
           user={user} 
           channels={channels}
@@ -133,22 +156,38 @@ export default function ChannelsPage() {
           onRefetch={refetchChannels}
         />
       </div>
-      <div className="w-3/4">
+      <div className="flex-1 flex flex-col">
         {selectedChannelId ? (
           <ChatLayout user={user} channelId={selectedChannelId} logout={logout} />
         ) : (
-          <div className="flex items-center justify-center h-full">
-            {channelsLoading ? (
-              <p className="text-gray-500">Loading channels...</p>
-            ) : channels.length === 0 ? (
-              <div className="text-center">
-                <p className="text-gray-500 mb-4">Belum ada channel. Buat sekarang!</p>
-                {/* FIX: Hilangkan tombol di sini - biar gak duplikat dengan sidebar */}
-                <p className="text-gray-400 text-sm">Gunakan tombol di sidebar untuk membuat channel baru.</p>
-              </div>
-            ) : (
-              <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
-            )}
+          <div className="flex items-center justify-center h-full bg-gray-50">
+            <div className="text-center p-6 max-w-md">
+              {channelsLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Memuat channels...</p>
+                </>
+              ) : channels.length === 0 ? (
+                <>
+                  <div className="mx-auto mb-4 w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-500 mb-2">Belum ada channel</p>
+                  <p className="text-gray-400 text-sm">Gunakan tombol di sidebar untuk membuat channel baru.</p>
+                </>
+              ) : (
+                <>
+                  <div className="mx-auto mb-4 w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
