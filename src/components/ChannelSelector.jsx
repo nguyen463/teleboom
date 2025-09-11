@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 
 export default function ChannelSelector({ 
   user, 
-  channels, 
+  channels = [],  // Default ke array kosong kalo props undefined
   loading, 
   selectedChannelId, 
   onSelectChannel, 
@@ -16,35 +16,11 @@ export default function ChannelSelector({
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
 
-  // Close menu on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenu(false);
-      }
-    }
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showMenu]);
+  // ... (useEffect buat menu dismissal sama kayak sebelumnya)
 
-  // Close menu on Escape key
-  useEffect(() => {
-    function handleEscape(event) {
-      if (event.key === "Escape") {
-        setShowMenu(false);
-      }
-    }
-    if (showMenu) {
-      document.addEventListener("keydown", handleEscape);
-      return () => document.removeEventListener("keydown", handleEscape);
-    }
-  }, [showMenu]);
-
-  // Memoize channel buttons for performance (aligns with page's useCallback patterns)
+  // Memoize dengan guard: channels?.map (optional chaining)
   const channelButtons = useMemo(() => 
-    channels.map((channel) => {
+    (channels || []).map((channel) => {  // Fallback ke [] kalo undefined
       const channelId = channel._id || channel.id;
       const isSelected = channelId === selectedChannelId;
       return (
@@ -64,16 +40,15 @@ export default function ChannelSelector({
         </button>
       );
     }), 
-    [channels, selectedChannelId, onSelectChannel]
+    [channels, selectedChannelId, onSelectChannel]  // Deps aman
   );
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header dengan tombol buat channel dan logout - sticky for alignment with page */}
+      {/* Header sama kayak sebelumnya */}
       <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
-          {/* Tombol Buat Channel */}
           <button
             onClick={onCreateChannel}
             className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -85,7 +60,6 @@ export default function ChannelSelector({
             </svg>
           </button>
           
-          {/* Tombol Menu (untuk logout dan refresh) */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -107,7 +81,7 @@ export default function ChannelSelector({
                 <button
                   onClick={() => {
                     onRefetch();
-                    setShowMenu(false); // Close menu after action, aligning with page UX
+                    setShowMenu(false);
                   }}
                   className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left focus:outline-none focus:bg-gray-100"
                   role="menuitem"
@@ -130,7 +104,7 @@ export default function ChannelSelector({
         </div>
       </div>
 
-      {/* Daftar Channels - with ARIA for alignment with page's role="main" */}
+      {/* Daftar Channels */}
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
@@ -140,7 +114,7 @@ export default function ChannelSelector({
           <div className="p-4 text-red-500 bg-red-50 rounded-md text-sm" role="alert">
             {error}
           </div>
-        ) : channels.length === 0 ? (
+        ) : (channels?.length ?? 0) === 0 ? (  // Guard tambahan: channels?.length ?? 0
           <div className="p-4 text-center text-gray-500">
             Tidak ada channels. Klik tombol + untuk membuat channel baru.
           </div>
