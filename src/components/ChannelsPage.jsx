@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
@@ -77,7 +77,7 @@ export default function ChannelsPage() {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() || { channels: [] }; // Fallback jika data undefined
       
       // Handle berbagai format response
       let channelsData = [];
@@ -91,7 +91,7 @@ export default function ChannelsPage() {
         channelsData = [data.channel];
       }
       
-      setChannels(channelsData);
+      setChannels(channelsData || []); // Pastikan selalu array
 
       // Auto-select channel berdasarkan query parameter (only if no manual selection)
       if (!manualSelectionRef.current && channelsData.length > 0) {
@@ -110,7 +110,7 @@ export default function ChannelsPage() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id]); // Removed selectedChannelId to prevent loops
+  }, [user, id, router, selectedChannelId]);
 
   // Call fetch setelah user ready
   useEffect(() => {
