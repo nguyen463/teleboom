@@ -2,227 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.6% 91.4%;
-  --input: 214.3 31.6% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 47.4% 11.2%;
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
-[data-theme="dark"] {
-  --background: 222.2 47.4% 11.2%;
-  --foreground: 210 40% 98%;
-  --muted: 217.2 32.4% 14.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  --secondary: 217.2 32.4% 14.5%;
-  --secondary-foreground: 210 40% 98%;
-  --accent: 217.2 32.4% 14.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 359 74% 53%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.4% 37.5%;
-  --input: 217.2 32.4% 37.5%;
-  --ring: 217.2 91.2% 59.8%;
-  --card: 217.2 32.4% 14.5%;
-  --card-foreground: 210 40% 98%;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  min-height: 100vh;
-}
-
-.container {
-  @apply mx-auto w-full max-w-7xl px-4 md:px-6 lg:px-8;
-}
-
-.auth-container {
-  @apply flex min-h-screen;
-}
-
-.auth-left {
-  @apply hidden flex-1 items-center justify-center p-8 text-white md:flex;
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-}
-
-.auth-left-content {
-  @apply max-w-md text-center;
-}
-
-.auth-left h1 {
-  @apply text-4xl font-bold mb-6;
-}
-
-.auth-left p {
-  @apply text-lg opacity-90;
-}
-
-.auth-right {
-  @apply flex flex-1 items-center justify-center p-8;
-  background-color: hsl(var(--background));
-}
-
-.auth-card {
-  @apply w-full max-w-md rounded-xl p-8 shadow-xl;
-  background-color: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-}
-
-.auth-header {
-  @apply text-center mb-8;
-}
-
-.auth-header h1 {
-  @apply text-3xl font-bold mb-2;
-  color: hsl(var(--foreground));
-}
-
-.auth-header p {
-  @apply text-base;
-  color: hsl(var(--muted-foreground));
-}
-
-.auth-form {
-  @apply flex flex-col space-y-5;
-}
-
-.form-group {
-  @apply flex flex-col space-y-2;
-}
-
-.form-group label {
-  @apply text-sm font-medium;
-  color: hsl(var(--foreground));
-}
-
-.form-group input {
-  @apply w-full rounded-lg border px-4 py-2 text-base transition-colors;
-  background-color: hsl(var(--input));
-  border-color: hsl(var(--border));
-  color: hsl(var(--foreground));
-}
-
-.form-group input:focus {
-  @apply outline-none ring-2 ring-offset-2;
-  ring-color: hsl(var(--ring));
-  box-shadow: 0 0 0 2px hsl(var(--ring));
-}
-
-.btn {
-  @apply inline-flex items-center justify-center rounded-lg px-6 py-3 text-base font-semibold transition-colors;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-primary {
-  @apply bg-primary text-primary-foreground hover:bg-primary/90;
-}
-
-.btn-secondary {
-  @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-input;
-}
-
-.auth-footer {
-  @apply text-center mt-6 text-sm;
-  color: hsl(var(--muted-foreground));
-}
-
-.auth-footer a {
-  @apply font-medium text-primary hover:underline;
-}
-
-.terms {
-  @apply text-center mt-4 text-xs;
-  color: hsl(var(--muted-foreground));
-}
-
-.terms a {
-  @apply font-medium text-primary hover:underline;
-}
-
-.divider {
-  @apply flex items-center my-6 text-sm;
-  color: hsl(var(--muted-foreground));
-}
-
-.divider::before,
-.divider::after {
-  content: "";
-  @apply flex-1 h-px;
-  background-color: hsl(var(--border));
-}
-
-.divider span {
-  @apply px-4;
-}
-
-.bg-background {
-  background-color: hsl(var(--background));
-}
-
-.bg-primary {
-  background-color: hsl(var(--primary));
-}
-
-.text-primary-foreground {
-  color: hsl(var(--primary-foreground));
-}
-
-.bg-secondary {
-  background-color: hsl(var(--secondary));
-}
-
-.text-foreground {
-  color: hsl(var(--foreground));
-}
-
-.bg-muted {
-  background-color: hsl(var(--muted));
-}
-
-.text-muted-foreground {
-  color: hsl(var(--muted-foreground));
-}
-
-.bg-destructive {
-  background-color: hsl(var(--destructive));
-}
-
-.text-destructive {
-  color: hsl(var(--destructive));
-}
-
-.text-destructive-foreground {
-  color: hsl(var(--destructive-foreground));
-}
-
-.border-border {
-  border-color: hsl(var(--border));
-}
-
-.ring-ring {
-  ring-color: hsl(var(--ring));
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
 }
