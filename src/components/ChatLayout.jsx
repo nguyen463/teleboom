@@ -25,6 +25,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
+  const [theme, setTheme] = useState("light"); // State untuk tema
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -32,6 +33,21 @@ export default function ChatLayout({ user, channelId, logout }) {
   const typingTimeoutRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const router = useRouter();
+
+  // Inisialisasi tema dari localStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") || "light";
+    setTheme(savedTheme);
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  }, []);
+
+  // Toggle tema
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
+  };
 
   // Reset everything when channelId changes
   useEffect(() => {
@@ -407,6 +423,12 @@ export default function ChatLayout({ user, channelId, logout }) {
                 className="block w-full text-left px-4 py-2 hover:bg-secondary-foreground hover:text-secondary transition-colors"
               >
                 {showOnlineUsers ? "Hide Online Users" : "Show Online Users"}
+              </button>
+              <button
+                onClick={toggleTheme}
+                className="block w-full text-left px-4 py-2 hover:bg-secondary-foreground hover:text-secondary transition-colors"
+              >
+                Switch to {theme === "light" ? "Dark" : "Light"} Mode
               </button>
               <button
                 onClick={() => {
