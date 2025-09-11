@@ -1,11 +1,10 @@
-// frontend/src/components/ChannelSelector.jsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-export default function ChannelSelector({ user }) {
+export default function ChannelSelector({ user, onSelectChannel }) {
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -35,7 +34,8 @@ export default function ChannelSelector({ user }) {
   }, [user, router]);
 
   const handleChannelClick = (channelId) => {
-    router.push(`/channels/${channelId}`);
+    if (onSelectChannel) onSelectChannel(channelId);
+    else router.push(`/channels/${channelId}`);
   };
 
   if (loading) {
@@ -58,34 +58,33 @@ export default function ChannelSelector({ user }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Pilih Channel</h1>
-        {channels.length === 0 ? (
-          <p className="text-gray-600">Belum ada channel. Buat channel baru!</p>
-        ) : (
-          <ul className="space-y-2">
-            {channels.map((channel) => (
-              <li
-                key={channel._id}
-                className="p-4 bg-white rounded-md shadow hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleChannelClick(channel._id)}
-              >
-                <h2 className="text-lg font-medium">{channel.name}</h2>
-                <p className="text-sm text-gray-600">
-                  {channel.isPrivate ? "Private" : "Public"} • {channel.members.length} anggota
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button
-          onClick={() => router.push("/create-channel")} // Asumsi ada rute untuk membuat channel
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          Buat Channel Baru
-        </button>
-      </div>
+    <div className="p-4">
+      <h1 className="text-xl font-bold mb-4">Pilih Channel</h1>
+      {channels.length === 0 ? (
+        <p className="text-gray-600">Belum ada channel. Buat channel baru!</p>
+      ) : (
+        <ul className="space-y-2">
+          {channels.map((channel) => (
+            <li
+              key={channel._id}
+              className="p-3 bg-white rounded-md shadow hover:bg-gray-50 cursor-pointer"
+              onClick={() => handleChannelClick(channel._id)}
+            >
+              <div className="flex justify-between">
+                <span className="font-medium">{channel.name}</span>
+                <span className="text-sm text-gray-500">{channel.members.length} anggota</span>
+              </div>
+              <p className="text-sm text-gray-500">{channel.isPrivate ? "Private" : "Public"}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        onClick={() => router.push("/create-channel")}
+        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+      >
+        Buat Channel Baru
+      </button>
     </div>
   );
 }
