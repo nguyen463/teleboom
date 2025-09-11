@@ -18,20 +18,38 @@ export default function ChannelSelector({ user, onSelectChannel }) {
       setError(null);
 
       try {
-        // Gunakan endpoint backend lengkap
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com/api";
-
-        const response = await axios.get(`${API_URL}/channels`, {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
-        });
+        // Gunakan endpoint yang benar
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
+        
+        // Coba beberapa endpoint yang mungkin
+        let response;
+        try {
+          // Coba endpoint /api/channels dulu
+          response = await axios.get(`${API_URL}/api/channels`, {
+            headers: {
+              Authorization: `Bearer ${user.token}`,
+            },
+          });
+        } catch (firstError) {
+          // Jika gagal, coba endpoint /channels (tanpa /api)
+          if (firstError.response?.status === 404) {
+            response = await axios.get(`${API_URL}/channels`, {
+              headers: {
+                Authorization: `Bearer ${user.token}`,
+              },
+            });
+          } else {
+            throw firstError;
+          }
+        }
 
         // Pastikan response adalah array
         if (Array.isArray(response.data)) {
           setChannels(response.data);
         } else if (Array.isArray(response.data.channels)) {
           setChannels(response.data.channels);
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          setChannels(response.data.data);
         } else {
           setChannels([]);
         }
@@ -72,7 +90,15 @@ export default function ChannelSelector({ user, onSelectChannel }) {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center text-red-600">{error}</div>
+        <div className="text-center text-red-600">
+          <p>{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Coba Lagi
+          </button>
+        </div>
       </div>
     );
   }
@@ -82,29 +108,39 @@ export default function ChannelSelector({ user, onSelectChannel }) {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Pilih Channel</h1>
         {channels.length === 0 ? (
-          <p className="text-gray-600">Belum ada channel. Buat channel baru!</p>
+          <div className="text-center py-8">
+            <p className="text-gray-600 mb-4">Belum ada channel. Buat channel baru!</p>
+            <button
+              onClick={() => router.push("/create-channel")}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Buat Channel Baru
+            </button>
+          </div>
         ) : (
-          <ul className="space-y-2">
-            {channels.map((channel) => (
-              <li
-                key={channel._id}
-                className="p-4 bg-white rounded-md shadow hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleChannelClick(channel._id)}
-              >
-                <h2 className="text-lg font-medium">{channel.name}</h2>
-                <p className="text-sm text-gray-600">
-                  {channel.isPrivate ? "Private" : "Public"} • {channel.members?.length || 0} anggota
-                </p>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-2 mb-4">
+              {channels.map((channel) => (
+                <li
+                  key={channel._id || channel.id}
+                  className="p-4 bg-white rounded-md shadow hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleChannelClick(channel._id || channel.id)}
+                >
+                  <h2 className="text-lg font-medium">{channel.name}</h2>
+                  <p className="text-sm text-gray-600">
+                    {channel.isPrivate ? "Private" : "Public"} • {channel.members?.length || 0} anggota
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => router.push("/create-channel")}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Buat Channel Baru
+            </button>
+          </>
         )}
-        <button
-          onClick={() => router.push("/create-channel")}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          Buat Channel Baru
-        </button>
       </div>
     </div>
   );
