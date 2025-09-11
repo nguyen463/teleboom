@@ -2,13 +2,17 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@400;500;700&family=Geist+Mono:wght@400&display=swap');
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #171717;
-  --color-primary: #3b82f6;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #e5e7eb;
-  --color-secondary-foreground: #1f2937;
+  --color-background: 0 0% 100%; /* Light: white */
+  --color-foreground: 222.2 84% 4.9%; /* Light: dark gray */
+  --color-primary: 221.2 83.2% 53.3%; /* Blue */
+  --color-primary-foreground: 210 40% 98%; /* White-ish */
+  --color-secondary: 210 20% 98%; /* Light gray */
+  --color-secondary-foreground: 215.4 16.3% 46.9%; /* Dark gray */
+  --color-border: 214.3 31.8% 91.4%; /* Light border */
+  --color-muted: 210 40% 96%; /* Muted bg */
   --font-sans: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
 }
@@ -17,15 +21,21 @@
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
+    --border: 214.3 31.8% 91.4%;
+    --muted: 210 40% 96%;
+    color-scheme: light;
   }
 
   :root[data-theme="dark"] {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 222.2 84% 4.9%; /* Dark: dark gray */
+    --foreground: 210 40% 98%; /* Dark: light gray */
+    --border: 217.2 32.6% 17.5%; /* Dark border */
+    --muted: 222.2 84% 4.9%; /* Dark muted */
+    color-scheme: dark;
   }
 
-  html {
-    color-scheme: var(--theme, light);
+  * {
+    @apply border-border;
   }
 
   body {
