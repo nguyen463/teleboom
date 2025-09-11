@@ -1,7 +1,7 @@
 // components/ChatLayout.jsx
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { io } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
@@ -34,6 +34,27 @@ export default function ChatLayout({ user, channelId, logout }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
+  // Reset everything when channelId changes
+  useEffect(() => {
+    setMessages([]);
+    setPage(0);
+    setHasMore(true);
+    setNewMsg("");
+    setEditingId(null);
+    setEditText("");
+    setSelectedImage(null);
+    setImagePreview(null);
+    setTypingUsers([]);
+    setError(null);
+    setIsLoading(true);
+    
+    // Disconnect existing socket if any
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+  }, [channelId]);
+
   // Normalisasi data pesan
   const normalizeMessage = useCallback(
     (msg) => ({
@@ -50,32 +71,12 @@ export default function ChatLayout({ user, channelId, logout }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Reset state ketika channelId berubah
-  useEffect(() => {
-    setMessages([]);
-    setPage(0);
-    setHasMore(true);
-    setNewMsg("");
-    setEditingId(null);
-    setEditText("");
-    setSelectedImage(null);
-    setImagePreview(null);
-    setTypingUsers([]);
-    setError(null);
-    setIsLoading(true);
-  }, [channelId]);
-
   // Inisialisasi socket dan penanganan event
   useEffect(() => {
     if (!user?.token || !channelId) {
       setError("Token atau channelId tidak ditemukan. Mengalihkan...");
       setIsLoading(false);
       setTimeout(() => router.push("/channels"), 2000);
-      return;
-    }
-
-    // Hindari inisialisasi ganda
-    if (socketRef.current?.connected && socketRef.current.channelId === channelId) {
       return;
     }
 
@@ -91,10 +92,10 @@ export default function ChatLayout({ user, channelId, logout }) {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
+      query: { channelId } // Add channelId to query params
     });
 
     socketRef.current = socket;
-    socketRef.current.channelId = channelId;
 
     // Event Listener Socket.IO
     socket.on("connect", () => {
@@ -102,6 +103,8 @@ export default function ChatLayout({ user, channelId, logout }) {
       setError(null);
       setIsLoading(true);
       console.log("🔗 Socket terhubung, ID:", socket.id);
+      socket.emit("joinChannel", { channelId }); // Join specific channel
+      
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
         if (response.error) {
           toast.error(response.error);
@@ -131,6 +134,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("newMessage", (msg) => {
+      // Only add message if it's for the current channel
       if (msg.channelId.toString() === channelId) {
         const container = messagesContainerRef.current;
         const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
@@ -142,6 +146,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("editMessage", (msg) => {
+      // Only update if it's for the current channel
       if (msg.channelId.toString() === channelId) {
         setMessages((prev) =>
           prev.map((m) => (m._id === msg._id ? { ...m, text: msg.text, updatedAt: msg.updatedAt } : m))
@@ -160,6 +165,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("userTyping", (userData) => {
+      // Only show typing indicator for current channel
       if (userData.channelId === channelId && userData.userId !== user.id) {
         setTypingUsers((prev) =>
           prev.some((u) => u.userId === userData.userId) ? prev : [...prev, userData]
@@ -168,6 +174,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("userStoppedTyping", (userData) => {
+      // Only remove typing indicator for current channel
       if (userData.channelId === channelId) {
         setTypingUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
       }
@@ -184,6 +191,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     return () => {
       if (socketRef.current) {
+        socketRef.current.emit("leaveChannel", { channelId }); // Leave channel when unmounting
         socketRef.current.disconnect();
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -337,6 +345,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hai, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
+          <span className="text-sm opacity-75">Channel: {channelId}</span>
         </div>
         <div className="relative">
           <button
