@@ -70,8 +70,8 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   const normalizeMessage = useCallback(
     (msg) => {
-      const senderIdStr = msg.senderId?._id 
-        ? msg.senderId._id.toString() 
+      const senderIdStr = msg.senderId?._id
+        ? msg.senderId._id.toString()
         : (typeof msg.senderId === 'string' ? msg.senderId : '');
       
       return {
@@ -155,7 +155,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     socket.on("newMessage", (msg) => {
       if (msg.channelId.toString() === channelId) {
         const container = messagesContainerRef.current;
-        const isScrolledToBottom = container && 
+        const isScrolledToBottom = container &&
           (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
         
         setMessages((prev) => [...prev, normalizeMessage(msg)]);
@@ -296,18 +296,18 @@ export default function ChatLayout({ user, channelId, logout }) {
       
       if (!socketRef.current) return;
       
-      socketRef.current.emit("typing", { 
-        channelId, 
-        isTyping: value.length > 0 
+      socketRef.current.emit("typing", {
+        channelId,
+        isTyping: value.length > 0
       });
       
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       
       if (value.length > 0) {
         typingTimeoutRef.current = setTimeout(() => {
-          socketRef.current.emit("typing", { 
-            channelId, 
-            isTyping: false 
+          socketRef.current.emit("typing", {
+            channelId,
+            isTyping: false
           });
         }, 3000);
       }
@@ -340,10 +340,10 @@ export default function ChatLayout({ user, channelId, logout }) {
   const saveEdit = useCallback(() => {
     if (!socketRef.current || !editText.trim() || !editingId) return;
     
-    socketRef.current.emit("editMessage", { 
-      id: editingId, 
-      text: editText, 
-      channelId 
+    socketRef.current.emit("editMessage", {
+      id: editingId,
+      text: editText,
+      channelId
     }, (response) => {
       if (response?.error) {
         toast.error(response.error);
@@ -359,9 +359,9 @@ export default function ChatLayout({ user, channelId, logout }) {
       if (!socketRef.current) return;
       
       if (window.confirm("Are you sure you want to delete this message?")) {
-        socketRef.current.emit("deleteMessage", { 
-          id, 
-          channelId 
+        socketRef.current.emit("deleteMessage", {
+          id,
+          channelId
         }, (response) => {
           if (response?.error) {
             toast.error(response.error);
@@ -384,14 +384,14 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   return (
     <div key={`${theme}-${forceUpdate}`} className="flex flex-col h-screen bg-background text-foreground font-sans">
-      <ToastContainer 
-        position="top-right" 
+      <ToastContainer
+        position="top-right"
         autoClose={3000}
         theme={theme}
-        toastClassName="bg-background text-foreground border-border border"
+        toastClassName="bg-card text-foreground border-border border"
         progressClassName={theme === "dark" ? "bg-primary" : "bg-primary"}
       />
-      <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
+      <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center shadow-lg">
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hi, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
@@ -400,7 +400,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="p-2 rounded-full hover:bg-primary/90 transition-colors"
+            className="p-2 rounded-full hover:bg-primary/90 transition-colors focus-visible"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -418,10 +418,10 @@ export default function ChatLayout({ user, channelId, logout }) {
             </svg>
           </button>
           {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-background border border-border text-foreground rounded-md shadow-lg z-10">
+            <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-lg shadow-lg z-10">
               <button
                 onClick={() => setShowOnlineUsers(!showOnlineUsers)}
-                className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
+                className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors rounded-t-lg"
               >
                 {showOnlineUsers ? "Hide Online Users" : "Show Online Users"}
               </button>
@@ -435,7 +435,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                 onClick={() => {
                   logout();
                 }}
-                className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
+                className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive rounded-b-lg"
               >
                 Logout
               </button>
@@ -445,11 +445,11 @@ export default function ChatLayout({ user, channelId, logout }) {
       </header>
 
       {showOnlineUsers && (
-        <div className="bg-muted p-4">
-          <h3 className="font-bold">Online Users ({onlineUsers.length})</h3>
+        <div className="bg-secondary p-4 border-b border-border">
+          <h3 className="font-bold text-lg text-foreground">Online Users ({onlineUsers.length})</h3>
           <ul className="mt-2 space-y-1">
             {onlineUsers.map((u) => (
-              <li key={u.userId} className="text-sm">
+              <li key={u.userId} className="text-sm text-muted-foreground">
                 {u.displayName || u.username}
               </li>
             ))}
@@ -458,7 +458,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       )}
 
       {error && (
-        <div className="bg-destructive text-destructive-foreground p-2 text-center">{error}</div>
+        <div className="bg-destructive text-destructive-foreground p-2 text-center text-sm font-medium">{error}</div>
       )}
 
       <div
@@ -510,20 +510,20 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : (
           messages.map((msg) => {
-            const isOwn = user?.id && msg.senderId && 
+            const isOwn = user?.id && msg.senderId &&
               msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-lg p-3 rounded-2xl shadow-sm border ${
-                    isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground border-border"
+                    isOwn ? "bg-primary text-primary-foreground" : "bg-card text-foreground border-border"
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-bold opacity-80">
+                    <span className="text-xs font-semibold opacity-80">
                       {msg.senderName || (isOwn ? "You" : "Unknown")}
                     </span>
-                    <span className="text-xs opacity-70">
+                    <span className="text-xs opacity-70 ml-2">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
                       {msg.updatedAt && " (edited)"}
                     </span>
@@ -552,13 +552,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                             setEditText("");
                           }
                         }}
-                        className="flex-1 p-2 rounded border-border bg-background text-foreground"
+                        className="flex-1 p-2 rounded-lg border-border bg-background text-foreground focus-visible"
                         autoFocus
                       />
                       <div className="flex space-x-2 self-end">
                         <button
                           onClick={saveEdit}
-                          className="bg-primary px-3 py-1 rounded text-primary-foreground text-sm"
+                          className="bg-primary px-3 py-1 rounded-lg text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
                         >
                           Save
                         </button>
@@ -567,7 +567,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                             setEditingId(null);
                             setEditText("");
                           }}
-                          className="bg-muted px-3 py-1 rounded text-foreground text-sm"
+                          className="bg-muted px-3 py-1 rounded-lg text-foreground text-sm hover:bg-muted/80 transition-colors"
                         >
                           Cancel
                         </button>
@@ -578,7 +578,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                       <div className="flex space-x-2 mt-1 justify-end">
                         <button
                           onClick={() => handleEdit(msg)}
-                          className="text-xs underline hover:opacity-80 transition-colors"
+                          className="text-xs underline text-muted-foreground hover:opacity-80 transition-colors"
                         >
                           Edit
                         </button>
@@ -600,22 +600,22 @@ export default function ChatLayout({ user, channelId, logout }) {
       </div>
 
       {imagePreview && (
-        <div className="p-4 bg-muted">
-          <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
+        <div className="p-4 bg-secondary">
+          <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg border border-border" />
           <button
             onClick={() => {
               setSelectedImage(null);
               setImagePreview(null);
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
-            className="mt-2 text-sm text-destructive"
+            className="mt-2 text-sm text-destructive hover:underline"
           >
             Remove Image
           </button>
         </div>
       )}
 
-      <div className="p-4 bg-secondary">
+      <div className="p-4 bg-card border-t border-border">
         {typingUsers.length > 0 && (
           <div className="text-sm text-muted-foreground mb-2">
             {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
@@ -631,7 +631,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 bg-muted text-foreground rounded-full hover:bg-border transition-colors"
+            className="p-2 bg-muted text-muted-foreground rounded-full hover:bg-muted/80 transition-colors"
             disabled={isUploading}
           >
             <svg
@@ -659,7 +659,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                 sendMessage();
               }
             }}
-            className="flex-1 p-2 rounded border-border bg-background text-foreground"
+            className="flex-1 p-2 rounded-lg border-border bg-input text-foreground focus-visible"
             placeholder="Type a message..."
             disabled={isUploading}
           />
