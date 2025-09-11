@@ -60,8 +60,10 @@ export default function ChatLayout({ user, channelId, logout }) {
     (msg) => ({
       ...msg,
       _id: msg._id?.toString() || Math.random().toString(),
-      senderId: msg.senderId?.toString() || "",
+      senderId: msg.senderId?._id ? msg.senderId._id.toString() : 
+                (msg.senderId?.toString() || ""),
       channelId: msg.channelId?.toString() || "",
+      senderName: msg.senderId?.displayName || msg.senderId?.username || "Unknown"
     }),
     []
   );
@@ -92,7 +94,6 @@ export default function ChatLayout({ user, channelId, logout }) {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      query: { channelId } // Add channelId to query params
     });
 
     socketRef.current = socket;
@@ -103,19 +104,24 @@ export default function ChatLayout({ user, channelId, logout }) {
       setError(null);
       setIsLoading(true);
       console.log("🔗 Socket terhubung, ID:", socket.id);
-      socket.emit("joinChannel", { channelId }); // Join specific channel
+      socket.emit("joinChannel", channelId);
       
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
-        if (response.error) {
+        if (response && response.error) {
           toast.error(response.error);
           setError(response.error);
           setIsLoading(false);
-        } else {
-          setMessages(response);
+        } else if (Array.isArray(response)) {
+          const normalizedMessages = response.map(normalizeMessage);
+          setMessages(normalizedMessages);
           setPage(0);
           setHasMore(response.length === 20);
           setIsLoading(false);
-          scrollToBottom();
+          setTimeout(() => scrollToBottom(), 100);
+        } else {
+          toast.error("Format respons tidak valid");
+          setError("Format respons tidak valid");
+          setIsLoading(false);
         }
       });
     });
@@ -137,8 +143,11 @@ export default function ChatLayout({ user, channelId, logout }) {
       // Only add message if it's for the current channel
       if (msg.channelId.toString() === channelId) {
         const container = messagesContainerRef.current;
-        const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+        const isScrolledToBottom = container && 
+          (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
+        
         setMessages((prev) => [...prev, normalizeMessage(msg)]);
+        
         if (isScrolledToBottom) {
           setTimeout(() => scrollToBottom(), 100);
         }
@@ -149,7 +158,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       // Only update if it's for the current channel
       if (msg.channelId.toString() === channelId) {
         setMessages((prev) =>
-          prev.map((m) => (m._id === msg._id ? { ...m, text: msg.text, updatedAt: msg.updatedAt } : m))
+          prev.map((m) => (m._id === msg._id ? normalizeMessage(msg) : m))
         );
         setEditingId(null);
         setEditText("");
@@ -157,31 +166,27 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("deleteMessage", (id) => {
-      setMessages((prev) => prev.filter((m) => m._id !== id));
+      setMessages((prev) => prev.filter((m) => m._id !== id.toString()));
     });
 
-    socket.on("onlineUsers", (users) => {
+    socket.on("online_users", (users) => {
       setOnlineUsers(users);
     });
 
     socket.on("userTyping", (userData) => {
       // Only show typing indicator for current channel
-      if (userData.channelId === channelId && userData.userId !== user.id) {
-        setTypingUsers((prev) =>
-          prev.some((u) => u.userId === userData.userId) ? prev : [...prev, userData]
-        );
-      }
-    });
-
-    socket.on("userStoppedTyping", (userData) => {
-      // Only remove typing indicator for current channel
-      if (userData.channelId === channelId) {
-        setTypingUsers((prev) => prev.filter((u) => u.userId !== userData.userId));
+      if (userData.userId !== user.id) {
+        setTypingUsers((prev) => {
+          // Hapus user jika sudah ada
+          const filtered = prev.filter((u) => u.userId !== userData.userId);
+          // Tambahkan user baru jika sedang mengetik
+          return userData.isTyping ? [...filtered, userData] : filtered;
+        });
       }
     });
 
     socket.on("error", (errorMsg) => {
-      toast.error(`Error: ${errorMsg}`);
+      toast.error(`Error: ${errorMsg.message || errorMsg}`);
       if (errorMsg.includes("autentikasi") || errorMsg.includes("token")) {
         logout();
       } else if (errorMsg.includes("channel")) {
@@ -191,7 +196,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     return () => {
       if (socketRef.current) {
-        socketRef.current.emit("leaveChannel", { channelId }); // Leave channel when unmounting
+        socketRef.current.emit("leaveChannel", channelId);
         socketRef.current.disconnect();
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -208,20 +213,28 @@ export default function ChatLayout({ user, channelId, logout }) {
         setIsLoading(true);
         const oldScrollHeight = container.scrollHeight;
         const newSkip = (page + 1) * 20;
-        socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip }, (msgs) => {
-          if (msgs?.error) {
+        
+        socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip }, (response) => {
+          if (response?.error) {
             setIsLoading(false);
             return;
           }
-          const newMessages = msgs.map(normalizeMessage);
-          setMessages((prev) => [...newMessages, ...prev]);
-          setHasMore(msgs.length === 20);
-          setPage((prev) => prev + 1);
-          setIsLoading(false);
-
-          // Pertahankan posisi gulir
-          const newScrollHeight = container.scrollHeight;
-          container.scrollTop = newScrollHeight - oldScrollHeight;
+          
+          if (Array.isArray(response)) {
+            const newMessages = response.map(normalizeMessage);
+            setMessages((prev) => [...newMessages, ...prev]);
+            setHasMore(response.length === 20);
+            setPage((prev) => prev + 1);
+            
+            // Pertahankan posisi gulir
+            setTimeout(() => {
+              const newScrollHeight = container.scrollHeight;
+              container.scrollTop = newScrollHeight - oldScrollHeight;
+              setIsLoading(false);
+            }, 0);
+          } else {
+            setIsLoading(false);
+          }
         });
       }
     };
@@ -234,7 +247,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     if (!socketRef.current || (!newMsg.trim() && !selectedImage) || isUploading) return;
     setIsUploading(true);
 
-    const messageData = { text: newMsg.trim(), image: null, channelId };
+    const messageData = { text: newMsg.trim(), channelId };
 
     const onMessageSent = (response) => {
       if (response?.error) {
@@ -244,7 +257,12 @@ export default function ChatLayout({ user, channelId, logout }) {
         setNewMsg("");
         setSelectedImage(null);
         setImagePreview(null);
-        socketRef.current.emit("stopTyping", { channelId });
+        // Hentikan indikator mengetik
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+        socketRef.current.emit("typing", { channelId, isTyping: false });
       }
       setIsUploading(false);
     };
@@ -270,16 +288,26 @@ export default function ChatLayout({ user, channelId, logout }) {
     (e) => {
       const value = e.target.value;
       setNewMsg(value);
+      
       if (!socketRef.current) return;
-      if (value) {
-        socketRef.current.emit("typing", { channelId });
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      
+      // Kirim status mengetik
+      socketRef.current.emit("typing", { 
+        channelId, 
+        isTyping: value.length > 0 
+      });
+      
+      // Hapus timeout sebelumnya
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      
+      // Set timeout untuk menghentikan indikator mengetik
+      if (value.length > 0) {
         typingTimeoutRef.current = setTimeout(() => {
-          socketRef.current.emit("stopTyping", { channelId });
+          socketRef.current.emit("typing", { 
+            channelId, 
+            isTyping: false 
+          });
         }, 3000);
-      } else {
-        socketRef.current.emit("stopTyping", { channelId });
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       }
     },
     [channelId]
@@ -309,9 +337,17 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   const saveEdit = useCallback(() => {
     if (!socketRef.current || !editText.trim() || !editingId) return;
-    socketRef.current.emit("editMessage", { id: editingId, text: editText, channelId }, (response) => {
+    
+    socketRef.current.emit("editMessage", { 
+      id: editingId, 
+      text: editText, 
+      channelId 
+    }, (response) => {
       if (response?.error) {
         toast.error(response.error);
+      } else {
+        setEditingId(null);
+        setEditText("");
       }
     });
   }, [editingId, editText, channelId]);
@@ -319,13 +355,19 @@ export default function ChatLayout({ user, channelId, logout }) {
   const handleDelete = useCallback(
     (id) => {
       if (!socketRef.current) return;
-      socketRef.current.emit("deleteMessage", id, (response) => {
-        if (response?.error) {
-          toast.error(response.error);
-        }
-      });
+      
+      if (window.confirm("Apakah Anda yakin ingin menghapus pesan ini?")) {
+        socketRef.current.emit("deleteMessage", { 
+          id, 
+          channelId 
+        }, (response) => {
+          if (response?.error) {
+            toast.error(response.error);
+          }
+        });
+      }
     },
-    []
+    [channelId]
   );
 
   const userDisplayName = user?.displayName || user?.username;
@@ -368,7 +410,7 @@ export default function ChatLayout({ user, channelId, logout }) {
             </svg>
           </button>
           {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white text-gray-900 rounded-md shadow-lg">
+            <div className="absolute right-0 mt-2 w-48 bg-white text-gray-900 rounded-md shadow-lg z-10">
               <button
                 onClick={() => setShowOnlineUsers(!showOnlineUsers)}
                 className="block w-full text-left px-4 py-2 hover:bg-gray-100"
@@ -409,7 +451,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
       >
-        {isLoading ? (
+        {isLoading && page === 0 ? (
           <div className="flex items-center justify-center h-full">
             <svg
               className="animate-spin h-8 w-8 text-blue-600"
@@ -454,7 +496,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : (
           messages.map((msg) => {
-            // PERBAIKAN: Pastikan perbandingan ID dilakukan dengan benar
             const isOwn = user?.id && msg.senderId && msg.senderId.toString() === user.id.toString();
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
@@ -464,7 +505,9 @@ export default function ChatLayout({ user, channelId, logout }) {
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-bold opacity-80">{msg.senderName}</span>
+                    <span className="text-xs font-bold opacity-80">
+                      {msg.senderName || (isOwn ? "Anda" : "Unknown")}
+                    </span>
                     <span className="text-xs opacity-70">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
                       {msg.updatedAt && " (diedit)"}
@@ -516,7 +559,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                       </div>
                     </div>
                   ) : (
-                    // PERBAIKAN: Tombol edit dan hapus hanya muncul untuk pesan milik sendiri
                     isOwn && (
                       <div className="flex space-x-2 mt-1 justify-end">
                         <button
@@ -549,7 +591,7 @@ export default function ChatLayout({ user, channelId, logout }) {
             onClick={() => {
               setSelectedImage(null);
               setImagePreview(null);
-              fileInputRef.current.value = null;
+              if (fileInputRef.current) fileInputRef.current.value = "";
             }}
             className="mt-2 text-sm text-red-600"
           >
@@ -573,7 +615,7 @@ export default function ChatLayout({ user, channelId, logout }) {
             className="hidden"
           />
           <button
-            onClick={() => fileInputRef.current.click()}
+            onClick={() => fileInputRef.current?.click()}
             className="p-2 bg-gray-300 rounded-full hover:bg-gray-400 transition-colors"
             disabled={isUploading}
           >
