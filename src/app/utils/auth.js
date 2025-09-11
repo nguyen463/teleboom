@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export const useAuth = () => {
   const [user, setUser] = useState(null);
@@ -17,33 +19,38 @@ export const useAuth = () => {
         setLoading(false);
         return;
       }
+
       try {
         const response = await axios.get(`${API_URL}/api/auth/verify`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+
         if (response.data.valid) {
           const rawUser = localStorage.getItem("chat-user");
-          const parsedUser = JSON.parse(rawUser);
+          const parsedUser = rawUser ? JSON.parse(rawUser) : null;
           setUser({ ...parsedUser, token });
         } else {
-          localStorage.setItem("chat-app-token", response.data.token);
-      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
+          // token tidak valid → hapus dari storage
+          localStorage.removeItem("chat-app-token");
+          localStorage.removeItem("chat-user");
           setUser(null);
         }
       } catch (err) {
-        localStorage.setItem("chat-app-token", response.data.token);
-      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
+        // error saat verifikasi → hapus storage
+        localStorage.removeItem("chat-app-token");
+        localStorage.removeItem("chat-user");
         setUser(null);
       } finally {
         setLoading(false);
       }
     };
+
     checkAuth();
-  }, [router]);
+  }, []); // cukup sekali jalan saat mount
 
   const logout = () => {
-    localStorage.setItem("chat-app-token", response.data.token);
-      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
+    localStorage.removeItem("chat-app-token");
+    localStorage.removeItem("chat-user");
     setUser(null);
     router.push("/login");
   };
