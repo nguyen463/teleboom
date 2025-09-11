@@ -13,6 +13,8 @@
     --border: 214.3 31.8% 91.4%;
     --muted: 210 40% 96%;
     --muted-foreground: 215.4 16.3% 46.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
     color-scheme: light;
   }
 
@@ -26,6 +28,8 @@
     --border: 217.2 32.6% 17.5%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
     color-scheme: dark;
   }
 }
@@ -58,4 +62,24 @@
   .text-muted-foreground {
     color: hsl(var(--muted-foreground));
   }
+  .bg-destructive {
+    background-color: hsl(var(--destructive));
+  }
+  .text-destructive {
+    color: hsl(var(--destructive));
+  }
+  .text-destructive-foreground {
+    color: hsl(var(--destructive-foreground));
+  }
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
+  transition: background-color 0.3s, color 0.3s;
 }
