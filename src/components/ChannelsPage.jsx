@@ -1,21 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
-import axios from "axios";
+import { useRouter } from "next/navigation";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
 export default function ChannelsPage() {
   const router = useRouter();
-  const params = useParams();
-  const { id } = params; // ambil id dari URL /channels/:id
+  const { id } = router.query;
+
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [user, setUser] = useState(null);
 
-  // Ambil user & token dari localStorage
+  // Ambil user dari localStorage hanya di client
   useEffect(() => {
     const rawUser = localStorage.getItem("chat-app-user");
     const token = localStorage.getItem("chat-app-token");
@@ -25,8 +22,10 @@ export default function ChannelsPage() {
       return;
     }
 
-    const parsedUser = JSON.parse(rawUser);
-    setUser({ ...parsedUser, token });
+    setUser({
+      ...JSON.parse(rawUser),
+      token,
+    });
   }, [router]);
 
   // Sinkronkan selectedChannelId dengan URL
@@ -38,7 +37,7 @@ export default function ChannelsPage() {
 
   const handleSelectChannel = (channelId) => {
     setSelectedChannelId(channelId);
-    router.push(`/channels/${channelId}`);
+    router.push(`/channels/${channelId}`, undefined, { shallow: true });
   };
 
   const logout = () => {
@@ -62,16 +61,10 @@ export default function ChannelsPage() {
       </div>
       <div className="w-3/4">
         {selectedChannelId ? (
-          <ChatLayout
-            user={user}
-            channelId={selectedChannelId}
-            logout={logout}
-          />
+          <ChatLayout user={user} channelId={selectedChannelId} logout={logout} />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">
-              Pilih channel untuk memulai obrolan
-            </p>
+            <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
           </div>
         )}
       </div>
