@@ -2,49 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
-@import "tailwindcss";
-
-@import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@400;500;700&family=Geist+Mono:wght@400&display=swap');
-
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-
-@theme {
-  --color-primary: 221.2 83.2% 53.3%; /* Blue */
-  --color-primary-foreground: 210 40% 98%; /* White-ish */
-  --color-secondary: 210 20% 98%; /* Light gray */
-  --color-secondary-foreground: 215.4 16.3% 46.9%; /* Dark gray */
-  --color-border: 214.3 31.8% 91.4%; /* Light border */
-  --color-muted: 210 40% 96%; /* Muted bg */
-  --font-sans: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, monospace;
-}
-
-@layer theme {
+@layer base {
   :root {
-    --background: 0 0% 100%; /* Light bg: white */
-    --foreground: 222.2 84% 4.9%; /* Light text: dark gray */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 20% 98%;
+    --secondary-foreground: 215.4 16.3% 46.9%;
     --border: 214.3 31.8% 91.4%;
     --muted: 210 40% 96%;
-    @variant dark {
-      --background: 222.2 84% 4.9%; /* Dark bg: dark gray */
-      --foreground: 210 40% 98%; /* Dark text: light gray */
-      --border: 217.2 32.6% 17.5%; /* Dark border */
-      --muted: 222.2 84% 4.9%; /* Dark muted */
-    }
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    color-scheme: light;
+  }
+
+  :root[data-theme="dark"] {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    color-scheme: dark;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border transition-colors duration-300;
+@layer utilities {
+  .bg-background {
+    background-color: hsl(var(--background));
   }
+  .text-foreground {
+    color: hsl(var(--foreground));
+  }
+  .bg-primary {
+    background-color: hsl(var(--primary));
+  }
+  .text-primary-foreground {
+    color: hsl(var(--primary-foreground));
+  }
+  .bg-secondary {
+    background-color: hsl(var(--secondary));
+  }
+  .text-secondary-foreground {
+    color: hsl(var(--secondary-foreground));
+  }
+  .border-border {
+    border-color: hsl(var(--border));
+  }
+  .bg-muted {
+    background-color: hsl(var(--muted));
+  }
+  .text-muted-foreground {
+    color: hsl(var(--muted-foreground));
+  }
+  .bg-destructive {
+    background-color: hsl(var(--destructive));
+  }
+  .text-destructive {
+    color: hsl(var(--destructive));
+  }
+  .text-destructive-foreground {
+    color: hsl(var(--destructive-foreground));
+  }
+}
 
-  html {
-    color-scheme: light dark;
-  }
+* {
+  border-color: hsl(var(--border));
+}
 
-  body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-sans);
-  }
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
+  transition: background-color 0.3s, color 0.3s;
 }
