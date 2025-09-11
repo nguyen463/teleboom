@@ -454,6 +454,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : (
           messages.map((msg) => {
+            // PERBAIKAN: Pastikan perbandingan ID dilakukan dengan benar
             const isOwn = user?.id && msg.senderId && msg.senderId.toString() === user.id.toString();
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
@@ -515,6 +516,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                       </div>
                     </div>
                   ) : (
+                    // PERBAIKAN: Tombol edit dan hapus hanya muncul untuk pesan milik sendiri
                     isOwn && (
                       <div className="flex space-x-2 mt-1 justify-end">
                         <button
