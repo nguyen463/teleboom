@@ -39,12 +39,12 @@ export default function ChannelsPage() {
     setChannelsLoading(true);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://teleboom-694d2bc690c3.herokuapp.com';
-      console.log("Debug: Fetching channels with token:", user.token ? "Yes" : "No"); // Debug token
+      console.log("Debug: Fetching channels with token:", user.token ? "Yes" : "No");
       const res = await fetch(`${API_URL}/api/channels`, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
 
-      console.log("Debug: Fetch response status:", res.status); // Debug status
+      console.log("Debug: Fetch response status:", res.status);
 
       if (!res.ok) {
         if (res.status === 401) {
@@ -57,12 +57,12 @@ export default function ChannelsPage() {
       }
 
       const data = await res.json();
-      console.log("Debug: Fetched channels data:", data); // Debug full response
+      console.log("Debug: Fetched channels data:", data);
 
       // Handle nested array kalau ada
       const channelsData = Array.isArray(data) ? data : (data.channels || data.data || []);
       setChannels(channelsData);
-      console.log("Debug: Set channels length:", channelsData.length); // Debug length
+      console.log("Debug: Set channels length:", channelsData.length);
 
       // Auto-select kalau ada query id dan channel exist
       if (id && !selectedChannelId) {
@@ -76,6 +76,7 @@ export default function ChannelsPage() {
       }
     } catch (err) {
       console.error("Error fetching channels:", err);
+      // Optional: toast.error("Gagal load channels"); // Tambah kalau pake toast
     } finally {
       setChannelsLoading(false);
     }
@@ -84,7 +85,7 @@ export default function ChannelsPage() {
   // Call fetch setelah user ready
   useEffect(() => {
     fetchChannels();
-  }, [user, id]); // Dependensi: user & id (gak selectedChannelId biar stabil)
+  }, [user, id]);
 
   // Sinkronkan selectedChannelId dengan query param
   useEffect(() => {
@@ -94,14 +95,14 @@ export default function ChannelsPage() {
   }, [id, selectedChannelId]);
 
   const handleSelectChannel = (channelId) => {
-    console.log("Debug: handleSelectChannel called:", channelId); // Debug
+    console.log("Debug: handleSelectChannel called:", channelId);
     setSelectedChannelId(channelId);
     router.push(`/channels?id=${channelId}`, { shallow: true });
   };
 
   // Refetch tanpa reload full page
   const refetchChannels = () => {
-    console.log("Debug: Refetch triggered"); // Debug
+    console.log("Debug: Refetch triggered");
     fetchChannels();
   };
 
@@ -142,13 +143,8 @@ export default function ChannelsPage() {
             ) : channels.length === 0 ? (
               <div className="text-center">
                 <p className="text-gray-500 mb-4">Belum ada channel. Buat sekarang!</p>
-                {/* FIX: Ganti ke tombol, route ke /new-channel (sesuaikan kode create awal) */}
-                <button 
-                  onClick={() => router.push("/new-channel")}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Buat Channel Baru
-                </button>
+                {/* FIX: Hilangkan tombol di sini - biar gak duplikat dengan sidebar */}
+                <p className="text-gray-400 text-sm">Gunakan tombol di sidebar untuk membuat channel baru.</p>
               </div>
             ) : (
               <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
