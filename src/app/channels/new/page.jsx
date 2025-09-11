@@ -1,8 +1,6 @@
-
-// app/channels/new/page.jsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
@@ -17,14 +15,27 @@ export default function NewChannelPage() {
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [token, setToken] = useState(null);
 
-  const token = localStorage.getItem("chat-app-token");
+  // Ambil token dari localStorage hanya di client
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedToken = localStorage.getItem("chat-app-token");
+      if (!storedToken) {
+        router.push("/login");
+      } else {
+        setToken(storedToken);
+      }
+    }
+  }, [router]);
 
   const handleCreate = async () => {
     if (!name.trim()) {
       toast.error("Nama channel tidak boleh kosong!");
       return;
     }
+
+    if (!token) return; // token belum siap
 
     setIsLoading(true);
     try {
@@ -43,6 +54,15 @@ export default function NewChannelPage() {
       setIsLoading(false);
     }
   };
+
+  // Loading sementara token belum siap
+  if (!token) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500">Memeriksa autentikasi...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-4">
