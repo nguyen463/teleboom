@@ -5,6 +5,8 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
+  --color-background: 0 0% 100%; /* Light: white */
+  --color-foreground: 222.2 84% 4.9%; /* Light: dark gray */
   --color-primary: 221.2 83.2% 53.3%; /* Blue */
   --color-primary-foreground: 210 40% 98%; /* White-ish */
   --color-secondary: 210 20% 98%; /* Light gray */
@@ -15,28 +17,25 @@
   --font-mono: 'Geist Mono', ui-monospace, monospace;
 }
 
-@layer theme {
+@layer base {
   :root {
-    --background: 0 0% 100%; /* Light bg: white */
-    --foreground: 222.2 84% 4.9%; /* Light text: dark gray */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
     --border: 214.3 31.8% 91.4%;
     --muted: 210 40% 96%;
-    @variant dark {
-      --background: 222.2 84% 4.9%; /* Dark bg: dark gray */
-      --foreground: 210 40% 98%; /* Dark text: light gray */
-      --border: 217.2 32.6% 17.5%; /* Dark border */
-      --muted: 222.2 84% 4.9%; /* Dark muted */
-    }
+    color-scheme: light;
   }
-}
 
-@layer base {
+  :root[data-theme="dark"] {
+    --background: 222.2 84% 4.9%; /* Dark: dark gray */
+    --foreground: 210 40% 98%; /* Dark: light gray */
+    --border: 217.2 32.6% 17.5%; /* Dark border */
+    --muted: 222.2 84% 4.9%; /* Dark muted */
+    color-scheme: dark;
+  }
+
   * {
-    @apply border-border transition-colors duration-300;
-  }
-
-  html {
-    color-scheme: light dark;
+    @apply border-border;
   }
 
   body {
