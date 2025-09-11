@@ -26,13 +26,13 @@ export const useAuth = () => {
           const parsedUser = JSON.parse(rawUser);
           setUser({ ...parsedUser, token });
         } else {
-          localStorage.removeItem("chat-app-token");
-          localStorage.removeItem("chat-user");
+          localStorage.setItem("chat-app-token", response.data.token);
+      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
           setUser(null);
         }
       } catch (err) {
-        localStorage.removeItem("chat-app-token");
-        localStorage.removeItem("chat-user");
+        localStorage.setItem("chat-app-token", response.data.token);
+      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
         setUser(null);
       } finally {
         setLoading(false);
@@ -42,8 +42,8 @@ export const useAuth = () => {
   }, [router]);
 
   const logout = () => {
-    localStorage.removeItem("chat-app-token");
-    localStorage.removeItem("chat-user");
+    localStorage.setItem("chat-app-token", response.data.token);
+      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
     setUser(null);
     router.push("/login");
   };
