@@ -18,6 +18,7 @@ export default function ChannelSelector({
 
   // Sync dengan props dari parent (kalau ada)
   useEffect(() => {
+    console.log("Debug: Sync propChannels to local:", propChannels.length); // Debug props
     setLocalChannels(propChannels);
   }, [propChannels]);
 
@@ -27,7 +28,12 @@ export default function ChannelSelector({
 
   // Fallback fetch kalau gak ada props channels
   useEffect(() => {
-    if (propChannels.length > 0 || !user?.token) return; // Skip kalau parent udah provide
+    if (propChannels.length > 0 || !user?.token) {
+      console.log("Debug: Skip fallback fetch - props provided or no token"); // Debug skip
+      return;
+    }
+
+    console.log("Debug: Starting fallback fetch"); // Debug start
 
     const fetchChannels = async () => {
       setLocalLoading(true);
@@ -38,48 +44,59 @@ export default function ChannelSelector({
         
         let response;
         try {
+          console.log("Debug: Trying /api/channels"); // Debug endpoint
           response = await axios.get(`${API_URL}/api/channels`, {
             headers: { Authorization: `Bearer ${user.token}` },
+            timeout: 10000, // 10s timeout
           });
         } catch (firstError) {
+          console.log("Debug: /api/channels failed, status:", firstError.response?.status); // Debug fallback
           if (firstError.response?.status === 404) {
             response = await axios.get(`${API_URL}/channels`, {
               headers: { Authorization: `Bearer ${user.token}` },
+              timeout: 10000,
             });
           } else {
             throw firstError;
           }
         }
 
+        console.log("Debug: Fetch success, response.data type:", typeof response.data, "isArray:", Array.isArray(response.data)); // Debug response
+
         // Handle berbagai format response
         let data = response.data;
+        let newChannels = [];
         if (Array.isArray(data)) {
-          setLocalChannels(data);
+          newChannels = data;
         } else if (Array.isArray(data.channels)) {
-          setLocalChannels(data.channels);
+          newChannels = data.channels;
         } else if (data.data && Array.isArray(data.data)) {
-          setLocalChannels(data.data);
+          newChannels = data.data;
         } else if (data.channel && typeof data.channel === 'object') {
-          // Single channel (misal dari create response)
-          setLocalChannels([data.channel]);
+          // Single channel (misal dari create) - tambah ke existing kalau ada
+          newChannels = [...localChannels, data.channel];
         } else {
-          setLocalChannels([]);
+          newChannels = [];
         }
+
+        console.log("Debug: Processed channels length:", newChannels.length); // Debug processed
+        setLocalChannels(newChannels);
       } catch (err) {
         console.error("❌ Gagal mengambil channels:", err);
         setError("Gagal memuat daftar channel. Silakan coba lagi.");
 
         // Auto-retry sekali kalau 500
         if (err.response?.status === 500) {
+          console.log("Debug: Auto-retry in 2s"); // Debug retry
           setTimeout(() => {
-            // Retry fetch
-            fetchChannels(); // Recursive call, tapi batasi 1x
+            fetchChannels(); // Recursive, tapi batasi manual (gak infinite)
           }, 2000);
         }
 
         // Redirect ke login kalau token invalid
         const msg = (err.response?.data?.message || "").toLowerCase();
         if (msg.includes("token") || msg.includes("autentikasi") || err.response?.status === 401) {
+          console.log("Debug: Invalid token - logout"); // Debug logout
           localStorage.removeItem("chat-app-user");
           localStorage.removeItem("chat-app-token");
           router.push("/login");
@@ -90,16 +107,19 @@ export default function ChannelSelector({
     };
 
     fetchChannels();
-  }, [user, router]);
+  }, [user, router]); // Dependensi: user & router (gak propChannels biar fallback trigger sekali)
 
   const handleChannelClick = (channelId) => {
-    if (onSelectChannel) {
-      console.log("Debug: Selecting channel:", channelId); // Debug
+    console.log("Debug: handleChannelClick called with ID:", channelId); // Debug click
+    if (onSelectChannel && channelId) {
       onSelectChannel(channelId);
+    } else {
+      console.warn("Debug: Invalid channelId or no onSelectChannel"); // Debug invalid
     }
   };
 
   const handleRefetch = () => {
+    console.log("Debug: handleRefetch called"); // Debug refetch
     if (onRefetch) {
       onRefetch(); // Panggil parent refetch
     } else {
@@ -109,7 +129,8 @@ export default function ChannelSelector({
   };
 
   const handleNewChannel = () => {
-    router.push("/channels/new"); // Atau "/new-channel" kalau route beda
+    console.log("Debug: handleNewChannel clicked - redirecting"); // Debug tombol
+    router.push("/new-channel"); // FIX: Route sesuai kode create awal
   };
 
   const combinedLoading = propLoading || localLoading;
@@ -141,25 +162,25 @@ export default function ChannelSelector({
   }
 
   return (
-    <div className="h-full bg-gray-100 p-4 flex flex-col overflow-hidden"> {/* Sidebar-friendly: h-full, flex-col */}
-      <h2 className="text-lg font-bold mb-4 text-gray-800">Channels</h2> {/* Ubah dari h1 */}
+    <div className="h-full bg-gray-100 p-4 flex flex-col overflow-hidden">
+      <h2 className="text-lg font-bold mb-4 text-gray-800">Channels</h2>
       
-      <div className="flex-1 overflow-y-auto space-y-2 mb-4"> {/* Scrollable list */}
+      <div className="flex-1 overflow-y-auto space-y-2 mb-4">
         {combinedChannels.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p className="text-sm mb-4">Belum ada channel. Buat channel baru!</p>
-            <button
-              onClick={handleNewChannel}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-            >
-              + Buat Channel Baru
-            </button>
+            {/* FIX: Hilangkan tombol di sini - cuma text, biar gak duplikasi */}
+            <p className="text-xs italic">Klik tombol di bawah untuk membuat.</p>
           </div>
         ) : (
           <ul className="space-y-2">
             {combinedChannels.map((channel) => {
               const channelId = channel._id || channel.id;
-              const isPrivate = channel.isPrivate || channel.isDM; // Kompatibilitas backend
+              if (!channelId) {
+                console.warn("Debug: Skipping channel without ID:", channel); // Debug invalid channel
+                return null;
+              }
+              const isPrivate = channel.isPrivate || channel.isDM;
               const memberCount = channel.members?.length || 0;
               return (
                 <li
@@ -178,17 +199,19 @@ export default function ChannelSelector({
         )}
       </div>
       
-      {/* Tombol action di bawah */}
-      <div className="pt-2 border-t">
+      {/* Tombol action di bawah - SATU-SATUNYA TOMBOL BUAT CHANNEL */}
+      <div className="pt-2 border-t space-y-2">
         <button
           onClick={handleNewChannel}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm mb-2"
+          disabled={combinedLoading} // Disable kalau loading
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + Buat Channel Baru
         </button>
-        {/* Optional: Logout button */}
+        {/* Logout button */}
         <button
           onClick={() => {
+            console.log("Debug: Logout clicked"); // Debug logout
             localStorage.removeItem("chat-app-user");
             localStorage.removeItem("chat-app-token");
             router.push("/login");
