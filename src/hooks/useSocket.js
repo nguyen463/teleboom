@@ -18,8 +18,37 @@ export default function ChatLayout({ user }) {
   useEffect(() => {
     if (!user?.token) return;
 
-    const socket = io(SOCKET_URL, { auth: { token: user.token } });
+    const socket = io(SOCKET_URL, { 
+      auth: { token: user.token },
+      // Tambahkan opsi reconnection untuk handling koneksi
+      reconnectionAttempts: 5,
+      timeout: 10000,
+    });
     socketRef.current = socket;
+
+    // Handler untuk event 'onlineUsers' dengan validasi data
+    const handleOnlineUsers = (data) => {
+      if (Array.isArray(data)) {
+        setOnlineUsers(data);
+      } else {
+        console.error("Data onlineUsers bukan array:", data);
+        setOnlineUsers([]);
+      }
+    };
+
+    // Handler untuk event 'userTyping' dengan validasi data
+    const handleUserTyping = (userData) => {
+      if (userData && typeof userData === 'object') {
+        setTypingUsers(prev => [...prev.filter(u => u.userId !== userData.userId), userData]);
+      }
+    };
+
+    // Handler untuk event 'userStoppedTyping' dengan validasi data
+    const handleUserStoppedTyping = (userData) => {
+      if (userData && typeof userData === 'object') {
+        setTypingUsers(prev => prev.filter(u => u.userId !== userData.userId));
+      }
+    };
 
     socket.on("allMessages", setMessages);
     socket.on("newMessage", msg => setMessages(prev => [...prev, msg]));
@@ -27,9 +56,14 @@ export default function ChatLayout({ user }) {
       setMessages(prev => prev.map(m => m._id === updatedMsg.id ? {...m, text: updatedMsg.text, updatedAt: updatedMsg.updatedAt} : m));
     });
     socket.on("deleteMessage", id => setMessages(prev => prev.filter(m => m._id !== id)));
-    socket.on("onlineUsers", setOnlineUsers);
-    socket.on("userTyping", userData => setTypingUsers(prev => [...prev.filter(u => u.userId !== userData.userId), userData]));
-    socket.on("userStoppedTyping", userData => setTypingUsers(prev => prev.filter(u => u.userId !== userData.userId)));
+    socket.on("onlineUsers", handleOnlineUsers); // Gunakan handler yang sudah divalidasi
+    socket.on("userTyping", handleUserTyping);
+    socket.on("userStoppedTyping", handleUserStoppedTyping);
+
+    // Handle error koneksi
+    socket.on("connect_error", (err) => {
+      console.error("Koneksi error:", err.message);
+    });
 
     return () => socket.disconnect();
   }, [user]);
@@ -80,17 +114,36 @@ export default function ChatLayout({ user }) {
           <div key={msg._id} className={`${msg.senderId === user.id ? "text-right" : ""} mb-2`}>
             <div className="text-xs">{msg.senderName} {msg.updatedAt && "(diedit)"}</div>
             {editingId === msg._id ? (
-              <div>
-                <input value={editText} onChange={e => setEditText(e.target.value)} />
-                <button onClick={saveEdit}>Simpan</button>
+              <div className="flex items-center space-x-2">
+                <input 
+                  value={editText} 
+                  onChange={e => setEditText(e.target.value)}
+                  className="border p-1 rounded flex-1"
+                />
+                <button 
+                  onClick={saveEdit}
+                  className="bg-green-500 text-white px-2 rounded"
+                >
+                  Simpan
+                </button>
               </div>
             ) : (
-              <div>{msg.text}</div>
+              <div className="bg-gray-100 p-2 rounded">{msg.text}</div>
             )}
             {msg.senderId === user.id && editingId !== msg._id && (
-              <div>
-                <button onClick={() => handleEdit(msg)}>Edit</button>
-                <button onClick={() => handleDelete(msg._id)}>Hapus</button>
+              <div className="space-x-2 mt-1">
+                <button 
+                  onClick={() => handleEdit(msg)}
+                  className="text-blue-500 text-xs"
+                >
+                  Edit
+                </button>
+                <button 
+                  onClick={() => handleDelete(msg._id)}
+                  className="text-red-500 text-xs"
+                >
+                  Hapus
+                </button>
               </div>
             )}
           </div>
@@ -103,16 +156,24 @@ export default function ChatLayout({ user }) {
           type="text"
           value={newMsg}
           onChange={e => setNewMsg(e.target.value)}
-          onKeyDown={e => { if(e.key === "Enter") sendMessage(); else startTyping(); }}
+          onKeyDown={e => { 
+            if(e.key === "Enter") sendMessage(); 
+            else startTyping(); 
+          }}
           onBlur={stopTyping}
           placeholder="Tulis pesan..."
           className="flex-1 border p-2 rounded"
         />
-        <button onClick={sendMessage} className="bg-blue-500 text-white px-4 rounded">Kirim</button>
+        <button 
+          onClick={sendMessage} 
+          className="bg-blue-500 text-white px-4 rounded"
+        >
+          Kirim
+        </button>
       </div>
 
       <div className="p-2 text-sm text-gray-500">
-        Online: {onlineUsers.map(u => u.displayName).join(", ")}
+        Online: {Array.isArray(onlineUsers) ? onlineUsers.map(u => u.displayName).join(", ") : "Error loading users"}
       </div>
       {typingUsers.length > 0 && (
         <div className="p-2 text-sm text-gray-500">
