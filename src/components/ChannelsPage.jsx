@@ -1,31 +1,33 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import axios from "axios";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export default function ChannelsPage() {
   const router = useRouter();
-  const { id } = router.query;
+  const params = useParams();
+  const { id } = params; // ambil id dari URL /channels/:id
   const [selectedChannelId, setSelectedChannelId] = useState(null);
+  const [user, setUser] = useState(null);
 
-  // Ambil user dari localStorage
-  const rawUser = useMemo(
-    () => JSON.parse(localStorage.getItem("chat-app-user") || "{}"),
-    []
-  );
-  const token = localStorage.getItem("chat-app-token");
+  // Ambil user & token dari localStorage
+  useEffect(() => {
+    const rawUser = localStorage.getItem("chat-app-user");
+    const token = localStorage.getItem("chat-app-token");
 
-  const user = useMemo(
-    () => ({
-      id: rawUser.id,
-      username: rawUser.username,
-      displayName: rawUser.displayName,
-      token,
-    }),
-    [rawUser, token]
-  );
+    if (!rawUser || !token) {
+      router.push("/login");
+      return;
+    }
+
+    const parsedUser = JSON.parse(rawUser);
+    setUser({ ...parsedUser, token });
+  }, [router]);
 
   // Sinkronkan selectedChannelId dengan URL
   useEffect(() => {
@@ -34,16 +36,9 @@ export default function ChannelsPage() {
     }
   }, [id, selectedChannelId]);
 
-  // Redirect kalau user belum login
-  useEffect(() => {
-    if (!user?.token) {
-      router.push("/login");
-    }
-  }, [user, router]);
-
   const handleSelectChannel = (channelId) => {
     setSelectedChannelId(channelId);
-    router.push(`/channels/${channelId}`, undefined, { shallow: true });
+    router.push(`/channels/${channelId}`);
   };
 
   const logout = () => {
@@ -52,6 +47,14 @@ export default function ChannelsPage() {
     router.push("/login");
   };
 
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500">Memeriksa autentikasi...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen">
       <div className="w-1/4 bg-gray-100 border-r">
@@ -59,10 +62,16 @@ export default function ChannelsPage() {
       </div>
       <div className="w-3/4">
         {selectedChannelId ? (
-          <ChatLayout user={user} channelId={selectedChannelId} logout={logout} />
+          <ChatLayout
+            user={user}
+            channelId={selectedChannelId}
+            logout={logout}
+          />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
+            <p className="text-gray-500">
+              Pilih channel untuk memulai obrolan
+            </p>
           </div>
         )}
       </div>
