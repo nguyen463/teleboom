@@ -47,6 +47,11 @@ export default function NewChannelPage() {
       return;
     }
 
+    if (name.trim().length > 50) { // Minor: Validasi client-side max length
+      toast.error("Nama channel terlalu panjang (max 50 karakter)!");
+      return;
+    }
+
     if (!token) {
       toast.error("Token tidak valid. Silakan login kembali.");
       return;
@@ -59,28 +64,43 @@ export default function NewChannelPage() {
       try {
         res = await axios.post(
           `${API_URL}/api/channels`,
-          { name, isPrivate },
-          { headers: { Authorization: `Bearer ${token}` } }
+          { name: name.trim(), isPrivate }, // Trim nama
+          { 
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 10000 // 10s timeout
+          }
         );
       } catch (firstError) {
         if (firstError.response?.status === 404) {
           // Coba endpoint tanpa /api
           res = await axios.post(
             `${API_URL}/channels`,
-            { name, isPrivate },
-            { headers: { Authorization: `Bearer ${token}` } }
+            { name: name.trim(), isPrivate },
+            { 
+              headers: { Authorization: `Bearer ${token}` },
+              timeout: 10000
+            }
           );
         } else {
           throw firstError;
         }
       }
 
+      console.log("Debug: Create response full:", res.data); // Debug response
+
+      // FIX: Handle nested response dari backend ({ channel: { _id: ... } })
+      const channelId = res.data.channel?._id || res.data._id || res.data.id;
+      if (!channelId) {
+        throw new Error("No channel ID in response");
+      }
+
       toast.success("Channel berhasil dibuat!");
       
-      // Tunggu sebentar sebelum redirect agar user bisa lihat toast
+      // FIX: Redirect dengan query id biar auto-select di ChannelsPage
       setTimeout(() => {
-        router.push(`/channels/${res.data._id || res.data.id}`);
-      }, 1500);
+        console.log("Debug: Redirecting to /channels?id=", channelId); // Debug redirect
+        router.push(`/channels?id=${channelId}`);
+      }, 2000); // Sedikit lebih lama biar toast keliatan
       
     } catch (err) {
       console.error("Error creating channel:", err);
@@ -92,6 +112,9 @@ export default function NewChannelPage() {
         errorMessage = err.response.data.message;
       } else if (err.response?.data?.error) {
         errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        // Handle validation details kalau ada
+        errorMessage = Object.values(err.response.data.details).join(', ');
       } else if (err.message) {
         errorMessage = err.message;
       }
@@ -150,6 +173,7 @@ export default function NewChannelPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Masukkan nama channel"
               required
+              maxLength={50} // Minor: Limit panjang
             />
           </div>
 
@@ -194,4 +218,4 @@ export default function NewChannelPage() {
       </div>
     </div>
   );
-}  
+}
