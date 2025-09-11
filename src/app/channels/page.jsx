@@ -1,17 +1,17 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import ChannelSelector from "@/components/ChannelSelector";
 import ChatLayout from "@/components/ChatLayout";
-import { useAuth } from "../utils/auth";  // Sesuaikan path
+import { useAuth } from "../utils/auth";
 
-export default function ChannelsPage() {
+// Create a component that uses useSearchParams
+function ChannelsContent() {
   const { user, loading, api } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const id = searchParams.get("id");
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
@@ -86,7 +86,7 @@ export default function ChannelsPage() {
     router.push("/channels/new");
   }, [router]);
 
-  const { logout } = useAuth();  // Dari hook
+  const { logout } = useAuth();
 
   if (loading) {
     return (
@@ -115,26 +115,38 @@ export default function ChannelsPage() {
         />
       </div>
       <div className="flex-1 flex flex-col" role="main">
-        <Suspense fallback={<div className="animate-spin h-full">Loading...</div>}>
-          {selectedChannelId && selectedChannelId !== "undefined" ? (
-            <ChatLayout user={user} channelId={selectedChannelId} onLogout={logout} key={selectedChannelId} />
-          ) : (
-            <div className="flex items-center justify-center h-full bg-gray-50">
-              <div className="text-center p-6 max-w-md">
-                {channelsLoading ? (
-                  <><div className="animate-spin h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div><p className="text-gray-500">Memuat channels...</p></>
-                ) : error ? (
-                  <><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><p className="text-red-500 mb-2">{error}</p><button onClick={refetchChannels} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Coba Lagi</button></>
-                ) : channels.length === 0 ? (
-                  <><div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mx-auto mb-4"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg></div><p className="text-gray-500 mb-2">Belum ada channel</p><button onClick={handleCreateChannel} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Buat Channel Pertama</button></>
-                ) : (
-                  <><div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-500 mx-auto mb-4"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg></div><p className="text-gray-500">Pilih channel untuk memulai obrolan</p></>
-                )}
-              </div>
+        {selectedChannelId && selectedChannelId !== "undefined" ? (
+          <ChatLayout user={user} channelId={selectedChannelId} onLogout={logout} key={selectedChannelId} />
+        ) : (
+          <div className="flex items-center justify-center h-full bg-gray-50">
+            <div className="text-center p-6 max-w-md">
+              {channelsLoading ? (
+                <><div className="animate-spin h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div><p className="text-gray-500">Memuat channels...</p></>
+              ) : error ? (
+                <><div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div><p className="text-red-500 mb-2">{error}</p><button onClick={refetchChannels} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Coba Lagi</button></>
+              ) : channels.length === 0 ? (
+                <><div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mx-auto mb-4"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg></div><p className="text-gray-500 mb-2">Belum ada channel</p><button onClick={handleCreateChannel} className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Buat Channel Pertama</button></>
+              ) : (
+                <><div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-500 mx-auto mb-4"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" /></svg></div><p className="text-gray-500">Pilih channel untuk memulai obrolan</p></>
+              )}
             </div>
-          )}
-        </Suspense>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// Main component that wraps the content in Suspense
+export default function ChannelsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+        <p className="text-gray-500">Memuat...</p>
+      </div>
+    }>
+      <ChannelsContent />
+    </Suspense>
   );
 }
