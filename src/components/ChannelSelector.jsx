@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { toast } from "react-toastify"; // Asumsi toast udah di-import di parent atau global
 
 export default function ChannelSelector({ 
   user, 
@@ -17,26 +16,126 @@ export default function ChannelSelector({
   const [error, setError] = useState(null);
   const router = useRouter();
 
-  // ... (useEffect sync & fallback fetch sama seperti sebelumnya, gak berubah)
+  // Sync dengan props dari parent
+  useEffect(() => {
+    setLocalChannels(propChannels);
+  }, [propChannels]);
 
-  // ... (handleChannelClick & handleRefetch sama)
+  useEffect(() => {
+    setLocalLoading(propLoading);
+  }, [propLoading]);
 
-  const handleNewChannel = async () => {
-    console.log("Debug: handleNewChannel clicked - attempting router.push to /channels/new"); // Debug klik
-    try {
-      router.push("/channels/new"); // FIX: Route match src/app/channels/new/page.js
-      console.log("Debug: router.push success - redirected to /channels/new");
-    } catch (err) {
-      console.error("Debug: router.push failed:", err); // Debug error
-      toast.error("Gagal redirect - coba refresh halaman"); // Toast fallback
-      // Fallback: Hard redirect
-      window.location.href = "/channels/new";
+  // Fallback fetch kalau gak ada props channels
+  useEffect(() => {
+    if (propChannels.length > 0 || !user?.token) return;
+
+    const fetchChannels = async () => {
+      setLocalLoading(true);
+      setError(null);
+
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
+        
+        let response;
+        try {
+          response = await axios.get(`${API_URL}/api/channels`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          });
+        } catch (firstError) {
+          if (firstError.response?.status === 404) {
+            response = await axios.get(`${API_URL}/channels`, {
+              headers: { Authorization: `Bearer ${user.token}` },
+            });
+          } else {
+            throw firstError;
+          }
+        }
+
+        // Handle berbagai format response
+        let data = response.data;
+        if (Array.isArray(data)) {
+          setLocalChannels(data);
+        } else if (Array.isArray(data.channels)) {
+          setLocalChannels(data.channels);
+        } else if (data.data && Array.isArray(data.data)) {
+          setLocalChannels(data.data);
+        } else if (data.channel && typeof data.channel === 'object') {
+          setLocalChannels([data.channel]);
+        } else {
+          setLocalChannels([]);
+        }
+      } catch (err) {
+        console.error("❌ Gagal mengambil channels:", err);
+        setError("Gagal memuat daftar channel. Silakan coba lagi.");
+
+        // Auto-retry kalau 500
+        if (err.response?.status === 500) {
+          setTimeout(() => {
+            fetchChannels();
+          }, 2000);
+        }
+
+        // Redirect ke login kalau 401
+        const msg = (err.response?.data?.message || "").toLowerCase();
+        if (msg.includes("token") || msg.includes("autentikasi") || err.response?.status === 401) {
+          localStorage.removeItem("chat-app-user");
+          localStorage.removeItem("chat-app-token");
+          router.push("/login");
+        }
+      } finally {
+        setLocalLoading(false);
+      }
+    };
+
+    fetchChannels();
+  }, [user, router]);
+
+  const handleChannelClick = (channelId) => {
+    if (onSelectChannel) {
+      onSelectChannel(channelId);
     }
   };
 
-  // ... (combinedLoading & combinedChannels sama)
+  const handleRefetch = () => {
+    if (onRefetch) {
+      onRefetch();
+    } else {
+      window.location.reload();
+    }
+  };
 
-  // ... (if loading & error sama)
+  const handleNewChannel = () => {
+    router.push("/channels/new");
+  };
+
+  // FIX: Deklarasi combinedChannels (ini yang hilang!)
+  const combinedLoading = propLoading || localLoading;
+  const combinedChannels = propChannels.length > 0 ? propChannels : localChannels;
+
+  if (combinedLoading) {
+    return (
+      <div className="flex items-center justify-center h-full p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Memuat channels...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 space-y-2">
+        <p className="text-red-600 text-sm">{error}</p>
+        <button 
+          onClick={handleRefetch}
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+        >
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full bg-gray-100 p-4 flex flex-col overflow-hidden">
@@ -52,10 +151,6 @@ export default function ChannelSelector({
           <ul className="space-y-2">
             {combinedChannels.map((channel) => {
               const channelId = channel._id || channel.id;
-              if (!channelId) {
-                console.warn("Debug: Skipping channel without ID:", channel);
-                return null;
-              }
               const isPrivate = channel.isPrivate || channel.isDM;
               const memberCount = channel.members?.length || 0;
               return (
@@ -79,13 +174,12 @@ export default function ChannelSelector({
         <button
           onClick={handleNewChannel}
           disabled={combinedLoading}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
         >
           + Buat Channel Baru
         </button>
         <button
           onClick={() => {
-            console.log("Debug: Logout clicked");
             localStorage.removeItem("chat-app-user");
             localStorage.removeItem("chat-app-token");
             router.push("/login");
