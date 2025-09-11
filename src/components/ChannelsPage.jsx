@@ -143,7 +143,7 @@ export default function ChannelsPage() {
     router.push("/channels/new");
   };
 
-  const logout = () => {
+  const handleLogout = () => {
     localStorage.removeItem("chat-app-user");
     localStorage.removeItem("chat-app-token");
     router.push("/login");
@@ -169,7 +169,7 @@ export default function ChannelsPage() {
           onSelectChannel={handleSelectChannel}
           onRefetch={refetchChannels}
           onCreateChannel={handleCreateChannel}
-          onLogout={logout}
+          onLogout={handleLogout}
           error={error}
         />
       </div>
@@ -178,7 +178,7 @@ export default function ChannelsPage() {
           <ChatLayout 
             user={user} 
             channelId={selectedChannelId} 
-            onLogout={logout} 
+            onLogout={handleLogout} 
             key={selectedChannelId}
           />
         ) : (
