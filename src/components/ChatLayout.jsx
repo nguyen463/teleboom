@@ -47,6 +47,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
     document.documentElement.setAttribute("data-theme", newTheme);
+    console.log("Theme toggled to:", newTheme, "Attribute set:", document.documentElement.getAttribute("data-theme")); // Debug log
   };
 
   // Reset everything when channelId changes
@@ -381,7 +382,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   if (!channelId) {
     return (
-      <div className="p-4 text-secondary-foreground">
+      <div className="p-4 text-foreground">
         Invalid channel. Redirecting...
       </div>
     );
@@ -399,7 +400,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="p-2 rounded-full hover:bg-primary-foreground hover:text-primary transition-colors"
+            className="p-2 rounded-full hover:bg-primary/90 transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -417,16 +418,16 @@ export default function ChatLayout({ user, channelId, logout }) {
             </svg>
           </button>
           {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-secondary text-secondary-foreground rounded-md shadow-lg z-10">
+            <div className="absolute right-0 mt-2 w-48 bg-background border border-border text-foreground rounded-md shadow-lg z-10">
               <button
                 onClick={() => setShowOnlineUsers(!showOnlineUsers)}
-                className="block w-full text-left px-4 py-2 hover:bg-secondary-foreground hover:text-secondary transition-colors"
+                className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
               >
                 {showOnlineUsers ? "Hide Online Users" : "Show Online Users"}
               </button>
               <button
                 onClick={toggleTheme}
-                className="block w-full text-left px-4 py-2 hover:bg-secondary-foreground hover:text-secondary transition-colors"
+                className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
               >
                 Switch to {theme === "light" ? "Dark" : "Light"} Mode
               </button>
@@ -434,7 +435,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                 onClick={() => {
                   logout();
                 }}
-                className="block w-full text-left px-4 py-2 hover:bg-red-600 hover:text-white transition-colors"
+                className="block w-full text-left px-4 py-2 hover:bg-red-500 hover:text-white transition-colors text-red-600"
               >
                 Logout
               </button>
@@ -444,7 +445,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       </header>
 
       {showOnlineUsers && (
-        <div className="bg-secondary p-4">
+        <div className="bg-muted p-4">
           <h3 className="font-bold">Online Users ({onlineUsers.length})</h3>
           <ul className="mt-2 space-y-1">
             {onlineUsers.map((u) => (
@@ -457,7 +458,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       )}
 
       {error && (
-        <div className="bg-red-500 text-white p-2 text-center">{error}</div>
+        <div className="bg-red-500 text-primary-foreground p-2 text-center">{error}</div>
       )}
 
       <div
@@ -489,7 +490,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center text-secondary-foreground">
+            <div className="text-center text-muted">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-12 w-12 mx-auto mb-2"
@@ -519,8 +520,8 @@ export default function ChatLayout({ user, channelId, logout }) {
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-lg p-3 rounded-2xl shadow-sm ${
-                    isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground border"
+                  className={`max-w-lg p-3 rounded-2xl shadow-sm border ${
+                    isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground border-border"
                   }`}
                 >
                   <div className="flex justify-between items-start mb-1">
@@ -556,13 +557,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                             setEditText("");
                           }
                         }}
-                        className="flex-1 p-2 rounded border text-secondary-foreground bg-background"
+                        className="flex-1 p-2 rounded border-border bg-muted text-foreground"
                         autoFocus
                       />
                       <div className="flex space-x-2 self-end">
                         <button
                           onClick={saveEdit}
-                          className="bg-green-500 px-3 py-1 rounded text-white text-sm"
+                          className="bg-green-500 px-3 py-1 rounded text-primary-foreground text-sm"
                         >
                           Save
                         </button>
@@ -571,7 +572,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                             setEditingId(null);
                             setEditText("");
                           }}
-                          className="bg-gray-400 px-3 py-1 rounded text-white text-sm"
+                          className="bg-muted px-3 py-1 rounded text-foreground text-sm"
                         >
                           Cancel
                         </button>
@@ -579,16 +580,16 @@ export default function ChatLayout({ user, channelId, logout }) {
                     </div>
                   ) : (
                     isOwn && (
-                      <div className="flex space-x-2 mt-1 justify-end edit-delete-buttons">
+                      <div className="flex space-x-2 mt-1 justify-end">
                         <button
                           onClick={() => handleEdit(msg)}
-                          className="text-xs text-primary-foreground underline hover:text-blue-300 transition-colors"
+                          className="text-xs underline hover:opacity-80 transition-colors"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(msg._id)}
-                          className="text-xs text-red-300 hover:text-red-500 transition-colors"
+                          className="text-xs text-red-500 hover:opacity-80 transition-colors"
                         >
                           Delete
                         </button>
@@ -604,7 +605,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       </div>
 
       {imagePreview && (
-        <div className="p-4 bg-secondary">
+        <div className="p-4 bg-muted">
           <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
           <button
             onClick={() => {
@@ -612,7 +613,7 @@ export default function ChatLayout({ user, channelId, logout }) {
               setImagePreview(null);
               if (fileInputRef.current) fileInputRef.current.value = "";
             }}
-            className="mt-2 text-sm text-red-600"
+            className="mt-2 text-sm text-red-500"
           >
             Remove Image
           </button>
@@ -621,7 +622,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
       <div className="p-4 bg-secondary">
         {typingUsers.length > 0 && (
-          <div className="text-sm text-secondary-foreground mb-2">
+          <div className="text-sm text-muted mb-2">
             {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
           </div>
         )}
@@ -635,7 +636,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-2 bg-secondary-foreground text-secondary rounded-full hover:bg-gray-400 transition-colors"
+            className="p-2 bg-muted text-foreground rounded-full hover:bg-border transition-colors"
             disabled={isUploading}
           >
             <svg
@@ -663,13 +664,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                 sendMessage();
               }
             }}
-            className="flex-1 p-2 rounded border text-secondary-foreground bg-background"
+            className="flex-1 p-2 rounded border-border bg-background text-foreground"
             placeholder="Type a message..."
             disabled={isUploading}
           />
           <button
             onClick={sendMessage}
-            className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-blue-700 transition-colors"
+            className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
             disabled={isUploading || (!newMsg.trim() && !selectedImage)}
           >
             <svg
