@@ -4,60 +4,80 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-export default function ChannelSelector({ user, onSelectChannel }) {
-  const [channels, setChannels] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function ChannelSelector({ 
+  user, 
+  channels: propChannels = [], // Props dari parent (prioritas)
+  loading: propLoading = false, 
+  onSelectChannel, 
+  onRefetch // Optional: Trigger refetch dari parent
+}) {
+  const [localChannels, setLocalChannels] = useState(propChannels);
+  const [localLoading, setLocalLoading] = useState(propLoading);
   const [error, setError] = useState(null);
   const router = useRouter();
 
+  // Sync dengan props dari parent (kalau ada)
   useEffect(() => {
-    if (!user?.token) return;
+    setLocalChannels(propChannels);
+  }, [propChannels]);
+
+  useEffect(() => {
+    setLocalLoading(propLoading);
+  }, [propLoading]);
+
+  // Fallback fetch kalau gak ada props channels
+  useEffect(() => {
+    if (propChannels.length > 0 || !user?.token) return; // Skip kalau parent udah provide
 
     const fetchChannels = async () => {
-      setLoading(true);
+      setLocalLoading(true);
       setError(null);
 
       try {
-        // Gunakan endpoint yang benar
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
         
-        // Coba beberapa endpoint yang mungkin
         let response;
         try {
-          // Coba endpoint /api/channels dulu
           response = await axios.get(`${API_URL}/api/channels`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
+            headers: { Authorization: `Bearer ${user.token}` },
           });
         } catch (firstError) {
-          // Jika gagal, coba endpoint /channels (tanpa /api)
           if (firstError.response?.status === 404) {
             response = await axios.get(`${API_URL}/channels`, {
-              headers: {
-                Authorization: `Bearer ${user.token}`,
-              },
+              headers: { Authorization: `Bearer ${user.token}` },
             });
           } else {
             throw firstError;
           }
         }
 
-        // Pastikan response adalah array
-        if (Array.isArray(response.data)) {
-          setChannels(response.data);
-        } else if (Array.isArray(response.data.channels)) {
-          setChannels(response.data.channels);
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          setChannels(response.data.data);
+        // Handle berbagai format response
+        let data = response.data;
+        if (Array.isArray(data)) {
+          setLocalChannels(data);
+        } else if (Array.isArray(data.channels)) {
+          setLocalChannels(data.channels);
+        } else if (data.data && Array.isArray(data.data)) {
+          setLocalChannels(data.data);
+        } else if (data.channel && typeof data.channel === 'object') {
+          // Single channel (misal dari create response)
+          setLocalChannels([data.channel]);
         } else {
-          setChannels([]);
+          setLocalChannels([]);
         }
       } catch (err) {
         console.error("❌ Gagal mengambil channels:", err);
         setError("Gagal memuat daftar channel. Silakan coba lagi.");
 
-        // Redirect ke login kalau token invalid atau expired
+        // Auto-retry sekali kalau 500
+        if (err.response?.status === 500) {
+          setTimeout(() => {
+            // Retry fetch
+            fetchChannels(); // Recursive call, tapi batasi 1x
+          }, 2000);
+        }
+
+        // Redirect ke login kalau token invalid
         const msg = (err.response?.data?.message || "").toLowerCase();
         if (msg.includes("token") || msg.includes("autentikasi") || err.response?.status === 401) {
           localStorage.removeItem("chat-app-user");
@@ -65,7 +85,7 @@ export default function ChannelSelector({ user, onSelectChannel }) {
           router.push("/login");
         }
       } finally {
-        setLoading(false);
+        setLocalLoading(false);
       }
     };
 
@@ -73,15 +93,34 @@ export default function ChannelSelector({ user, onSelectChannel }) {
   }, [user, router]);
 
   const handleChannelClick = (channelId) => {
-    if (onSelectChannel) onSelectChannel(channelId);
+    if (onSelectChannel) {
+      console.log("Debug: Selecting channel:", channelId); // Debug
+      onSelectChannel(channelId);
+    }
   };
 
-  if (loading) {
+  const handleRefetch = () => {
+    if (onRefetch) {
+      onRefetch(); // Panggil parent refetch
+    } else {
+      // Fallback: Force reload page
+      window.location.reload();
+    }
+  };
+
+  const handleNewChannel = () => {
+    router.push("/channels/new"); // Atau "/new-channel" kalau route beda
+  };
+
+  const combinedLoading = propLoading || localLoading;
+  const combinedChannels = propChannels.length > 0 ? propChannels : localChannels;
+
+  if (combinedLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="flex items-center justify-center h-full p-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Memuat channels...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Memuat channels...</p>
         </div>
       </div>
     );
@@ -89,59 +128,75 @@ export default function ChannelSelector({ user, onSelectChannel }) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center text-red-600">
-          <p>{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Coba Lagi
-          </button>
-        </div>
+      <div className="p-4 space-y-2">
+        <p className="text-red-600 text-sm">{error}</p>
+        <button 
+          onClick={handleRefetch}
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+        >
+          Coba Lagi
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4">Pilih Channel</h1>
-        {channels.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-600 mb-4">Belum ada channel. Buat channel baru!</p>
-            {/* PERBAIKAN DI SINI: ganti "/create-channel" menjadi "/channels/new" */}
+    <div className="h-full bg-gray-100 p-4 flex flex-col overflow-hidden"> {/* Sidebar-friendly: h-full, flex-col */}
+      <h2 className="text-lg font-bold mb-4 text-gray-800">Channels</h2> {/* Ubah dari h1 */}
+      
+      <div className="flex-1 overflow-y-auto space-y-2 mb-4"> {/* Scrollable list */}
+        {combinedChannels.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p className="text-sm mb-4">Belum ada channel. Buat channel baru!</p>
             <button
-              onClick={() => router.push("/channels/new")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              onClick={handleNewChannel}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
             >
-              Buat Channel Baru
+              + Buat Channel Baru
             </button>
           </div>
         ) : (
-          <>
-            <ul className="space-y-2 mb-4">
-              {channels.map((channel) => (
+          <ul className="space-y-2">
+            {combinedChannels.map((channel) => {
+              const channelId = channel._id || channel.id;
+              const isPrivate = channel.isPrivate || channel.isDM; // Kompatibilitas backend
+              const memberCount = channel.members?.length || 0;
+              return (
                 <li
-                  key={channel._id || channel.id}
-                  className="p-4 bg-white rounded-md shadow hover:bg-gray-50 cursor-pointer"
-                  onClick={() => handleChannelClick(channel._id || channel.id)}
+                  key={channelId}
+                  className="p-3 bg-white rounded-md shadow-sm hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleChannelClick(channelId)}
                 >
-                  <h2 className="text-lg font-medium">{channel.name}</h2>
-                  <p className="text-sm text-gray-600">
-                    {channel.isPrivate ? "Private" : "Public"} • {channel.members?.length || 0} anggota
+                  <h3 className="text-base font-medium text-gray-900 truncate">{channel.name || "Direct Message"}</h3>
+                  <p className="text-xs text-gray-500">
+                    {isPrivate ? "Private" : "Public"} • {memberCount} anggota
                   </p>
                 </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => router.push("/channels/new")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Buat Channel Baru
-            </button>
-          </>
+              );
+            })}
+          </ul>
         )}
+      </div>
+      
+      {/* Tombol action di bawah */}
+      <div className="pt-2 border-t">
+        <button
+          onClick={handleNewChannel}
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm mb-2"
+        >
+          + Buat Channel Baru
+        </button>
+        {/* Optional: Logout button */}
+        <button
+          onClick={() => {
+            localStorage.removeItem("chat-app-user");
+            localStorage.removeItem("chat-app-token");
+            router.push("/login");
+          }}
+          className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+        >
+          Logout
+        </button>
       </div>
     </div>
   );
