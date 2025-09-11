@@ -8,42 +8,45 @@ import ChatLayout from "./ChatLayout";
 export default function ChannelsPage() {
   const router = useRouter();
   const { id } = router.query;
+  const [selectedChannelId, setSelectedChannelId] = useState(null);
 
-  const rawUser = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("chat-app-user")) || {};
-    } catch {
-      return {};
-    }
-  }, []);
+  // Ambil user dari localStorage
+  const rawUser = useMemo(
+    () => JSON.parse(localStorage.getItem("chat-app-user") || "{}"),
+    []
+  );
+  const token = localStorage.getItem("chat-app-token");
 
-  const user = useMemo(() => ({
-    id: rawUser.id,
-    username: rawUser.username,
-    displayName: rawUser.displayName,
-    token: localStorage.getItem("chat-app-token"),
-  }), [rawUser]);
+  const user = useMemo(
+    () => ({
+      id: rawUser.id,
+      username: rawUser.username,
+      displayName: rawUser.displayName,
+      token,
+    }),
+    [rawUser, token]
+  );
 
-  const [selectedChannelId, setSelectedChannelId] = useState(id || null);
-
-  useEffect(() => {
-    if (!user?.token) {
-      router.push("/login");
-    }
-  }, [user, router]);
-
+  // Sinkronkan selectedChannelId dengan URL
   useEffect(() => {
     if (id && id !== selectedChannelId) {
       setSelectedChannelId(id);
     }
   }, [id, selectedChannelId]);
 
+  // Redirect kalau user belum login
+  useEffect(() => {
+    if (!user?.token) {
+      router.push("/login");
+    }
+  }, [user, router]);
+
   const handleSelectChannel = (channelId) => {
     setSelectedChannelId(channelId);
     router.push(`/channels/${channelId}`, undefined, { shallow: true });
   };
 
-  const handleLogout = () => {
+  const logout = () => {
     localStorage.removeItem("chat-app-user");
     localStorage.removeItem("chat-app-token");
     router.push("/login");
@@ -56,10 +59,10 @@ export default function ChannelsPage() {
       </div>
       <div className="w-3/4">
         {selectedChannelId ? (
-          <ChatLayout user={user} channelId={selectedChannelId} logout={handleLogout} />
+          <ChatLayout user={user} channelId={selectedChannelId} logout={logout} />
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Pilih channel untuk memulai obrolan
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
           </div>
         )}
       </div>
