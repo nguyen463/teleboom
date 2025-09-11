@@ -25,7 +25,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
-  const [theme, setTheme] = useState("light"); // State untuk tema
+  const [theme, setTheme] = useState("light");
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -34,23 +34,19 @@ export default function ChatLayout({ user, channelId, logout }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
-  // Inisialisasi tema dari localStorage
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
     setTheme(savedTheme);
     document.documentElement.setAttribute("data-theme", savedTheme);
   }, []);
 
-  // Toggle tema
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
     document.documentElement.setAttribute("data-theme", newTheme);
-    console.log("Theme toggled to:", newTheme, "Attribute set:", document.documentElement.getAttribute("data-theme")); // Debug log
   };
 
-  // Reset everything when channelId changes
   useEffect(() => {
     setMessages([]);
     setPage(0);
@@ -70,7 +66,6 @@ export default function ChatLayout({ user, channelId, logout }) {
     }
   }, [channelId]);
 
-  // Normalize message data
   const normalizeMessage = useCallback(
     (msg) => {
       const senderIdStr = msg.senderId?._id 
@@ -88,12 +83,10 @@ export default function ChatLayout({ user, channelId, logout }) {
     []
   );
 
-  // Scroll to bottom
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Initialize socket and handle events
   useEffect(() => {
     if (!user?.token || !channelId) {
       setError("Token or channelId not found. Redirecting...");
@@ -216,7 +209,6 @@ export default function ChatLayout({ user, channelId, logout }) {
     };
   }, [user, channelId, router, normalizeMessage, logout, scrollToBottom]);
 
-  // Infinite scroll
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -389,7 +381,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground font-sans">
+    <div key={theme} className="flex flex-col h-screen bg-background text-foreground font-sans">
       <ToastContainer position="top-right" autoClose={3000} />
       <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
@@ -512,11 +504,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           messages.map((msg) => {
             const isOwn = user?.id && msg.senderId && 
               msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
-            console.log('Debug ID:', {
-              userId: user?.id,
-              senderId: msg.senderId,
-              isOwn
-            });
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
