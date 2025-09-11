@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ChannelSelector from "./ChannelSelector";
 import ChatLayout from "./ChatLayout";
@@ -14,7 +14,8 @@ export default function ChannelsPage() {
   const [user, setUser] = useState(null);
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [channelsLoading, setChannelsLoading] = useState(true);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Ambil user dari localStorage
   useEffect(() => {
@@ -42,15 +43,16 @@ export default function ChannelsPage() {
     }
   }, [router]);
 
-  // Fetch channels
-  const fetchChannels = async () => {
+  // Fetch channels dengan useCallback untuk menghindari recreasi function
+  const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
     
     setChannelsLoading(true);
+    setError(null);
+    
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://teleboom-694d2bc690c3.herokuapp.com';
       
-      // Coba endpoint yang berbeda
       let response;
       try {
         response = await fetch(`${API_URL}/api/channels`, {
@@ -96,28 +98,35 @@ export default function ChannelsPage() {
         );
         if (channelExists) {
           setSelectedChannelId(id);
+        } else if (channelsData.length > 0) {
+          // Jika channel dari query param tidak ditemukan, pilih channel pertama
+          setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
         }
+      } else if (channelsData.length > 0 && !selectedChannelId) {
+        // Jika tidak ada query param, pilih channel pertama
+        setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
       }
     } catch (err) {
       console.error("Error fetching channels:", err);
+      setError("Gagal memuat channels. Silakan coba lagi.");
     } finally {
       setChannelsLoading(false);
     }
-  };
+  }, [user, id, router, selectedChannelId]);
 
   // Call fetch setelah user ready
   useEffect(() => {
-    if (user) {
+    if (user && !channels.length) {
       fetchChannels();
     }
-  }, [user]);
+  }, [user, channels.length, fetchChannels]);
 
   // Sinkronkan selectedChannelId dengan query param
   useEffect(() => {
     if (id && id !== selectedChannelId) {
       setSelectedChannelId(id);
     }
-  }, [id]);
+  }, [id, selectedChannelId]);
 
   const handleSelectChannel = (channelId) => {
     setSelectedChannelId(channelId);
@@ -152,13 +161,20 @@ export default function ChannelsPage() {
           user={user} 
           channels={channels}
           loading={channelsLoading}
+          selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
           onRefetch={refetchChannels}
+          error={error}
         />
       </div>
       <div className="flex-1 flex flex-col">
         {selectedChannelId ? (
-          <ChatLayout user={user} channelId={selectedChannelId} logout={logout} />
+          <ChatLayout 
+            user={user} 
+            channelId={selectedChannelId} 
+            logout={logout} 
+            key={selectedChannelId} // Pastikan remount saat channel berubah
+          />
         ) : (
           <div className="flex items-center justify-center h-full bg-gray-50">
             <div className="text-center p-6 max-w-md">
@@ -166,6 +182,21 @@ export default function ChannelsPage() {
                 <>
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
                   <p className="text-gray-500">Memuat channels...</p>
+                </>
+              ) : error ? (
+                <>
+                  <div className="mx-auto mb-4 w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-red-500 mb-2">{error}</p>
+                  <button 
+                    onClick={refetchChannels}
+                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  >
+                    Coba Lagi
+                  </button>
                 </>
               ) : channels.length === 0 ? (
                 <>
