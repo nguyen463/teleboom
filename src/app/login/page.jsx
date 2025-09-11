@@ -1,88 +1,83 @@
+// src/app/login/page.jsx
+
 "use client";
 
-import { useState, useEffect } from "react";
-import axios from "axios";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useState } from 'react';
+import axios from 'axios';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../utils/auth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
-
 export default function LoginPage() {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [error, setError] = useState('');
   const router = useRouter();
-  const { user, loading } = useAuth();
-
-  const [credentials, setCredentials] = useState({ email: "", password: "" });
-  const [errors, setErrors] = useState({});
-  const [loginLoading, setLoginLoading] = useState(false);
-
-  useEffect(() => {
-    if (!loading && user) {
-      router.push("/chat");
-    }
-  }, [loading, user, router]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setCredentials({ ...credentials, [name]: value });
-    setErrors({ ...errors, [name]: "" });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrors({});
-    setLoginLoading(true);
+    setError('');
+
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, credentials);
-      localStorage.setItem("chat-app-token", response.data.token);
-      localStorage.setItem("chat-user", JSON.stringify(response.data.user));
-      router.push("/chat");
+      // 1. Kirim data login ke backend
+      const response = await axios.post('http://localhost:3001/api/auth/login', formData);
+      
+      // 2. Jika berhasil, backend akan mengirimkan token
+      const { token } = response.data;
+
+      // 3. Simpan token di localStorage browser
+      localStorage.setItem('chat-app-token', token);
+      
+      // 4. Arahkan pengguna ke halaman utama (nantinya halaman chat)
+      router.push('/');
+
     } catch (err) {
-      setErrors({ general: err.response?.data?.message || "Login gagal. Silakan coba lagi." });
-    } finally {
-      setLoginLoading(false);
+      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     }
   };
 
-  if (loading) return null;
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-md bg-white p-8 rounded-xl shadow-lg">
-        <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
-        {errors.general && <p className="text-red-500 text-sm mb-4">{errors.general}</p>}
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+        <h1 className="text-2xl font-bold text-center text-gray-900">Log In to Your Account</h1>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <input
             type="email"
             name="email"
-            placeholder="Email"
-            value={credentials.email}
+            value={formData.email}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            placeholder="Email Address"
+            className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
-          {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
           <input
             type="password"
             name="password"
-            placeholder="Password"
-            value={credentials.password}
+            value={formData.password}
             onChange={handleChange}
-            className="w-full p-2 border rounded"
+            placeholder="Password"
+            className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
           />
-          {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
           <button
             type="submit"
-            disabled={loginLoading}
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            className="w-full py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            {loginLoading ? "Loading..." : "Login"}
+            Log In
           </button>
         </form>
-        <p className="text-sm text-center mt-4">
-          Belum punya akun?{" "}
-          <a href="/register" className="text-blue-600 hover:underline">
+        {error && <p className="mt-4 text-sm text-center text-red-600">{error}</p>}
+        <p className="text-sm text-center text-gray-600">
+          Don't have an account?{' '}
+          <Link href="/register" className="font-medium text-blue-600 hover:underline">
             Register
-          </a>
+          </Link>
         </p>
       </div>
     </div>
