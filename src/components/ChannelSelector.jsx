@@ -2,50 +2,71 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 
-export default function ChannelSelector({ 
-  user, 
-  channels = [],  // Default ke array kosong kalo props undefined
-  loading, 
-  selectedChannelId, 
-  onSelectChannel, 
-  onRefetch, 
-  onCreateChannel, 
-  onLogout, 
-  error 
+export default function ChannelSelector({
+  user,
+  channels = [], // Guard default
+  loading,
+  selectedChannelId,
+  onSelectChannel,
+  onRefetch,
+  onCreateChannel,
+  onLogout,
+  error,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
 
-  // ... (useEffect buat menu dismissal sama kayak sebelumnya)
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    }
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showMenu]);
 
-  // Memoize dengan guard: channels?.map (optional chaining)
-  const channelButtons = useMemo(() => 
-    (channels || []).map((channel) => {  // Fallback ke [] kalo undefined
-      const channelId = channel._id || channel.id;
-      const isSelected = channelId === selectedChannelId;
-      return (
-        <button
-          key={channelId}
-          onClick={() => onSelectChannel(channelId)}
-          className={`w-full text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isSelected ? 'bg-blue-500 text-white' : 'hover:bg-gray-200'
-          }`}
-          aria-selected={isSelected}
-          aria-label={`Select channel ${channel.name}${channel.description ? ` - ${channel.description}` : ''}`}
-        >
-          <div className="font-medium">#{channel.name}</div>
-          {channel.description && (
-            <div className="text-xs opacity-75 truncate">{channel.description}</div>
-          )}
-        </button>
-      );
-    }), 
-    [channels, selectedChannelId, onSelectChannel]  // Deps aman
+  useEffect(() => {
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setShowMenu(false);
+      }
+    }
+    if (showMenu) {
+      document.addEventListener("keydown", handleEscape);
+      return () => document.removeEventListener("keydown", handleEscape);
+    }
+  }, [showMenu]);
+
+  const channelButtons = useMemo(
+    () =>
+      (channels || []).map((channel) => {
+        const channelId = channel._id || channel.id;
+        const isSelected = channelId === selectedChannelId;
+        return (
+          <button
+            key={channelId}
+            onClick={() => onSelectChannel(channelId)}
+            className={`w-full text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isSelected ? "bg-blue-500 text-white" : "hover:bg-gray-200"
+            }`}
+            aria-selected={isSelected}
+            aria-label={`Select channel ${channel.name}${channel.description ? ` - ${channel.description}` : ""}`}
+          >
+            <div className="font-medium">#{channel.name}</div>
+            {channel.description && (
+              <div className="text-xs opacity-75 truncate">{channel.description}</div>
+            )}
+          </button>
+        );
+      }),
+    [channels, selectedChannelId, onSelectChannel]
   );
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header sama kayak sebelumnya */}
       <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
@@ -55,11 +76,16 @@ export default function ChannelSelector({
             aria-label="Buat Channel Baru"
             title="Buat Channel Baru"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
-          
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -67,13 +93,18 @@ export default function ChannelSelector({
               aria-label="Menu"
               aria-expanded={showMenu}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            
             {showMenu && (
-              <div 
+              <div
                 className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200"
                 role="menu"
                 aria-labelledby="menu-button"
@@ -103,8 +134,6 @@ export default function ChannelSelector({
           </div>
         </div>
       </div>
-
-      {/* Daftar Channels */}
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
@@ -114,7 +143,7 @@ export default function ChannelSelector({
           <div className="p-4 text-red-500 bg-red-50 rounded-md text-sm" role="alert">
             {error}
           </div>
-        ) : (channels?.length ?? 0) === 0 ? (  // Guard tambahan: channels?.length ?? 0
+        ) : (channels?.length ?? 0) === 0 ? (
           <div className="p-4 text-center text-gray-500">
             Tidak ada channels. Klik tombol + untuk membuat channel baru.
           </div>
