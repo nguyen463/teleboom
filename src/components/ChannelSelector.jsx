@@ -134,7 +134,7 @@ export default function ChannelSelector({ user, onSelectChannel }) {
               ))}
             </ul>
             <button
-              onClick={() => router.push("/create-channel")}
+              onClick={() => router.push("/channels/new")}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
               Buat Channel Baru
