@@ -12,9 +12,9 @@ export default function ChannelsPage() {
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [user, setUser] = useState(null);
-  const [channels, setChannels] = useState([]); // BARU: State untuk list channels
+  const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [channelsLoading, setChannelsLoading] = useState(true); // BARU: Loading khusus channels
+  const [channelsLoading, setChannelsLoading] = useState(true);
 
   // Ambil user dari localStorage
   useEffect(() => {
@@ -33,50 +33,58 @@ export default function ChannelsPage() {
     setLoading(false);
   }, [router]);
 
-  // BARU: Fetch channels setelah user ready
-  useEffect(() => {
+  // Fetch channels (dengan debug)
+  const fetchChannels = async () => {
     if (!user) return;
+    setChannelsLoading(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://teleboom-694d2bc690c3.herokuapp.com';
+      console.log("Debug: Fetching channels with token:", user.token ? "Yes" : "No"); // Debug token
+      const res = await fetch(`${API_URL}/api/channels`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
 
-    const fetchChannels = async () => {
-      setChannelsLoading(true);
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://teleboom-694d2bc690c3.herokuapp.com'}/api/channels`, {
-          headers: {
-            Authorization: `Bearer ${user.token}`,
-          },
-        });
+      console.log("Debug: Fetch response status:", res.status); // Debug status
 
-        if (!res.ok) {
-          if (res.status === 401) {
-            // Token invalid: Logout auto
-            localStorage.removeItem("chat-app-user");
-            localStorage.removeItem("chat-app-token");
-            router.push("/login");
-            return;
-          }
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          localStorage.removeItem("chat-app-user");
+          localStorage.removeItem("chat-app-token");
+          router.push("/login");
+          return;
         }
-
-        const data = await res.json();
-        setChannels(data); // Asumsi response: array channels
-
-        // Auto-select kalau ada query id dan channel exist
-        if (id && !selectedChannelId) {
-          const channelExists = data.find(ch => ch._id === id);
-          if (channelExists) {
-            setSelectedChannelId(id);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching channels:", err);
-        // Optional: toast.error("Gagal load channels");
-      } finally {
-        setChannelsLoading(false);
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
-    };
 
+      const data = await res.json();
+      console.log("Debug: Fetched channels data:", data); // Debug full response
+
+      // Handle nested array kalau ada
+      const channelsData = Array.isArray(data) ? data : (data.channels || data.data || []);
+      setChannels(channelsData);
+      console.log("Debug: Set channels length:", channelsData.length); // Debug length
+
+      // Auto-select kalau ada query id dan channel exist
+      if (id && !selectedChannelId) {
+        const channelExists = channelsData.find(ch => ch._id === id);
+        if (channelExists) {
+          setSelectedChannelId(id);
+          console.log("Debug: Auto-selected channel:", id);
+        } else {
+          console.warn("Debug: Channel ID from query not found:", id);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching channels:", err);
+    } finally {
+      setChannelsLoading(false);
+    }
+  };
+
+  // Call fetch setelah user ready
+  useEffect(() => {
     fetchChannels();
-  }, [user, id, selectedChannelId]); // Re-fetch kalau id change (misal join baru)
+  }, [user, id]); // Dependensi: user & id (gak selectedChannelId biar stabil)
 
   // Sinkronkan selectedChannelId dengan query param
   useEffect(() => {
@@ -86,14 +94,15 @@ export default function ChannelsPage() {
   }, [id, selectedChannelId]);
 
   const handleSelectChannel = (channelId) => {
+    console.log("Debug: handleSelectChannel called:", channelId); // Debug
     setSelectedChannelId(channelId);
     router.push(`/channels?id=${channelId}`, { shallow: true });
   };
 
-  // BARU: Function buat refetch (pass ke child kalau perlu, misal setelah create/join)
+  // Refetch tanpa reload full page
   const refetchChannels = () => {
-    // Trigger useEffect di atas
-    window.location.href = `/channels?id=${selectedChannelId || ''}`; // Force shallow refresh
+    console.log("Debug: Refetch triggered"); // Debug
+    fetchChannels();
   };
 
   const logout = () => {
@@ -117,10 +126,10 @@ export default function ChannelsPage() {
       <div className="w-1/4 bg-gray-100 border-r">
         <ChannelSelector 
           user={user} 
-          channels={channels} // BARU: Pass list channels
+          channels={channels}
           loading={channelsLoading}
           onSelectChannel={handleSelectChannel}
-          onRefetch={refetchChannels} // Optional: Buat child trigger refetch
+          onRefetch={refetchChannels}
         />
       </div>
       <div className="w-3/4">
@@ -131,7 +140,16 @@ export default function ChannelsPage() {
             {channelsLoading ? (
               <p className="text-gray-500">Loading channels...</p>
             ) : channels.length === 0 ? (
-              <p className="text-gray-500">Belum ada channel. <a href="/new-channel" className="text-blue-500 underline">Buat sekarang!</a></p>
+              <div className="text-center">
+                <p className="text-gray-500 mb-4">Belum ada channel. Buat sekarang!</p>
+                {/* FIX: Ganti ke tombol, route ke /new-channel (sesuaikan kode create awal) */}
+                <button 
+                  onClick={() => router.push("/new-channel")}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Buat Channel Baru
+                </button>
+              </div>
             ) : (
               <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
             )}
