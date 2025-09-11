@@ -21,10 +21,9 @@ export const useAuth = () => {
       }
 
       try {
-        const response = await axios.get(`${API_URL}/api/auth/verify`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
+       const response = await axios.get(`${API_URL}/api/auth/validate`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
         if (response.data.valid) {
           const rawUser = localStorage.getItem("chat-user");
           const parsedUser = rawUser ? JSON.parse(rawUser) : null;
