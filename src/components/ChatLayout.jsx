@@ -16,7 +16,6 @@ import {
   FaImage,
   FaSpinner,
 } from "react-icons/fa";
-import { logout } from "@/app/utils/auth";
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
@@ -43,6 +42,23 @@ export default function ChatLayout({ user, channelId }) {
   const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Create a custom logout function
+  const handleLogout = () => {
+    // Clear any stored authentication data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    
+    // Disconnect socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+    
+    // Redirect to login
+    router.push("/login");
+  };
 
   // Function to scroll to bottom
   const scrollToBottom = () => {
@@ -76,12 +92,19 @@ export default function ChatLayout({ user, channelId }) {
     }
   }, [channelId]);
 
-  // 🎛️ Setup socket
+  // 🎛️ Setup socket - Fixed userId issue
   useEffect(() => {
     if (!user || !channelId) return;
 
+    // Make sure we have a valid user ID
+    const userId = user._id || user.id;
+    if (!userId) {
+      setError("User ID is missing");
+      return;
+    }
+
     const socket = io(SOCKET_URL, {
-      query: { userId: user._id, channelId },
+      query: { userId, channelId },
       transports: ["websocket"],
     });
     socketRef.current = socket;
@@ -116,7 +139,7 @@ export default function ChatLayout({ user, channelId }) {
     });
 
     socket.on("typing", (userData) => {
-      if (userData._id !== user._id) {
+      if (userData._id !== userId) {
         setTypingUsers((prev) => {
           if (prev.find((u) => u._id === userData._id)) return prev;
           return [...prev, userData];
@@ -271,6 +294,7 @@ export default function ChatLayout({ user, channelId }) {
 
   // Format timestamp
   const formatTime = (timestamp) => {
+    if (!timestamp) return "";
     return new Date(timestamp).toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
@@ -301,11 +325,7 @@ export default function ChatLayout({ user, channelId }) {
             <span>{onlineUsers.length} Online</span>
           </div>
           <button
-            onClick={() => {
-              if (socketRef.current) socketRef.current.disconnect();
-              logout();
-              router.push("/login");
-            }}
+            onClick={handleLogout}
             className="p-2 rounded-full hover:bg-opacity-20 hover:bg-white transition"
             aria-label="Logout"
           >
