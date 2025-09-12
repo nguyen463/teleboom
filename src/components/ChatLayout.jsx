@@ -575,16 +575,16 @@ export default function ChatLayout({ user, channelId, logout }) {
                     </div>
                   ) : (
                     isOwn && (
-                      <div className="flex space-x-2 mt-1 justify-end">
+                      <div className="flex space-x-2 mt-3 justify-end">
                         <button
                           onClick={() => handleEdit(msg)}
-                          className="text-xs underline hover:opacity-80 transition-colors"
+                          className="text-xs bg-background text-foreground px-2 py-1 rounded hover:bg-accent transition-colors"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(msg._id)}
-                          className="text-xs text-destructive hover:opacity-80 transition-colors"
+                          className="text-xs bg-destructive text-destructive-foreground px-2 py-1 rounded hover:bg-destructive/90 transition-colors"
                         >
                           Delete
                         </button>
