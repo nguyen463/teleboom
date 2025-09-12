@@ -9,7 +9,6 @@ import "react-toastify/dist/ReactToastify.css";
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout({ user, channelId, logout }) {
-  // State declarations
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -36,369 +35,420 @@ export default function ChatLayout({ user, channelId, logout }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
-  // Theme management
   useEffect(() => {
-    const savedTheme = localStorage.getItem("chat-theme") || "light";
+    const savedTheme = localStorage.getItem("theme") || "light";
     setTheme(savedTheme);
+    document.documentElement.setAttribute("data-theme", savedTheme);
   }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
-    localStorage.setItem("chat-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme);
     setForceUpdate(prev => prev + 1);
   };
 
-  // Socket connection and event handlers
   useEffect(() => {
-    if (!user || !channelId) return;
-
+    setMessages([]);
+    setPage(0);
+    setHasMore(true);
+    setNewMsg("");
+    setEditingId(null);
+    setEditText("");
+    setSelectedImage(null);
+    setImagePreview(null);
+    setTypingUsers([]);
+    setError(null);
     setIsLoading(true);
-    socketRef.current = io(SOCKET_URL, {
-      query: {
-        userId: user.id,
-        channelId: channelId,
-        username: user.username,
-        displayName: user.displayName || user.username
+    
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+  }, [channelId]);
+
+  // Fungsi normalisasi yang lebih aman
+  const normalizeMessage = useCallback(
+    (msg) => {
+      if (!msg) return null;
+      
+      try {
+        // Handle berbagai format senderId
+        let senderIdStr = '';
+        if (msg.senderId) {
+          if (typeof msg.senderId === 'object' && msg.senderId._id) {
+            senderIdStr = msg.senderId._id.toString();
+          } else if (typeof msg.senderId === 'string') {
+            senderIdStr = msg.senderId;
+          } else if (typeof msg.senderId === 'number') {
+            senderIdStr = msg.senderId.toString();
+          }
+        }
+        
+        // Handle berbagai format channelId
+        let channelIdStr = '';
+        if (msg.channelId) {
+          if (typeof msg.channelId === 'object' && msg.channelId.toString) {
+            channelIdStr = msg.channelId.toString();
+          } else if (typeof msg.channelId === 'string') {
+            channelIdStr = msg.channelId;
+          } else if (typeof msg.channelId === 'number') {
+            channelIdStr = msg.channelId.toString();
+          }
+        }
+        
+        // Handle senderName
+        let senderName = "Unknown";
+        if (msg.senderId) {
+          if (typeof msg.senderId === 'object') {
+            senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
+          } else if (msg.senderName) {
+            senderName = msg.senderName;
+          }
+        }
+        
+        return {
+          ...msg,
+          _id: msg._id ? msg._id.toString() : Math.random().toString(),
+          senderId: senderIdStr,
+          channelId: channelIdStr,
+          senderName: senderName
+        };
+      } catch (error) {
+        console.error("Error normalizing message:", error, msg);
+        return null;
+      }
+    },
+    []
+  );
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    if (!user?.token || !channelId) {
+      setError("Token or channelId not found. Redirecting...");
+      setIsLoading(false);
+      setTimeout(() => router.push("/channels"), 2000);
+      return;
+    }
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
+    const socket = io(SOCKET_URL, {
+      auth: { token: user.token },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setConnectionStatus("connected");
+      setError(null);
+      setIsLoading(true);
+      console.log("🔗 Socket connected, ID:", socket.id);
+      socket.emit("joinChannel", channelId);
+      
+      socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
+        if (response && response.error) {
+          toast.error(response.error);
+          setError(response.error);
+          setIsLoading(false);
+        } else if (Array.isArray(response)) {
+          const normalizedMessages = response.map(normalizeMessage).filter(msg => msg !== null);
+          setMessages(normalizedMessages);
+          setPage(0);
+          setHasMore(response.length === 20);
+          setIsLoading(false);
+          setTimeout(() => scrollToBottom(), 100);
+        } else {
+          toast.error("Invalid response format");
+          setError("Invalid response format");
+          setIsLoading(false);
+        }
+      });
+    });
+
+    socket.on("disconnect", (reason) => {
+      setConnectionStatus("disconnected");
+      setError("Disconnected from server. Attempting to reconnect...");
+      console.log("🔍 Socket disconnected:", reason);
+    });
+
+    socket.on("connect_error", (err) => {
+      setConnectionStatus("error");
+      setError("Connection failed: " + err.message);
+      setIsLoading(false);
+      toast.error("Connection failed: " + err.message);
+    });
+
+    socket.on("newMessage", (msg) => {
+      try {
+        if (msg && msg.channelId && msg.channelId.toString() === channelId) {
+          const container = messagesContainerRef.current;
+          const isScrolledToBottom = container && 
+            (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
+          
+          const normalizedMsg = normalizeMessage(msg);
+          if (normalizedMsg) {
+            setMessages((prev) => [...prev, normalizedMsg]);
+            
+            if (isScrolledToBottom) {
+              setTimeout(() => scrollToBottom(), 100);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error processing newMessage:", error, msg);
       }
     });
 
-    socketRef.current.on("connect", () => {
-      setConnectionStatus("connected");
-      setError(null);
+    socket.on("editMessage", (msg) => {
+      try {
+        if (msg && msg.channelId && msg.channelId.toString() === channelId) {
+          const normalizedMsg = normalizeMessage(msg);
+          if (normalizedMsg) {
+            setMessages((prev) =>
+              prev.map((m) => (m._id === normalizedMsg._id ? normalizedMsg : m))
+            );
+            setEditingId(null);
+            setEditText("");
+          }
+        }
+      } catch (error) {
+        console.error("Error processing editMessage:", error, msg);
+      }
     });
 
-    socketRef.current.on("disconnect", () => {
-      setConnectionStatus("disconnected");
+    socket.on("deleteMessage", (id) => {
+      try {
+        if (id) {
+          setMessages((prev) => prev.filter((m) => m._id !== id.toString()));
+        }
+      } catch (error) {
+        console.error("Error processing deleteMessage:", error, id);
+      }
     });
 
-    socketRef.current.on("connect_error", (error) => {
-      setConnectionStatus("disconnected");
-      setError("Connection failed. Trying to reconnect...");
-      console.error("Connection error:", error);
+    socket.on("online_users", (users) => {
+      if (Array.isArray(users)) {
+        setOnlineUsers(users);
+      }
     });
 
-    socketRef.current.on("messages", (data) => {
-      setMessages(data.messages || []);
-      setIsLoading(false);
+    socket.on("userTyping", (userData) => {
+      try {
+        if (userData && userData.userId !== user.id) {
+          setTypingUsers((prev) => {
+            const filtered = prev.filter((u) => u.userId !== userData.userId);
+            return userData.isTyping ? [...filtered, userData] : filtered;
+          });
+        }
+      } catch (error) {
+        console.error("Error processing userTyping:", error, userData);
+      }
     });
 
-    socketRef.current.on("newMessage", (message) => {
-      setMessages(prev => [...prev, message]);
-    });
-
-    socketRef.current.on("messageEdited", (updatedMessage) => {
-      setMessages(prev => prev.map(msg => 
-        msg._id === updatedMessage._id ? updatedMessage : msg
-      ));
-    });
-
-    socketRef.current.on("messageDeleted", (deletedMessageId) => {
-      setMessages(prev => prev.filter(msg => msg._id !== deletedMessageId));
-    });
-
-    socketRef.current.on("onlineUsers", (users) => {
-      setOnlineUsers(users);
-    });
-
-    socketRef.current.on("userTyping", (typingData) => {
-      setTypingUsers(typingData.users || []);
-    });
-
-    socketRef.current.on("error", (errorMsg) => {
-      toast.error(errorMsg);
+    socket.on("error", (errorMsg) => {
+      const message = errorMsg?.message || errorMsg || "Unknown error";
+      toast.error(`Error: ${message}`);
+      if (message.includes("authentication") || message.includes("token")) {
+        logout();
+      } else if (message.includes("channel")) {
+        router.push("/channels");
+      }
     });
 
     return () => {
       if (socketRef.current) {
+        socketRef.current.emit("leaveChannel", channelId);
         socketRef.current.disconnect();
       }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [user, channelId]);
+  }, [user, channelId, router, normalizeMessage, logout, scrollToBottom]);
 
-  // Scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Handle typing indicator
-  const handleTyping = useCallback((e) => {
-    setNewMsg(e.target.value);
-    
-    if (socketRef.current) {
-      socketRef.current.emit("typing", {
-        userId: user.id,
-        channelId: channelId
-      });
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current.emit("stopTyping", {
-          userId: user.id,
-          channelId: channelId
-        });
-      }, 1000);
-    }
-  }, [user, channelId]);
-
-  // Send message
-  const sendMessage = useCallback(() => {
-    if ((!newMsg.trim() && !selectedImage) || !socketRef.current) return;
-
-    socketRef.current.emit("sendMessage", {
-      text: newMsg,
-      channelId: channelId,
-      senderId: user.id,
-      senderName: user.displayName || user.username
-    });
-
-    setNewMsg("");
-    setSelectedImage(null);
-    setImagePreview(null);
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }, [newMsg, selectedImage, channelId, user]);
-
-  // Handle image selection
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size should be less than 5MB");
-      return;
-    }
-
-    setSelectedImage(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Handle edit message
-  const handleEdit = (message) => {
-    setEditingId(message._id);
-    setEditText(message.text);
-  };
-
-  // Save edited message
-  const saveEdit = useCallback(() => {
-    if (!editText.trim() || !socketRef.current) return;
-
-    socketRef.current.emit("editMessage", {
-      messageId: editingId,
-      newText: editText,
-      channelId: channelId,
-      userId: user.id
-    });
-
-    setEditingId(null);
-    setEditText("");
-  }, [editText, editingId, channelId, user]);
-
-  // Handle delete message
-  const handleDelete = useCallback((messageId) => {
-    if (!socketRef.current) return;
-
-    if (window.confirm("Are you sure you want to delete this message?")) {
-      socketRef.current.emit("deleteMessage", {
-        messageId: messageId,
-        channelId: channelId,
-        userId: user.id
-      });
-    }
-  }, [channelId, user]);
-
-  // Load more messages
-  const loadMoreMessages = useCallback(() => {
-    if (!hasMore || isLoading || !socketRef.current) return;
-
-    setIsLoading(true);
-    socketRef.current.emit("loadMessages", {
-      channelId: channelId,
-      page: page + 1,
-      limit: 20
-    });
-
-    socketRef.current.once("messagesLoaded", (data) => {
-      setMessages(prev => [...data.messages, ...prev]);
-      setPage(prev => prev + 1);
-      setHasMore(data.hasMore);
-      setIsLoading(false);
-    });
-  }, [hasMore, isLoading, page, channelId]);
-
-  // Handle scroll for infinite loading
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
-      if (container.scrollTop === 0 && hasMore) {
-        loadMoreMessages();
+      if (container.scrollTop === 0 && hasMore && !isLoading) {
+        setIsLoading(true);
+        const oldScrollHeight = container.scrollHeight;
+        const newSkip = (page + 1) * 20;
+        
+        socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip }, (response) => {
+          if (response?.error) {
+            setIsLoading(false);
+            return;
+          }
+          
+          if (Array.isArray(response)) {
+            const newMessages = response.map(normalizeMessage).filter(msg => msg !== null);
+            setMessages((prev) => [...newMessages, ...prev]);
+            setHasMore(response.length === 20);
+            setPage((prev) => prev + 1);
+            
+            setTimeout(() => {
+              const newScrollHeight = container.scrollHeight;
+              container.scrollTop = newScrollHeight - oldScrollHeight;
+              setIsLoading(false);
+            }, 0);
+          } else {
+            setIsLoading(false);
+          }
+        });
       }
     };
 
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [loadMoreMessages, hasMore]);
+  }, [hasMore, isLoading, page, channelId, normalizeMessage]);
+
+  const sendMessage = useCallback(() => {
+    if (!socketRef.current || (!newMsg.trim() && !selectedImage) || isUploading) return;
+    setIsUploading(true);
+
+    const messageData = { text: newMsg.trim(), channelId };
+
+    const onMessageSent = (response) => {
+      if (response?.error) {
+        setError(response.error);
+        toast.error(response.error);
+      } else {
+        setNewMsg("");
+        setSelectedImage(null);
+        setImagePreview(null);
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = null;
+        }
+        socketRef.current.emit("typing", { channelId, isTyping: false });
+      }
+      setIsUploading(false);
+    };
+
+    if (selectedImage) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        messageData.image = e.target.result;
+        socketRef.current.emit("sendMessage", messageData, onMessageSent);
+      };
+      reader.onerror = () => {
+        setError("Failed to read image file.");
+        toast.error("Failed to read image file.");
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(selectedImage);
+    } else {
+      socketRef.current.emit("sendMessage", messageData, onMessageSent);
+    }
+  }, [newMsg, selectedImage, isUploading, channelId]);
+
+  const handleTyping = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setNewMsg(value);
+      
+      if (!socketRef.current) return;
+      
+      socketRef.current.emit("typing", { 
+        channelId, 
+        isTyping: value.length > 0 
+      });
+      
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      
+      if (value.length > 0) {
+        typingTimeoutRef.current = setTimeout(() => {
+          socketRef.current.emit("typing", { 
+            channelId, 
+            isTyping: false 
+          });
+        }, 3000);
+      }
+    },
+    [channelId]
+  );
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files are allowed.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size too large (max 5MB).");
+      return;
+    }
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleEdit = (msg) => {
+    setEditingId(msg._id);
+    setEditText(msg.text);
+  };
+
+  const saveEdit = useCallback(() => {
+    if (!socketRef.current || !editText.trim() || !editingId) return;
+    
+    socketRef.current.emit("editMessage", { 
+      id: editingId, 
+      text: editText, 
+      channelId 
+    }, (response) => {
+      if (response?.error) {
+        toast.error(response.error);
+      } else {
+        setEditingId(null);
+        setEditText("");
+      }
+    });
+  }, [editingId, editText, channelId]);
+
+  const handleDelete = useCallback(
+    (id) => {
+      if (!socketRef.current) return;
+      
+      if (window.confirm("Are you sure you want to delete this message?")) {
+        socketRef.current.emit("deleteMessage", { 
+          id, 
+          channelId 
+        }, (response) => {
+          if (response?.error) {
+            toast.error(response.error);
+          }
+        });
+      }
+    },
+    [channelId]
+  );
+
+  const userDisplayName = user?.displayName || user?.username;
+
+  if (!channelId) {
+    return (
+      <div className="p-4 text-foreground">
+        Invalid channel. Redirecting...
+      </div>
+    );
+  }
 
   return (
-    <div className={`flex flex-col h-screen font-sans transition-colors duration-300 ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
-      <style jsx>{`
-        .light-theme {
-          --bg-primary: #ffffff;
-          --bg-secondary: #f8f9fa;
-          --bg-muted: #e9ecef;
-          --bg-destructive: #dc3545;
-          --text-primary: #212529;
-          --text-secondary: #495057;
-          --text-muted: #6c757d;
-          --text-destructive: #ffffff;
-          --border-color: #dee2e6;
-          --accent-color: #007bff;
-          --accent-hover: #0056b3;
-          --online-indicator: #28a745;
-        }
-        
-        .dark-theme {
-          --bg-primary: #1a1a1a;
-          --bg-secondary: #2d2d2d;
-          --bg-muted: #3d3d3d;
-          --bg-destructive: #dc3545;
-          --text-primary: #f8f9fa;
-          --text-secondary: #e9ecef;
-          --text-muted: #adb5bd;
-          --text-destructive: #ffffff;
-          --border-color: #495057;
-          --accent-color: #4dabf7;
-          --accent-hover: #339af0;
-          --online-indicator: #51cf66;
-        }
-        
-        .chat-container {
-          background-color: var(--bg-primary);
-          color: var(--text-primary);
-        }
-        
-        .chat-header {
-          background-color: var(--accent-color);
-          color: white;
-        }
-        
-        .chat-online-users {
-          background-color: var(--bg-muted);
-          color: var(--text-primary);
-        }
-        
-        .chat-input-area {
-          background-color: var(--bg-secondary);
-          border-top: 1px solid var(--border-color);
-        }
-        
-        .message-bubble {
-          max-width: 70%;
-          padding: 0.75rem;
-          border-radius: 1rem;
-          margin-bottom: 0.5rem;
-          position: relative;
-        }
-        
-        .message-own {
-          background-color: var(--accent-color);
-          color: white;
-          margin-left: auto;
-        }
-        
-        .message-other {
-          background-color: var(--bg-secondary);
-          color: var(--text-primary);
-          border: 1px solid var(--border-color);
-        }
-        
-        .typing-indicator {
-          display: inline-block;
-          position: relative;
-          width: 10px;
-          height: 10px;
-          margin-right: 4px;
-          border-radius: 50%;
-          background-color: var(--accent-color);
-          animation: typingAnimation 1.4s infinite ease-in-out both;
-        }
-        
-        .typing-indicator:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-        
-        .typing-indicator:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-        
-        @keyframes typingAnimation {
-          0%, 80%, 100% { 
-            transform: scale(0.8);
-            opacity: 0.5;
-          }
-          40% { 
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        
-        .connection-status {
-          display: inline-flex;
-          align-items: center;
-          font-size: 0.75rem;
-          margin-left: 0.5rem;
-        }
-        
-        .status-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          margin-right: 4px;
-        }
-        
-        .connected {
-          background-color: var(--online-indicator);
-        }
-        
-        .connecting {
-          background-color: #ffc107;
-        }
-        
-        .disconnected {
-          background-color: var(--bg-destructive);
-        }
-        
-        .menu-button {
-          transition: all 0.2s;
-        }
-        
-        .menu-button:hover {
-          transform: rotate(90deg);
-        }
-        
-        .scroll-top-loading {
-          text-align: center;
-          padding: 10px;
-          color: var(--text-muted);
-        }
-      `}</style>
-
+    <div key={`${theme}-${forceUpdate}`} className="flex flex-col h-screen bg-background text-foreground font-sans">
       <ToastContainer 
         position="top-right" 
         autoClose={3000}
@@ -406,23 +456,16 @@ export default function ChatLayout({ user, channelId, logout }) {
         toastClassName="bg-background text-foreground border-border border"
         progressClassName={theme === "dark" ? "bg-primary" : "bg-primary"}
       />
-      
-      <header className="chat-header p-4 flex justify-between items-center shadow-md">
+      <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
-          <div className="flex flex-col">
-            <span className="font-semibold">Hi, {user?.displayName || user?.username || 'User'}</span>
-            <span className="text-xs opacity-85 flex items-center">
-              <span className={`status-dot ${connectionStatus === 'connected' ? 'connected' : connectionStatus === 'connecting' ? 'connecting' : 'disconnected'}`}></span>
-              {connectionStatus}
-              <span className="ml-2">Channel: {channelId}</span>
-            </span>
-          </div>
+          <span className="hidden md:inline">Hi, {userDisplayName}</span>
+          <span className="text-sm opacity-75">({connectionStatus})</span>
+          <span className="text-sm opacity-75">Channel: {channelId}</span>
         </div>
-        
         <div className="relative">
           <button
             onClick={() => setShowMenu(!showMenu)}
-            className="menu-button p-2 rounded-full hover:bg-black hover:bg-opacity-20 transition-colors"
+            className="p-2 rounded-full hover:bg-primary/90 transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -439,18 +482,17 @@ export default function ChatLayout({ user, channelId, logout }) {
               />
             </svg>
           </button>
-          
           {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10 overflow-hidden">
+            <div className="absolute right-0 mt-2 w-48 bg-background border border-border text-foreground rounded-md shadow-lg z-10">
               <button
                 onClick={() => setShowOnlineUsers(!showOnlineUsers)}
-                className="block w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700"
+                className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
               >
                 {showOnlineUsers ? "Hide Online Users" : "Show Online Users"}
               </button>
               <button
                 onClick={toggleTheme}
-                className="block w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700"
+                className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
               >
                 Switch to {theme === "light" ? "Dark" : "Light"} Mode
               </button>
@@ -458,7 +500,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                 onClick={() => {
                   logout();
                 }}
-                className="block w-full text-left px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400"
+                className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
               >
                 Logout
               </button>
@@ -468,39 +510,55 @@ export default function ChatLayout({ user, channelId, logout }) {
       </header>
 
       {showOnlineUsers && (
-        <div className="chat-online-users p-4 border-b border-border">
-          <h3 className="font-bold flex items-center">
-            Online Users ({onlineUsers.length})
-            <span className="w-2 h-2 bg-green-500 rounded-full ml-2"></span>
-          </h3>
-          <div className="mt-2 flex flex-wrap gap-2">
+        <div className="bg-muted p-4">
+          <h3 className="font-bold">Online Users ({onlineUsers.length})</h3>
+          <ul className="mt-2 space-y-1">
             {onlineUsers.map((u) => (
-              <span key={u.userId} className="bg-accent-color bg-opacity-20 text-xs px-2 py-1 rounded-full">
+              <li key={u.userId} className="text-sm">
                 {u.displayName || u.username}
-              </span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
 
       {error && (
-        <div className="bg-destructive text-destructive-foreground p-3 text-center">{error}</div>
+        <div className="bg-destructive text-destructive-foreground p-2 text-center">{error}</div>
       )}
 
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 chat-container"
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background"
       >
         {isLoading && page === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-accent-color"></div>
+            <svg
+              className="animate-spin h-8 w-8 text-primary"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z"
+              ></path>
+            </svg>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-muted-foreground">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-16 w-16 mx-auto mb-4 text-accent-color opacity-50"
+                className="h-12 w-12 mx-auto mb-2"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -512,148 +570,131 @@ export default function ChatLayout({ user, channelId, logout }) {
                   d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
                 />
               </svg>
-              <p className="text-lg font-medium">No messages yet</p>
-              <p className="text-sm">Start the conversation by sending a message!</p>
+              <p>No messages in this channel yet. Start the conversation!</p>
             </div>
           </div>
         ) : (
-          <>
-            {hasMore && (
-              <div className="scroll-top-loading">
-                <div className="inline-block animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-accent-color mr-2"></div>
-                Loading earlier messages...
-              </div>
-            )}
+          messages.map((msg) => {
+            // Penanganan error untuk pengecekan kepemilikan pesan
+            let isOwn = false;
+            try {
+              isOwn = user?.id && msg.senderId && 
+                msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
+            } catch (error) {
+              console.error("Error checking message ownership:", error, msg, user);
+              isOwn = false;
+            }
             
-            {messages.map((msg) => {
-              let isOwn = false;
-              try {
-                isOwn = user?.id && msg.senderId && 
-                  msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
-              } catch (error) {
-                console.error("Error checking message ownership:", error, msg, user);
-                isOwn = false;
-              }
-              
-              return (
-                <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`message-bubble ${isOwn ? "message-own" : "message-other"}`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="text-xs font-bold opacity-80">
-                        {msg.senderName || (isOwn ? "You" : "Unknown")}
-                      </span>
-                      <span className="text-xs opacity-70">
-                        {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                        {msg.isEdited && " (edited)"}
-                      </span>
-                    </div>
-                    {msg.image && (
-                      <div className="my-2">
-                        <img
-                          src={msg.image}
-                          alt="Message image"
-                          className="max-w-full rounded-lg max-h-64 object-cover shadow-sm"
-                        />
-                      </div>
-                    )}
-                    {msg.text && <span className="block text-base">{msg.text}</span>}
-                    {editingId === msg._id ? (
-                      <div className="flex flex-col space-y-2 mt-2">
-                        <input
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              saveEdit();
-                            } else if (e.key === "Escape") {
-                              setEditingId(null);
-                              setEditText("");
-                            }
-                          }}
-                          className="flex-1 p-2 rounded border-border bg-background text-foreground"
-                          autoFocus
-                        />
-                        <div className="flex space-x-2 self-end">
-                          <button
-                            onClick={saveEdit}
-                            className="bg-accent-color px-3 py-1 rounded text-white text-sm hover:bg-accent-hover transition-colors"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingId(null);
-                              setEditText("");
-                            }}
-                            className="bg-muted px-3 py-1 rounded text-foreground text-sm hover:bg-muted-hover transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      isOwn && (
-                        <div className="flex space-x-2 mt-3 justify-end">
-                          <button
-                            onClick={() => handleEdit(msg)}
-                            className="text-xs bg-background text-foreground px-2 py-1 rounded hover:bg-accent transition-colors opacity-70 hover:opacity-100"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(msg._id)}
-                            className="text-xs bg-destructive text-destructive-foreground px-2 py-1 rounded hover:bg-destructive/90 transition-colors opacity-70 hover:opacity-100"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )
-                    )}
+            return (
+              <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-lg p-3 rounded-2xl shadow-sm border ${
+                    isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground border-border"
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-xs font-bold opacity-80">
+                      {msg.senderName || (isOwn ? "You" : "Unknown")}
+                    </span>
+                    <span className="text-xs opacity-70">
+                      {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
+                      {msg.updatedAt && " (edited)"}
+                    </span>
                   </div>
+                  {msg.image && (
+                    <div className="my-2">
+                      <img
+                        src={msg.image}
+                        alt="Message image"
+                        className="max-w-full rounded-lg max-h-64 object-cover"
+                      />
+                    </div>
+                  )}
+                  {msg.text && <span className="block text-base">{msg.text}</span>}
+                  {editingId === msg._id ? (
+                    <div className="flex flex-col space-y-2 mt-2">
+                      <input
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            saveEdit();
+                          } else if (e.key === "Escape") {
+                            setEditingId(null);
+                            setEditText("");
+                          }
+                        }}
+                        className="flex-1 p-2 rounded border-border bg-background text-foreground"
+                        autoFocus
+                      />
+                      <div className="flex space-x-2 self-end">
+                        <button
+                          onClick={saveEdit}
+                          className="bg-primary px-3 py-1 rounded text-primary-foreground text-sm"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingId(null);
+                            setEditText("");
+                          }}
+                          className="bg-muted px-3 py-1 rounded text-foreground text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    isOwn && (
+                      <div className="flex space-x-2 mt-3 justify-end">
+                        <button
+                          onClick={() => handleEdit(msg)}
+                          className="text-xs bg-background text-foreground px-2 py-1 rounded hover:bg-accent transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(msg._id)}
+                          className="text-xs bg-destructive text-destructive-foreground px-2 py-1 rounded hover:bg-destructive/90 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )
+                  )}
                 </div>
-              );
-            })}
-          </>
+              </div>
+            );
+          })
         )}
         <div ref={messagesEndRef}></div>
       </div>
 
       {imagePreview && (
-        <div className="p-4 bg-muted border-t border-border">
-          <div className="flex items-center">
-            <img src={imagePreview} alt="Preview" className="max-h-20 rounded-lg shadow-sm" />
-            <button
-              onClick={() => {
-                setSelectedImage(null);
-                setImagePreview(null);
-                if (fileInputRef.current) fileInputRef.current.value = "";
-              }}
-              className="ml-3 p-1 bg-destructive text-destructive-foreground rounded-full hover:bg-destructive/90 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
+        <div className="p-4 bg-muted">
+          <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
+          <button
+            onClick={() => {
+              setSelectedImage(null);
+              setImagePreview(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+            className="mt-2 text-sm text-destructive"
+          >
+            Remove Image
+          </button>
         </div>
       )}
 
-      <div className="chat-input-area p-4">
+      <div className="p-4 bg-secondary">
         {typingUsers.length > 0 && (
-          <div className="text-sm text-muted-foreground mb-2 flex items-center">
-            <div className="flex mr-1">
-              {[0, 1, 2].map(i => (
-                <div key={i} className="typing-indicator"></div>
-              ))}
-            </div>
+          <div className="text-sm text-muted-foreground mb-2">
             {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
           </div>
         )}
-        
-        <div className="flex space-x-3">
+        <div className="flex space-x-2">
           <input
             type="file"
             accept="image/*"
@@ -663,13 +704,12 @@ export default function ChatLayout({ user, channelId, logout }) {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-3 bg-muted text-foreground rounded-full hover:bg-border transition-colors flex-shrink-0"
+            className="p-2 bg-muted text-foreground rounded-full hover:bg-border transition-colors"
             disabled={isUploading}
-            title="Attach image"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
+              className="h-6 w-6"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -682,7 +722,6 @@ export default function ChatLayout({ user, channelId, logout }) {
               />
             </svg>
           </button>
-          
           <input
             type="text"
             value={newMsg}
@@ -693,20 +732,18 @@ export default function ChatLayout({ user, channelId, logout }) {
                 sendMessage();
               }
             }}
-            className="flex-1 p-3 rounded-full border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent-color"
+            className="flex-1 p-2 rounded border-border bg-background text-foreground"
             placeholder="Type a message..."
             disabled={isUploading}
           />
-          
           <button
             onClick={sendMessage}
-            className="p-3 bg-accent-color text-white rounded-full hover:bg-accent-hover transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
             disabled={isUploading || (!newMsg.trim() && !selectedImage)}
-            title="Send message"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
+              className="h-6 w-6"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -723,4 +760,4 @@ export default function ChatLayout({ user, channelId, logout }) {
       </div>
     </div>
   );
-}
+} 
