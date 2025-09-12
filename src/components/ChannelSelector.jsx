@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useAuth } from "@/utils/auth";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../../utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
@@ -50,14 +51,11 @@ export default function ChannelSelector({
         const channelId = channel._id || channel.id;
         const isSelected = channelId === selectedChannelId;
         
+        // Ambil ID pemilik channel dari data yang diterima
         const channelOwnerId = channel.ownerId?._id || channel.ownerId;
+        
+        // Periksa apakah user saat ini adalah pemilik channel
         const isOwner = user?.id === channelOwnerId;
-
-        console.log(`Channel: ${channel.name}`);
-        console.log(`  User ID:    ${user?.id}`);
-        console.log(`  Owner ID:   ${channelOwnerId}`);
-        console.log(`  Match:      ${isOwner}`);
-        console.log("---");
 
         return (
           <div key={channelId} className="relative flex items-center group">
@@ -77,7 +75,7 @@ export default function ChannelSelector({
             {isOwner && (
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
+                  e.stopPropagation(); // Stop event bubbling to parent button
                   onDeleteChannel(channelId);
                 }}
                 className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity`}
