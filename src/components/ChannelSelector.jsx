@@ -1,18 +1,22 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useAuth } from "../utils/auth";
+import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
   user,
-  channels = [], // Guard default
+  channels = [],
   loading,
   selectedChannelId,
   onSelectChannel,
   onRefetch,
   onCreateChannel,
   onLogout,
+  onDeleteChannel, // Tambahkan prop ini
   error,
 }) {
+  const { theme, toggleTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
 
@@ -45,34 +49,64 @@ export default function ChannelSelector({
       (channels || []).map((channel) => {
         const channelId = channel._id || channel.id;
         const isSelected = channelId === selectedChannelId;
+        
+        // Ambil ID pemilik channel dari data yang diterima
+        const channelOwnerId = channel.ownerId?._id || channel.ownerId;
+        
+        // Periksa apakah user saat ini adalah pemilik channel
+        const isOwner = user?.id === channelOwnerId;
+
+        // Tampilkan di konsol untuk debugging
+        console.log(`Channel: ${channel.name}`);
+        console.log(`  User ID:    ${user?.id}`);
+        console.log(`  Owner ID:   ${channelOwnerId}`);
+        console.log(`  Match:      ${isOwner}`);
+        console.log("---");
+
         return (
-          <button
-            key={channelId}
-            onClick={() => onSelectChannel(channelId)}
-            className={`w-full text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isSelected ? "bg-blue-500 text-white" : "hover:bg-gray-200"
-            }`}
-            aria-selected={isSelected}
-            aria-label={`Select channel ${channel.name}${channel.description ? ` - ${channel.description}` : ""}`}
-          >
-            <div className="font-medium">#{channel.name}</div>
-            {channel.description && (
-              <div className="text-xs opacity-75 truncate">{channel.description}</div>
+          <div key={channelId} className="relative flex items-center group">
+            <button
+              onClick={() => onSelectChannel(channelId)}
+              className={`flex-1 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+              }`}
+              aria-selected={isSelected}
+              aria-label={`Select channel ${channel.name}${channel.description ? ` - ${channel.description}` : ""}`}
+            >
+              <div className="font-medium">#{channel.name}</div>
+              {channel.description && (
+                <div className="text-xs opacity-75 truncate">{channel.description}</div>
+              )}
+            </button>
+            {isOwner && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // Stop event bubbling to parent button
+                  onDeleteChannel(channelId);
+                }}
+                className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity`}
+                aria-label={`Delete channel ${channel.name}`}
+                title={`Delete channel ${channel.name}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             )}
-          </button>
+          </div>
         );
       }),
-    [channels, selectedChannelId, onSelectChannel]
+    [channels, selectedChannelId, onSelectChannel, onDeleteChannel, user]
   );
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
+    <div className="h-full flex flex-col bg-secondary text-foreground">
+      <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
           <button
             onClick={onCreateChannel}
-            className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
             aria-label="Buat Channel Baru"
             title="Buat Channel Baru"
           >
@@ -89,7 +123,7 @@ export default function ChannelSelector({
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+              className="p-2 bg-muted text-foreground rounded-full hover:bg-muted-foreground/20 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
               aria-label="Menu"
               aria-expanded={showMenu}
             >
@@ -105,7 +139,7 @@ export default function ChannelSelector({
             </button>
             {showMenu && (
               <div
-                className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200"
+                className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200"
                 role="menu"
                 aria-labelledby="menu-button"
               >
@@ -114,17 +148,23 @@ export default function ChannelSelector({
                     onRefetch();
                     setShowMenu(false);
                   }}
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left focus:outline-none focus:bg-gray-100"
+                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
                   role="menuitem"
                 >
                   Refresh Channels
+                </button>
+                <button
+                  onClick={toggleTheme}
+                  className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
+                >
+                  Switch to {theme === "light" ? "Dark" : "Light"} Mode
                 </button>
                 <button
                   onClick={() => {
                     onLogout();
                     setShowMenu(false);
                   }}
-                  className="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 w-full text-left focus:outline-none focus:bg-gray-100"
+                  className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left focus:outline-none focus:bg-destructive/10"
                   role="menuitem"
                 >
                   Logout
@@ -137,14 +177,14 @@ export default function ChannelSelector({
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
           </div>
         ) : error ? (
-          <div className="p-4 text-red-500 bg-red-50 rounded-md text-sm" role="alert">
+          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
             {error}
           </div>
         ) : (channels?.length ?? 0) === 0 ? (
-          <div className="p-4 text-center text-gray-500">
+          <div className="p-4 text-center text-muted-foreground">
             Tidak ada channels. Klik tombol + untuk membuat channel baru.
           </div>
         ) : (
