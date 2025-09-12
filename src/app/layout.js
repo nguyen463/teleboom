@@ -1,6 +1,7 @@
 // src/app/layout.js
 import localFont from 'next/font/local';
 import "./globals.css";
+import { ThemeProvider } from '../components/ThemeContext';
 
 // Muat font lokal dari file yang sudah Anda tambahkan
 const geist = localFont({
@@ -27,9 +28,14 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      {/* Terapkan class font ke body */}
+      {/* Terapkan class font ke body.
+        ThemeProvider membungkus seluruh children (semua halaman)
+        agar theme context bisa diakses di mana saja.
+      */}
       <body className={geist.className}>
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
