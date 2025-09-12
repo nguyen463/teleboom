@@ -19,7 +19,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState("connecting");
+  const [connectionStatus, setConnectionStatus] = useState("menghubungkan");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -68,7 +68,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     }
   }, [channelId]);
 
-  // Fungsi normalisasi message yang lebih robust
+  // Normalisasi message yang lebih robust
   const normalizeMessage = useCallback((msg) => {
     if (!msg) return null;
 
@@ -95,14 +95,17 @@ export default function ChatLayout({ user, channelId, logout }) {
         }
       }
 
-      let senderName = "Unknown";
+      let senderName = "Tidak Diketahui";
       if (msg.senderId) {
         if (typeof msg.senderId === "object") {
-          senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
+          senderName = msg.senderId.displayName || msg.senderId.username || "Tidak Diketahui";
         } else if (msg.senderName) {
           senderName = msg.senderName;
         }
       }
+
+      // Log untuk debugging
+      console.log("Normalized message:", { senderIdStr, userId: user?.id, msg });
 
       return {
         ...msg,
@@ -115,7 +118,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       console.error("Error normalizing message:", error, msg);
       return null;
     }
-  }, []);
+  }, [user?.id]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -195,7 +198,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
-
             if (isScrolledToBottom) {
               setTimeout(() => scrollToBottom(), 100);
             }
@@ -335,7 +337,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     if (selectedImage) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        messageData.image = e.target.result; // Base64 image
+        messageData.image = e.target.result;
         socketRef.current.emit("sendMessage", messageData, onMessageSent);
       };
       reader.onerror = () => {
@@ -572,11 +574,18 @@ export default function ChatLayout({ user, channelId, logout }) {
           messages.map((msg) => {
             let isOwn = false;
             try {
+              // Perbaikan logika isOwn untuk lebih toleran
               isOwn =
                 user?.id &&
                 msg.senderId &&
-                msg.senderId.toString() ===
-                  (typeof user.id === "string" ? user.id : user.id.toString());
+                (msg.senderId === user.id ||
+                  (typeof msg.senderId === "object" && msg.senderId._id && msg.senderId._id.toString() === user.id.toString()));
+              // Log untuk debug
+              console.log("isOwn check:", {
+                userId: user?.id,
+                senderId: msg.senderId,
+                isOwn,
+              });
             } catch (error) {
               console.error("Error cek kepemilikan pesan:", error, msg, user);
               isOwn = false;
@@ -595,7 +604,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                     </span>
                     <span className="text-xs opacity-70">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                      {msg.updatedAt && " (diedit)"}
+                      {msg.isEdited && " (diedit)"}
                     </span>
                   </div>
                   {msg.image && (
@@ -605,13 +614,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                         alt="Image pesan"
                         className="max-w-full rounded-lg max-h-64 object-cover"
                         onError={(e) => {
-                          e.target.src = "/placeholder-image.png"; // Fallback jika image gagal load
+                          e.target.src = "/placeholder-image.png";
                           toast.error("Gagal memuat image.");
                         }}
                       />
                     </div>
                   )}
-                  {msg.text && <span className="block text-base">{msg.displayText || msg.text}</span>} {/* Dukung displayText jika dari backend */}
+                  {msg.text && <span className="block text-base">{msg.displayText || msg.text}</span>}
                   {editingId === msg._id ? (
                     <div className="flex flex-col space-y-2 mt-2">
                       <input
