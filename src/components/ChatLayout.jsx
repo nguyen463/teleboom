@@ -1,14 +1,19 @@
+// chatlayout.js
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useContext } from "react";
 import { io } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
+import { ThemeContext } from "../components/ThemeContext";
+
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout({ user, channelId, logout }) {
+  const { theme, toggleTheme } = useContext(ThemeContext);
+
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -25,7 +30,6 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
-  const [theme, setTheme] = useState("light");
   const [forceUpdate, setForceUpdate] = useState(0);
 
   const socketRef = useRef(null);
@@ -35,46 +39,10 @@ export default function ChatLayout({ user, channelId, logout }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.setAttribute("data-theme", newTheme);
-    setForceUpdate(prev => prev + 1);
-  };
-
-  useEffect(() => {
-    setMessages([]);
-    setPage(0);
-    setHasMore(true);
-    setNewMsg("");
-    setEditingId(null);
-    setEditText("");
-    setSelectedImage(null);
-    setImagePreview(null);
-    setTypingUsers([]);
-    setError(null);
-    setIsLoading(true);
-    
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
-    }
-  }, [channelId]);
-
-  // Fungsi normalisasi yang lebih aman
   const normalizeMessage = useCallback(
     (msg) => {
       if (!msg) return null;
-      
       try {
-        // Handle berbagai format senderId
         let senderIdStr = '';
         if (msg.senderId) {
           if (typeof msg.senderId === 'object' && msg.senderId._id) {
@@ -85,8 +53,6 @@ export default function ChatLayout({ user, channelId, logout }) {
             senderIdStr = msg.senderId.toString();
           }
         }
-        
-        // Handle berbagai format channelId
         let channelIdStr = '';
         if (msg.channelId) {
           if (typeof msg.channelId === 'object' && msg.channelId.toString) {
@@ -97,8 +63,6 @@ export default function ChatLayout({ user, channelId, logout }) {
             channelIdStr = msg.channelId.toString();
           }
         }
-        
-        // Handle senderName
         let senderName = "Unknown";
         if (msg.senderId) {
           if (typeof msg.senderId === 'object') {
@@ -107,7 +71,6 @@ export default function ChatLayout({ user, channelId, logout }) {
             senderName = msg.senderName;
           }
         }
-        
         return {
           ...msg,
           _id: msg._id ? msg._id.toString() : Math.random().toString(),
@@ -126,6 +89,25 @@ export default function ChatLayout({ user, channelId, logout }) {
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  useEffect(() => {
+    setMessages([]);
+    setPage(0);
+    setHasMore(true);
+    setNewMsg("");
+    setEditingId(null);
+    setEditText("");
+    setSelectedImage(null);
+    setImagePreview(null);
+    setTypingUsers([]);
+    setError(null);
+    setIsLoading(true);
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+  }, [channelId]);
 
   useEffect(() => {
     if (!user?.token || !channelId) {
@@ -156,7 +138,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       setIsLoading(true);
       console.log("🔗 Socket connected, ID:", socket.id);
       socket.emit("joinChannel", channelId);
-      
+
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
         if (response && response.error) {
           toast.error(response.error);
@@ -194,13 +176,13 @@ export default function ChatLayout({ user, channelId, logout }) {
       try {
         if (msg && msg.channelId && msg.channelId.toString() === channelId) {
           const container = messagesContainerRef.current;
-          const isScrolledToBottom = container && 
+          const isScrolledToBottom = container &&
             (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
-          
+
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
-            
+
             if (isScrolledToBottom) {
               setTimeout(() => scrollToBottom(), 100);
             }
@@ -285,19 +267,19 @@ export default function ChatLayout({ user, channelId, logout }) {
         setIsLoading(true);
         const oldScrollHeight = container.scrollHeight;
         const newSkip = (page + 1) * 20;
-        
+
         socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip }, (response) => {
           if (response?.error) {
             setIsLoading(false);
             return;
           }
-          
+
           if (Array.isArray(response)) {
             const newMessages = response.map(normalizeMessage).filter(msg => msg !== null);
             setMessages((prev) => [...newMessages, ...prev]);
             setHasMore(response.length === 20);
             setPage((prev) => prev + 1);
-            
+
             setTimeout(() => {
               const newScrollHeight = container.scrollHeight;
               container.scrollTop = newScrollHeight - oldScrollHeight;
@@ -358,21 +340,21 @@ export default function ChatLayout({ user, channelId, logout }) {
     (e) => {
       const value = e.target.value;
       setNewMsg(value);
-      
+
       if (!socketRef.current) return;
-      
-      socketRef.current.emit("typing", { 
-        channelId, 
-        isTyping: value.length > 0 
+
+      socketRef.current.emit("typing", {
+        channelId,
+        isTyping: value.length > 0
       });
-      
+
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      
+
       if (value.length > 0) {
         typingTimeoutRef.current = setTimeout(() => {
-          socketRef.current.emit("typing", { 
-            channelId, 
-            isTyping: false 
+          socketRef.current.emit("typing", {
+            channelId,
+            isTyping: false
           });
         }, 3000);
       }
@@ -404,11 +386,11 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   const saveEdit = useCallback(() => {
     if (!socketRef.current || !editText.trim() || !editingId) return;
-    
-    socketRef.current.emit("editMessage", { 
-      id: editingId, 
-      text: editText, 
-      channelId 
+
+    socketRef.current.emit("editMessage", {
+      id: editingId,
+      text: editText,
+      channelId
     }, (response) => {
       if (response?.error) {
         toast.error(response.error);
@@ -422,11 +404,11 @@ export default function ChatLayout({ user, channelId, logout }) {
   const handleDelete = useCallback(
     (id) => {
       if (!socketRef.current) return;
-      
+
       if (window.confirm("Are you sure you want to delete this message?")) {
-        socketRef.current.emit("deleteMessage", { 
-          id, 
-          channelId 
+        socketRef.current.emit("deleteMessage", {
+          id,
+          channelId
         }, (response) => {
           if (response?.error) {
             toast.error(response.error);
@@ -449,8 +431,8 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   return (
     <div key={`${theme}-${forceUpdate}`} className="flex flex-col h-screen bg-background text-foreground font-sans">
-      <ToastContainer 
-        position="top-right" 
+      <ToastContainer
+        position="top-right"
         autoClose={3000}
         theme={theme}
         toastClassName="bg-background text-foreground border-border border"
@@ -575,16 +557,15 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : (
           messages.map((msg) => {
-            // Penanganan error untuk pengecekan kepemilikan pesan
             let isOwn = false;
             try {
-              isOwn = user?.id && msg.senderId && 
+              isOwn = user?.id && msg.senderId &&
                 msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
             } catch (error) {
               console.error("Error checking message ownership:", error, msg, user);
               isOwn = false;
             }
-            
+
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
@@ -760,4 +741,4 @@ export default function ChatLayout({ user, channelId, logout }) {
       </div>
     </div>
   );
-} 
+}
