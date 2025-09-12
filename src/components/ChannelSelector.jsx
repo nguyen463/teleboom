@@ -50,13 +50,9 @@ export default function ChannelSelector({
         const channelId = channel._id || channel.id;
         const isSelected = channelId === selectedChannelId;
         
-        // Ambil ID pemilik channel dari data yang diterima
         const channelOwnerId = channel.ownerId?._id || channel.ownerId;
-        
-        // Periksa apakah user saat ini adalah pemilik channel
         const isOwner = user?.id === channelOwnerId;
 
-        // Tampilkan di konsol untuk debugging
         console.log(`Channel: ${channel.name}`);
         console.log(`  User ID:    ${user?.id}`);
         console.log(`  Owner ID:   ${channelOwnerId}`);
@@ -81,7 +77,7 @@ export default function ChannelSelector({
             {isOwner && (
               <button
                 onClick={(e) => {
-                  e.stopPropagation(); // Stop event bubbling to parent button
+                  e.stopPropagation();
                   onDeleteChannel(channelId);
                 }}
                 className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity`}
