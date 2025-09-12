@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { Suspense } from "react";
 import ChannelSelector from "@/components/ChannelSelector";
 import { useAuth } from '../utils/auth';
 import ChatLayout from "@/components/ChatLayout";
+import { useTheme } from "@/components/ThemeContext";
 
-// Komponen baru yang menangani semua logika klien
-function ChatContainer() {
+export default function ChatPage() {
   const { user, loading, logout, api } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -20,7 +19,6 @@ function ChatContainer() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
-  // Fungsi untuk mengambil data channel dari API
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
 
@@ -44,7 +42,6 @@ function ChatContainer() {
 
       setChannels(channelsData);
 
-      // Otomatis memilih channel jika ada yang dipilih di URL atau jika ini yang pertama
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(ch => ch._id === urlChannelId || ch.id === urlChannelId);
         if (channelExists && urlChannelId && urlChannelId !== "undefined") {
@@ -64,28 +61,24 @@ function ChatContainer() {
     }
   }, [user, api, urlChannelId, selectedChannelId, logout]);
 
-  // Panggil fetchChannels saat komponen dimuat atau saat user data tersedia
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
   }, [user, channels.length, channelsLoading, fetchChannels]);
 
-  // Sinkronkan selectedChannelId dengan query param saat berubah
   useEffect(() => {
     if (urlChannelId && urlChannelId !== "undefined" && urlChannelId !== selectedChannelId && !manualSelectionRef.current) {
       handleSelectChannel(urlChannelId);
     }
   }, [urlChannelId, selectedChannelId]);
 
-  // Handler saat user memilih channel
   const handleSelectChannel = useCallback(
     (channelId) => {
       if (!channelId || channelId === "undefined") return;
       manualSelectionRef.current = true;
       setSelectedChannelId(channelId);
 
-      // Perbarui URL
       const params = new URLSearchParams(searchParams.toString());
       params.set("id", channelId);
       const newUrl = `${pathname}?${params.toString()}`;
@@ -103,15 +96,24 @@ function ChatContainer() {
     router.push("/channels/new");
   }, [router]);
 
-  // PENTING: Handle pengalihan ke login jika user tidak ada
-  useEffect(() => {
-    if (!loading && !user) {
-      console.log("Tidak ada pengguna yang terautentikasi. Mengalihkan ke halaman login...");
-      router.push("/login");
+  const handleDeleteChannel = useCallback(async (channelId) => {
+    if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
+      try {
+        await api.delete(`/api/channels/${channelId}`);
+        setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== channelId));
+        
+        if (selectedChannelId === channelId) {
+          const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
+          const newSelectedId = newChannels[0]?._id || newChannels[0]?.id || null;
+          handleSelectChannel(newSelectedId);
+        }
+      } catch (err) {
+        console.error("Gagal menghapus channel:", err);
+        alert("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
+      }
     }
-  }, [loading, user, router]);
+  }, [api, channels, selectedChannelId, handleSelectChannel]);
 
-  // Guard: Kalo loading, show loader. Kalo no user, return null (middleware udah handle redirect)
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
@@ -123,14 +125,12 @@ function ChatContainer() {
     );
   }
 
-  // Kembali ke null jika tidak ada user, router.push sudah berjalan
   if (!user) {
     return null;
   }
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* Sidebar */}
       <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
@@ -142,10 +142,10 @@ function ChatContainer() {
           onCreateChannel={handleCreateChannel}
           onLogout={logout}
           error={error}
+          onDeleteChannel={handleDeleteChannel}
         />
       </div>
       
-      {/* Chat Area - Wrap Suspense buat loading */}
       <div className="flex-1 flex flex-col" role="main">
         <Suspense fallback={
           <div className="flex items-center justify-center h-full bg-background">
@@ -246,20 +246,5 @@ function ChatContainer() {
         </Suspense>
       </div>
     </div>
-  );
-}
-
-// Komponen utama yang akan di-export, menggunakan Suspense
-export default function ChatPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-screen bg-background">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        </div>
-      }
-    >
-      <ChatContainer />
-    </Suspense>
   );
 }
