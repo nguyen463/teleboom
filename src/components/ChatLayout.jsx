@@ -1,4 +1,3 @@
-// chatlayout.js
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useContext } from "react";
@@ -579,7 +578,8 @@ export default function ChatLayout({ user, channelId, logout }) {
                     </span>
                     <span className="text-xs opacity-70">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                      {msg.updatedAt && " (edited)"}
+                      {/* BARIS YANG DIPERBAIKI: */}
+                      {msg.isEdited && " (edited)"}
                     </span>
                   </div>
                   {msg.image && (
