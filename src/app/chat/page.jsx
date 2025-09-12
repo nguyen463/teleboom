@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "@/components/ChannelSelector";
 import ChatLayout from "@/components/ChatLayout";
-import { useAuth } from "@/utils/auth";
-import { useTheme } from "@/components/ThemeContext";
+import { useAuth } from "../../utils/auth";
+import { useTheme } from "../../components/ThemeContext";
 
 // Komponen utama yang menampung semua logika klien
 function ChatContainer() {
