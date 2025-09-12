@@ -9,7 +9,7 @@ import "react-toastify/dist/ReactToastify.css";
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
 export default function ChatLayout({ user, channelId, logout }) {
-  // State declarations remain the same
+  // State declarations
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -36,7 +36,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
-  // Theme management - now only applies to chat room
+  // Theme management
   useEffect(() => {
     const savedTheme = localStorage.getItem("chat-theme") || "light";
     setTheme(savedTheme);
@@ -49,7 +49,211 @@ export default function ChatLayout({ user, channelId, logout }) {
     setForceUpdate(prev => prev + 1);
   };
 
-  // Rest of the logic remains the same until the return statement
+  // Socket connection and event handlers
+  useEffect(() => {
+    if (!user || !channelId) return;
+
+    setIsLoading(true);
+    socketRef.current = io(SOCKET_URL, {
+      query: {
+        userId: user.id,
+        channelId: channelId,
+        username: user.username,
+        displayName: user.displayName || user.username
+      }
+    });
+
+    socketRef.current.on("connect", () => {
+      setConnectionStatus("connected");
+      setError(null);
+    });
+
+    socketRef.current.on("disconnect", () => {
+      setConnectionStatus("disconnected");
+    });
+
+    socketRef.current.on("connect_error", (error) => {
+      setConnectionStatus("disconnected");
+      setError("Connection failed. Trying to reconnect...");
+      console.error("Connection error:", error);
+    });
+
+    socketRef.current.on("messages", (data) => {
+      setMessages(data.messages || []);
+      setIsLoading(false);
+    });
+
+    socketRef.current.on("newMessage", (message) => {
+      setMessages(prev => [...prev, message]);
+    });
+
+    socketRef.current.on("messageEdited", (updatedMessage) => {
+      setMessages(prev => prev.map(msg => 
+        msg._id === updatedMessage._id ? updatedMessage : msg
+      ));
+    });
+
+    socketRef.current.on("messageDeleted", (deletedMessageId) => {
+      setMessages(prev => prev.filter(msg => msg._id !== deletedMessageId));
+    });
+
+    socketRef.current.on("onlineUsers", (users) => {
+      setOnlineUsers(users);
+    });
+
+    socketRef.current.on("userTyping", (typingData) => {
+      setTypingUsers(typingData.users || []);
+    });
+
+    socketRef.current.on("error", (errorMsg) => {
+      toast.error(errorMsg);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, [user, channelId]);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Handle typing indicator
+  const handleTyping = useCallback((e) => {
+    setNewMsg(e.target.value);
+    
+    if (socketRef.current) {
+      socketRef.current.emit("typing", {
+        userId: user.id,
+        channelId: channelId
+      });
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        socketRef.current.emit("stopTyping", {
+          userId: user.id,
+          channelId: channelId
+        });
+      }, 1000);
+    }
+  }, [user, channelId]);
+
+  // Send message
+  const sendMessage = useCallback(() => {
+    if ((!newMsg.trim() && !selectedImage) || !socketRef.current) return;
+
+    socketRef.current.emit("sendMessage", {
+      text: newMsg,
+      channelId: channelId,
+      senderId: user.id,
+      senderName: user.displayName || user.username
+    });
+
+    setNewMsg("");
+    setSelectedImage(null);
+    setImagePreview(null);
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, [newMsg, selectedImage, channelId, user]);
+
+  // Handle image selection
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size should be less than 5MB");
+      return;
+    }
+
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle edit message
+  const handleEdit = (message) => {
+    setEditingId(message._id);
+    setEditText(message.text);
+  };
+
+  // Save edited message
+  const saveEdit = useCallback(() => {
+    if (!editText.trim() || !socketRef.current) return;
+
+    socketRef.current.emit("editMessage", {
+      messageId: editingId,
+      newText: editText,
+      channelId: channelId,
+      userId: user.id
+    });
+
+    setEditingId(null);
+    setEditText("");
+  }, [editText, editingId, channelId, user]);
+
+  // Handle delete message
+  const handleDelete = useCallback((messageId) => {
+    if (!socketRef.current) return;
+
+    if (window.confirm("Are you sure you want to delete this message?")) {
+      socketRef.current.emit("deleteMessage", {
+        messageId: messageId,
+        channelId: channelId,
+        userId: user.id
+      });
+    }
+  }, [channelId, user]);
+
+  // Load more messages
+  const loadMoreMessages = useCallback(() => {
+    if (!hasMore || isLoading || !socketRef.current) return;
+
+    setIsLoading(true);
+    socketRef.current.emit("loadMessages", {
+      channelId: channelId,
+      page: page + 1,
+      limit: 20
+    });
+
+    socketRef.current.once("messagesLoaded", (data) => {
+      setMessages(prev => [...data.messages, ...prev]);
+      setPage(prev => prev + 1);
+      setHasMore(data.hasMore);
+      setIsLoading(false);
+    });
+  }, [hasMore, isLoading, page, channelId]);
+
+  // Handle scroll for infinite loading
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop === 0 && hasMore) {
+        loadMoreMessages();
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [loadMoreMessages, hasMore]);
 
   return (
     <div className={`flex flex-col h-screen font-sans transition-colors duration-300 ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
@@ -206,7 +410,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       <header className="chat-header p-4 flex justify-between items-center shadow-md">
         <div className="flex items-center space-x-2">
           <div className="flex flex-col">
-            <span className="font-semibold">Hi, {userDisplayName}</span>
+            <span className="font-semibold">Hi, {user?.displayName || user?.username || 'User'}</span>
             <span className="text-xs opacity-85 flex items-center">
               <span className={`status-dot ${connectionStatus === 'connected' ? 'connected' : connectionStatus === 'connecting' ? 'connecting' : 'disconnected'}`}></span>
               {connectionStatus}
@@ -342,7 +546,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                       </span>
                       <span className="text-xs opacity-70">
                         {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                        {msg.updatedAt && " (edited)"}
+                        {msg.isEdited && " (edited)"}
                       </span>
                     </div>
                     {msg.image && (
