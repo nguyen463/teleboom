@@ -4,7 +4,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@400;500;700&family=Geist+Mono:wght@400&display=swap');
 
-:root {
+:root, [data-theme="light"] {
   --background: #ffffff;
   --foreground: #171717;
   --primary: #3b82f6;
@@ -24,8 +24,28 @@
   --ring: #3b82f6;
 }
 
+[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fef2f2;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --card: #0a0a0a;
+  --card-foreground: #ededed;
+  --border: #262626;
+  --input: #262626;
+  --ring: #3b82f6;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --background: #0a0a0a;
     --foreground: #ededed;
     --primary: #3b82f6;
@@ -69,4 +89,15 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary);
+}
+
+/* Style untuk ToastContainer */
+.Toastify__toast {
+  background: var(--card) !important;
+  color: var(--card-foreground) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.Toastify__progress-bar {
+  background: var(--primary) !important;
 }
