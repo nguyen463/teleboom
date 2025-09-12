@@ -68,19 +68,57 @@ export default function ChatLayout({ user, channelId, logout }) {
     }
   }, [channelId]);
 
+  // Fungsi normalisasi yang lebih aman
   const normalizeMessage = useCallback(
     (msg) => {
-      const senderIdStr = msg.senderId?._id 
-        ? msg.senderId._id.toString() 
-        : (typeof msg.senderId === 'string' ? msg.senderId : '');
+      if (!msg) return null;
       
-      return {
-        ...msg,
-        _id: msg._id?.toString() || Math.random().toString(),
-        senderId: senderIdStr,
-        channelId: msg.channelId?.toString() || "",
-        senderName: msg.senderId?.displayName || msg.senderId?.username || "Unknown"
-      };
+      try {
+        // Handle berbagai format senderId
+        let senderIdStr = '';
+        if (msg.senderId) {
+          if (typeof msg.senderId === 'object' && msg.senderId._id) {
+            senderIdStr = msg.senderId._id.toString();
+          } else if (typeof msg.senderId === 'string') {
+            senderIdStr = msg.senderId;
+          } else if (typeof msg.senderId === 'number') {
+            senderIdStr = msg.senderId.toString();
+          }
+        }
+        
+        // Handle berbagai format channelId
+        let channelIdStr = '';
+        if (msg.channelId) {
+          if (typeof msg.channelId === 'object' && msg.channelId.toString) {
+            channelIdStr = msg.channelId.toString();
+          } else if (typeof msg.channelId === 'string') {
+            channelIdStr = msg.channelId;
+          } else if (typeof msg.channelId === 'number') {
+            channelIdStr = msg.channelId.toString();
+          }
+        }
+        
+        // Handle senderName
+        let senderName = "Unknown";
+        if (msg.senderId) {
+          if (typeof msg.senderId === 'object') {
+            senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
+          } else if (msg.senderName) {
+            senderName = msg.senderName;
+          }
+        }
+        
+        return {
+          ...msg,
+          _id: msg._id ? msg._id.toString() : Math.random().toString(),
+          senderId: senderIdStr,
+          channelId: channelIdStr,
+          senderName: senderName
+        };
+      } catch (error) {
+        console.error("Error normalizing message:", error, msg);
+        return null;
+      }
     },
     []
   );
@@ -125,7 +163,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           setError(response.error);
           setIsLoading(false);
         } else if (Array.isArray(response)) {
-          const normalizedMessages = response.map(normalizeMessage);
+          const normalizedMessages = response.map(normalizeMessage).filter(msg => msg !== null);
           setMessages(normalizedMessages);
           setPage(0);
           setHasMore(response.length === 20);
@@ -153,51 +191,78 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     socket.on("newMessage", (msg) => {
-      if (msg.channelId.toString() === channelId) {
-        const container = messagesContainerRef.current;
-        const isScrolledToBottom = container && 
-          (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
-        
-        setMessages((prev) => [...prev, normalizeMessage(msg)]);
-        
-        if (isScrolledToBottom) {
-          setTimeout(() => scrollToBottom(), 100);
+      try {
+        if (msg && msg.channelId && msg.channelId.toString() === channelId) {
+          const container = messagesContainerRef.current;
+          const isScrolledToBottom = container && 
+            (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
+          
+          const normalizedMsg = normalizeMessage(msg);
+          if (normalizedMsg) {
+            setMessages((prev) => [...prev, normalizedMsg]);
+            
+            if (isScrolledToBottom) {
+              setTimeout(() => scrollToBottom(), 100);
+            }
+          }
         }
+      } catch (error) {
+        console.error("Error processing newMessage:", error, msg);
       }
     });
 
     socket.on("editMessage", (msg) => {
-      if (msg.channelId.toString() === channelId) {
-        setMessages((prev) =>
-          prev.map((m) => (m._id === msg._id ? normalizeMessage(msg) : m))
-        );
-        setEditingId(null);
-        setEditText("");
+      try {
+        if (msg && msg.channelId && msg.channelId.toString() === channelId) {
+          const normalizedMsg = normalizeMessage(msg);
+          if (normalizedMsg) {
+            setMessages((prev) =>
+              prev.map((m) => (m._id === normalizedMsg._id ? normalizedMsg : m))
+            );
+            setEditingId(null);
+            setEditText("");
+          }
+        }
+      } catch (error) {
+        console.error("Error processing editMessage:", error, msg);
       }
     });
 
     socket.on("deleteMessage", (id) => {
-      setMessages((prev) => prev.filter((m) => m._id !== id.toString()));
+      try {
+        if (id) {
+          setMessages((prev) => prev.filter((m) => m._id !== id.toString()));
+        }
+      } catch (error) {
+        console.error("Error processing deleteMessage:", error, id);
+      }
     });
 
     socket.on("online_users", (users) => {
-      setOnlineUsers(users);
+      if (Array.isArray(users)) {
+        setOnlineUsers(users);
+      }
     });
 
     socket.on("userTyping", (userData) => {
-      if (userData.userId !== user.id) {
-        setTypingUsers((prev) => {
-          const filtered = prev.filter((u) => u.userId !== userData.userId);
-          return userData.isTyping ? [...filtered, userData] : filtered;
-        });
+      try {
+        if (userData && userData.userId !== user.id) {
+          setTypingUsers((prev) => {
+            const filtered = prev.filter((u) => u.userId !== userData.userId);
+            return userData.isTyping ? [...filtered, userData] : filtered;
+          });
+        }
+      } catch (error) {
+        console.error("Error processing userTyping:", error, userData);
       }
     });
 
     socket.on("error", (errorMsg) => {
-      toast.error(`Error: ${errorMsg.message || errorMsg}`);
-      if (errorMsg.includes("authentication") || errorMsg.includes("token")) {
+      const message = errorMsg?.message || errorMsg || "Unknown error";
+      toast.error(`Error: ${message}`);
+      if (message.includes("authentication") || message.includes("token")) {
         logout();
-      } else if (errorMsg.includes("channel")) {
+      } else if (message.includes("channel")) {
         router.push("/channels");
       }
     });
@@ -228,7 +293,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           }
           
           if (Array.isArray(response)) {
-            const newMessages = response.map(normalizeMessage);
+            const newMessages = response.map(normalizeMessage).filter(msg => msg !== null);
             setMessages((prev) => [...newMessages, ...prev]);
             setHasMore(response.length === 20);
             setPage((prev) => prev + 1);
@@ -510,8 +575,16 @@ export default function ChatLayout({ user, channelId, logout }) {
           </div>
         ) : (
           messages.map((msg) => {
-            const isOwn = user?.id && msg.senderId && 
-              msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
+            // Penanganan error untuk pengecekan kepemilikan pesan
+            let isOwn = false;
+            try {
+              isOwn = user?.id && msg.senderId && 
+                msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
+            } catch (error) {
+              console.error("Error checking message ownership:", error, msg, user);
+              isOwn = false;
+            }
+            
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
