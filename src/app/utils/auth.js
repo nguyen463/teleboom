@@ -45,7 +45,6 @@ api.interceptors.response.use(
   }
 );
 
-// Buat Socket.IO instance (opsional, tapi disarankan untuk sinkronisasi)
 const socket = io(SOCKET_URL, {
   autoConnect: false,
   reconnection: true,
@@ -66,6 +65,8 @@ export const useAuth = () => {
 
   const checkAuth = async () => {
     const token = sessionStorage.getItem("chat-app-token");
+    console.log("Memeriksa otentikasi. Token ditemukan:", !!token);
+
     if (!token) {
       setUser(null);
       setLoading(false);
@@ -73,42 +74,38 @@ export const useAuth = () => {
     }
 
     try {
-      // Pake instance api (auto-header) untuk validasi
       const response = await api.get("/api/auth/validate");
       
-      // Ambil data user dari respons API, ini lebih akurat dari localStorage
       const validatedUser = response.data.user || response.data;
-      
+      console.log("Validasi berhasil. Data pengguna dari API:", validatedUser);
+
       if (response.data.valid && validatedUser && validatedUser._id) {
-        // Gabungkan data yang divalidasi dengan token
-        // Gunakan _id yang sudah ada dari respons API
         const userWithId = { ...validatedUser, id: validatedUser._id, token };
         setUser(userWithId);
-        
-        // Simpan data user yang lengkap ke sessionStorage untuk sinkronisasi
         sessionStorage.setItem("chat-app-user", JSON.stringify(userWithId));
-        
-        // Sambungkan socket setelah autentikasi berhasil
         connectSocket(token);
       } else {
+        console.log("Validasi gagal, menghapus token.");
         sessionStorage.removeItem("chat-app-token");
         sessionStorage.removeItem("chat-app-user");
         setUser(null);
       }
     } catch (err) {
-      console.warn("Auth validation failed:", err.response?.status || err.message);
+      console.error("Kesalahan validasi autentikasi:", err);
+      // Pindahkan ke blok finally agar loading selalu false
       sessionStorage.removeItem("chat-app-token");
       sessionStorage.removeItem("chat-app-user");
       setUser(null);
       router.push("/login");
     } finally {
+      // Pastikan loading selalu diatur ke false setelah pemeriksaan selesai
       setLoading(false);
     }
   };
 
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [router]);
 
   const logout = () => {
     sessionStorage.removeItem("chat-app-token");
