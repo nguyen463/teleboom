@@ -1,5 +1,4 @@
 // src/app/layout.js
-import "tailwindcss/tailwind.css";
 import localFont from 'next/font/local';
 import "./globals.css";
 
