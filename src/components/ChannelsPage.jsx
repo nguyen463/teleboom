@@ -5,7 +5,6 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "@/components/ChannelSelector";
 import ChatLayout from "@/components/ChatLayout";
 import { useAuth } from "../utils/auth";
-import { useTheme } from "@/components/ThemeContext";
 
 export default function ChannelsPage() {
   const { user, loading: authLoading, api } = useAuth();
@@ -138,6 +137,27 @@ export default function ChannelsPage() {
     router.push("/login");
   }, [router]);
 
+  // Tambahkan fungsi untuk menghapus channel
+  const handleDeleteChannel = useCallback(async (channelId) => {
+    if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
+      try {
+        await api.delete(`/api/channels/${channelId}`);
+        // Jika berhasil, perbarui daftar channel secara lokal
+        setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== channelId));
+        
+        // Alihkan pengguna jika channel yang aktif dihapus
+        if (selectedChannelId === channelId) {
+          const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
+          const newSelectedId = newChannels[0]?._id || newChannels[0]?.id || null;
+          handleSelectChannel(newSelectedId);
+        }
+      } catch (err) {
+        console.error("Gagal menghapus channel:", err);
+        alert("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
+      }
+    }
+  }, [api, channels, selectedChannelId, handleSelectChannel]);
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -165,6 +185,7 @@ export default function ChannelsPage() {
           onCreateChannel={handleCreateChannel}
           onLogout={handleLogout}
           error={error}
+          onDeleteChannel={handleDeleteChannel} // Teruskan prop ini
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
