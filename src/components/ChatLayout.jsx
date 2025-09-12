@@ -558,6 +558,8 @@ export default function ChatLayout({ user, channelId, logout }) {
           messages.map((msg) => {
             let isOwn = false;
             try {
+              // Tambahkan console.log untuk debugging
+              console.log('user.id:', user.id, '| msg.senderId:', msg.senderId);
               isOwn = user?.id && msg.senderId &&
                 msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
             } catch (error) {
@@ -578,7 +580,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                     </span>
                     <span className="text-xs opacity-70">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                      {/* BARIS YANG DIPERBAIKI: */}
                       {msg.isEdited && " (edited)"}
                     </span>
                   </div>
