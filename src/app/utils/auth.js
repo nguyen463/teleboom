@@ -65,9 +65,9 @@ export const useAuth = () => {
 
   const checkAuth = async () => {
     const token = sessionStorage.getItem("chat-app-token");
-    console.log("Memeriksa otentikasi. Token ditemukan:", !!token);
+    const storedUser = sessionStorage.getItem("chat-app-user");
 
-    if (!token) {
+    if (!token || !storedUser) {
       setUser(null);
       setLoading(false);
       return;
@@ -76,29 +76,29 @@ export const useAuth = () => {
     try {
       const response = await api.get("/api/auth/validate");
       
-      const validatedUser = response.data.user || response.data;
-      console.log("Validasi berhasil. Data pengguna dari API:", validatedUser);
-
-      if (response.data.valid && validatedUser && validatedUser._id) {
-        const userWithId = { ...validatedUser, id: validatedUser._id, token };
+      if (response.data.valid) {
+        // Jika token valid, gunakan data user yang sudah disimpan.
+        const parsedUser = JSON.parse(storedUser);
+        const userWithId = { ...parsedUser, id: parsedUser._id, token };
         setUser(userWithId);
-        sessionStorage.setItem("chat-app-user", JSON.stringify(userWithId));
+        
+        // Sambungkan socket setelah autentikasi berhasil
         connectSocket(token);
       } else {
-        console.log("Validasi gagal, menghapus token.");
+        // Jika token tidak valid (meski ada), hapus.
         sessionStorage.removeItem("chat-app-token");
         sessionStorage.removeItem("chat-app-user");
         setUser(null);
+        router.push("/login");
       }
     } catch (err) {
-      console.error("Kesalahan validasi autentikasi:", err);
-      // Pindahkan ke blok finally agar loading selalu false
+      // Tangani error API (misal 401, 500)
+      console.warn("Auth validation failed:", err.response?.status || err.message);
       sessionStorage.removeItem("chat-app-token");
       sessionStorage.removeItem("chat-app-user");
       setUser(null);
       router.push("/login");
     } finally {
-      // Pastikan loading selalu diatur ke false setelah pemeriksaan selesai
       setLoading(false);
     }
   };
