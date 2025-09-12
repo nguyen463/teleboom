@@ -5,9 +5,10 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "@/components/ChannelSelector";
 import ChatLayout from "@/components/ChatLayout";
 import { useAuth } from "../utils/auth";
+import { useTheme } from "@/components/ThemeContext";
 
 export default function ChannelsPage() {
-  const { user, loading, api } = useAuth();  // Pake api instance dari useAuth
+  const { user, loading: authLoading, api } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -19,7 +20,33 @@ export default function ChannelsPage() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
-  // Fetch channels
+  // Implementasi real-time listener untuk channel
+  // Asumsi: Backend menggunakan Socket.IO dan emit event "channelCreated"
+  // Jika menggunakan Firestore, ganti dengan onSnapshot
+  useEffect(() => {
+    if (!user || !api?.socket) {
+      return;
+    }
+
+    const socket = api.socket;
+    
+    // Listener untuk pembaruan channel
+    socket.on("channelCreated", (newChannel) => {
+      setChannels(prev => [...prev, newChannel]);
+    });
+    
+    // Panggil fetchChannels saat user dan socket siap
+    if (!channels.length) {
+      fetchChannels();
+    }
+    
+    // Membersihkan listener saat komponen di-unmount
+    return () => {
+      socket.off("channelCreated");
+    };
+  }, [user, api, channels.length]);
+  
+  // Fungsi fetchChannels diubah menjadi fetch saja, bukan listener
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
 
@@ -27,9 +54,9 @@ export default function ChannelsPage() {
     setError(null);
 
     try {
-      const response = await api.get("/api/channels"); // Pake axios instance
+      const response = await api.get("/api/channels");
+      const data = response.data || { channels: [] };
       let channelsData = [];
-      const data = response.data || { channels: [] }; // Fallback kalo null
 
       if (Array.isArray(data)) {
         channelsData = data;
@@ -43,7 +70,6 @@ export default function ChannelsPage() {
 
       setChannels(channelsData || []);
 
-      // Auto-select channel
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(ch => ch._id === id || ch.id === id);
         if (channelExists && id && id !== "undefined") {
@@ -56,30 +82,28 @@ export default function ChannelsPage() {
       console.error("Error fetching channels:", err);
       setError("Gagal memuat channels. Silakan coba lagi.");
       if (err.response?.status === 401) {
-        router.push("/login"); // Auto-logout kalo unauthorized
+        router.push("/login");
       }
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router]);
+  }, [user, id, api, router, channels.length, selectedChannelId]);
 
-  // Call fetch setelah user ready
   useEffect(() => {
-    if (user && !channels.length) {
+    if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
-  }, [user, fetchChannels]);
+  }, [user, fetchChannels, channels.length, channelsLoading]);
 
-  // Sinkronkan selectedChannelId dengan query param
   useEffect(() => {
     if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
-      setSelectedChannelId(id);
+      handleSelectChannel(id);
     }
-  }, [id, selectedChannelId]);
+  }, [id, selectedChannelId, handleSelectChannel]);
 
   const handleSelectChannel = useCallback(
     (channelId) => {
-      if (!channelId || channelId === "undefined") return; // Guard invalid ID
+      if (!channelId || channelId === "undefined") return;
       manualSelectionRef.current = true;
       setSelectedChannelId(channelId);
 
@@ -109,30 +133,31 @@ export default function ChannelsPage() {
   }, [router]);
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("chat-app-user");
-    localStorage.removeItem("chat-app-token");
+    sessionStorage.removeItem("chat-app-user");
+    sessionStorage.removeItem("chat-app-token");
     router.push("/login");
   }, [router]);
 
-  if (loading) {
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
-        <p className="text-gray-500">Memeriksa autentikasi...</p>
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+        <p className="text-foreground">Memeriksa autentikasi...</p>
       </div>
     );
   }
 
   if (!user) {
-    return null; // Middleware handle redirect
+    return null;
   }
 
   return (
-    <div className="flex h-screen bg-white">
-      <div className="w-1/4 min-w-64 bg-gray-100 border-r border-gray-200">
+    <div className="flex h-screen bg-background text-foreground">
+      {/* Ganti kelas hardcode dengan kelas tema */}
+      <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
-          channels={channels || []} // Guard undefined
+          channels={channels || []}
           loading={channelsLoading}
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
@@ -142,11 +167,11 @@ export default function ChannelsPage() {
           error={error}
         />
       </div>
-      <div className="flex-1 flex flex-col" role="main" aria-label="Chat area">
+      <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
         <Suspense
           fallback={
-            <div className="flex items-center justify-center h-full bg-gray-50">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <div className="flex items-center justify-center h-full bg-background">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           }
         >
@@ -158,16 +183,16 @@ export default function ChannelsPage() {
               key={selectedChannelId}
             />
           ) : (
-            <div className="flex items-center justify-center h-full bg-gray-50">
+            <div className="flex items-center justify-center h-full bg-background">
               <div className="text-center p-6 max-w-md">
                 {channelsLoading ? (
                   <>
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p className="text-gray-500">Memuat channels...</p>
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-foreground">Memuat channels...</p>
                   </>
                 ) : error ? (
                   <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-500">
+                    <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-8 w-8"
@@ -183,17 +208,17 @@ export default function ChannelsPage() {
                         />
                       </svg>
                     </div>
-                    <p className="text-red-500 mb-2">{error}</p>
+                    <p className="text-destructive-foreground mb-2">{error}</p>
                     <button
                       onClick={refetchChannels}
-                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                       Coba Lagi
                     </button>
                   </>
                 ) : channels.length === 0 ? (
                   <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center text-gray-400">
+                    <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-8 w-8"
@@ -209,17 +234,17 @@ export default function ChannelsPage() {
                         />
                       </svg>
                     </div>
-                    <p className="text-gray-500 mb-2">Belum ada channel</p>
+                    <p className="text-foreground mb-2">Belum ada channel</p>
                     <button
                       onClick={handleCreateChannel}
-                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                       Buat Channel Pertama
                     </button>
                   </>
                 ) : (
                   <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-500">
+                    <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         className="h-8 w-8"
@@ -235,7 +260,7 @@ export default function ChannelsPage() {
                         />
                       </svg>
                     </div>
-                    <p className="text-gray-500">Pilih channel untuk memulai obrolan</p>
+                    <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
                   </>
                 )}
               </div>
