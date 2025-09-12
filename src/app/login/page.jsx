@@ -12,6 +12,7 @@ const API_URL =
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
@@ -21,17 +22,25 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     setError("");
     try {
       const response = await axios.post(`${API_URL}/api/auth/login`, formData);
       const { token, user } = response.data;
 
-      localStorage.setItem("chat-app-token", token);
-      localStorage.setItem("chat-user", JSON.stringify(user));
+      // PENTING: Mengganti localStorage dengan sessionStorage
+      sessionStorage.setItem("chat-app-token", token);
+      sessionStorage.setItem("chat-app-user", JSON.stringify(user));
+
+      console.log("Token berhasil disimpan di sessionStorage.");
+      console.log("Data user yang disimpan:", sessionStorage.getItem("chat-app-user"));
 
       router.push("/chat");
     } catch (err) {
-      setError(err.response?.data?.message || "Login gagal. Periksa kembali data Anda.");
+      console.error("Kesalahan saat login:", err);
+      setError(err.response?.data?.message || "Login gagal. Periksa kembali email dan password Anda.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -62,9 +71,12 @@ export default function LoginPage() {
           />
           <button
             type="submit"
-            className="w-full py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition"
+            disabled={loading}
+            className={`w-full py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition ${
+              loading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
           >
-            Log In
+            {loading ? "Memproses..." : "Log In"}
           </button>
         </form>
         {error && <p className="text-sm text-center text-red-600">{error}</p>}
