@@ -46,7 +46,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
     document.documentElement.setAttribute("data-theme", newTheme);
-    setForceUpdate(prev => prev + 1);
+    setForceUpdate((prev) => prev + 1);
   };
 
   useEffect(() => {
@@ -61,67 +61,61 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTypingUsers([]);
     setError(null);
     setIsLoading(true);
-    
+
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
   }, [channelId]);
 
-  // Fungsi normalisasi yang lebih aman
-  const normalizeMessage = useCallback(
-    (msg) => {
-      if (!msg) return null;
-      
-      try {
-        // Handle berbagai format senderId
-        let senderIdStr = '';
-        if (msg.senderId) {
-          if (typeof msg.senderId === 'object' && msg.senderId._id) {
-            senderIdStr = msg.senderId._id.toString();
-          } else if (typeof msg.senderId === 'string') {
-            senderIdStr = msg.senderId;
-          } else if (typeof msg.senderId === 'number') {
-            senderIdStr = msg.senderId.toString();
-          }
+  // Fungsi normalisasi message yang lebih robust
+  const normalizeMessage = useCallback((msg) => {
+    if (!msg) return null;
+
+    try {
+      let senderIdStr = "";
+      if (msg.senderId) {
+        if (typeof msg.senderId === "object" && msg.senderId._id) {
+          senderIdStr = msg.senderId._id.toString();
+        } else if (typeof msg.senderId === "string") {
+          senderIdStr = msg.senderId;
+        } else if (typeof msg.senderId === "number") {
+          senderIdStr = msg.senderId.toString();
         }
-        
-        // Handle berbagai format channelId
-        let channelIdStr = '';
-        if (msg.channelId) {
-          if (typeof msg.channelId === 'object' && msg.channelId.toString) {
-            channelIdStr = msg.channelId.toString();
-          } else if (typeof msg.channelId === 'string') {
-            channelIdStr = msg.channelId;
-          } else if (typeof msg.channelId === 'number') {
-            channelIdStr = msg.channelId.toString();
-          }
-        }
-        
-        // Handle senderName
-        let senderName = "Unknown";
-        if (msg.senderId) {
-          if (typeof msg.senderId === 'object') {
-            senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
-          } else if (msg.senderName) {
-            senderName = msg.senderName;
-          }
-        }
-        
-        return {
-          ...msg,
-          _id: msg._id ? msg._id.toString() : Math.random().toString(),
-          senderId: senderIdStr,
-          channelId: channelIdStr,
-          senderName: senderName
-        };
-      } catch (error) {
-        console.error("Error normalizing message:", error, msg);
-        return null;
       }
-    },
-    []
-  );
+
+      let channelIdStr = "";
+      if (msg.channelId) {
+        if (typeof msg.channelId === "object" && msg.channelId.toString) {
+          channelIdStr = msg.channelId.toString();
+        } else if (typeof msg.channelId === "string") {
+          channelIdStr = msg.channelId;
+        } else if (typeof msg.channelId === "number") {
+          channelIdStr = msg.channelId.toString();
+        }
+      }
+
+      let senderName = "Unknown";
+      if (msg.senderId) {
+        if (typeof msg.senderId === "object") {
+          senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
+        } else if (msg.senderName) {
+          senderName = msg.senderName;
+        }
+      }
+
+      return {
+        ...msg,
+        _id: msg._id ? msg._id.toString() : Math.random().toString(),
+        senderId: senderIdStr,
+        channelId: channelIdStr,
+        senderName: senderName,
+      };
+    } catch (error) {
+      console.error("Error normalizing message:", error, msg);
+      return null;
+    }
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -129,7 +123,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   useEffect(() => {
     if (!user?.token || !channelId) {
-      setError("Token or channelId not found. Redirecting...");
+      setError("Token atau channelId tidak ditemukan. Mengalihkan...");
       setIsLoading(false);
       setTimeout(() => router.push("/channels"), 2000);
       return;
@@ -151,63 +145,64 @@ export default function ChatLayout({ user, channelId, logout }) {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      setConnectionStatus("connected");
+      setConnectionStatus("terhubung");
       setError(null);
       setIsLoading(true);
-      console.log("🔗 Socket connected, ID:", socket.id);
+      console.log("🔗 Socket terhubung, ID:", socket.id);
       socket.emit("joinChannel", channelId);
-      
+
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
         if (response && response.error) {
           toast.error(response.error);
           setError(response.error);
           setIsLoading(false);
         } else if (Array.isArray(response)) {
-          const normalizedMessages = response.map(normalizeMessage).filter(msg => msg !== null);
+          const normalizedMessages = response.map(normalizeMessage).filter((msg) => msg !== null);
           setMessages(normalizedMessages);
           setPage(0);
           setHasMore(response.length === 20);
           setIsLoading(false);
           setTimeout(() => scrollToBottom(), 100);
         } else {
-          toast.error("Invalid response format");
-          setError("Invalid response format");
+          toast.error("Format respons tidak valid");
+          setError("Format respons tidak valid");
           setIsLoading(false);
         }
       });
     });
 
     socket.on("disconnect", (reason) => {
-      setConnectionStatus("disconnected");
-      setError("Disconnected from server. Attempting to reconnect...");
-      console.log("🔍 Socket disconnected:", reason);
+      setConnectionStatus("terputus");
+      setError("Terputus dari server. Mencoba menghubungkan kembali...");
+      console.log("🔍 Socket terputus:", reason);
     });
 
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
-      setError("Connection failed: " + err.message);
+      setError("Koneksi gagal: " + err.message);
       setIsLoading(false);
-      toast.error("Connection failed: " + err.message);
+      toast.error("Koneksi gagal: " + err.message);
     });
 
     socket.on("newMessage", (msg) => {
       try {
         if (msg && msg.channelId && msg.channelId.toString() === channelId) {
           const container = messagesContainerRef.current;
-          const isScrolledToBottom = container && 
-            (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
-          
+          const isScrolledToBottom =
+            container &&
+            container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
-            
+
             if (isScrolledToBottom) {
               setTimeout(() => scrollToBottom(), 100);
             }
           }
         }
       } catch (error) {
-        console.error("Error processing newMessage:", error, msg);
+        console.error("Error memproses newMessage:", error, msg);
       }
     });
 
@@ -224,7 +219,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           }
         }
       } catch (error) {
-        console.error("Error processing editMessage:", error, msg);
+        console.error("Error memproses editMessage:", error, msg);
       }
     });
 
@@ -234,7 +229,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           setMessages((prev) => prev.filter((m) => m._id !== id.toString()));
         }
       } catch (error) {
-        console.error("Error processing deleteMessage:", error, id);
+        console.error("Error memproses deleteMessage:", error, id);
       }
     });
 
@@ -253,12 +248,12 @@ export default function ChatLayout({ user, channelId, logout }) {
           });
         }
       } catch (error) {
-        console.error("Error processing userTyping:", error, userData);
+        console.error("Error memproses userTyping:", error, userData);
       }
     });
 
     socket.on("error", (errorMsg) => {
-      const message = errorMsg?.message || errorMsg || "Unknown error";
+      const message = errorMsg?.message || errorMsg || "Error tidak diketahui";
       toast.error(`Error: ${message}`);
       if (message.includes("authentication") || message.includes("token")) {
         logout();
@@ -285,19 +280,19 @@ export default function ChatLayout({ user, channelId, logout }) {
         setIsLoading(true);
         const oldScrollHeight = container.scrollHeight;
         const newSkip = (page + 1) * 20;
-        
+
         socketRef.current?.emit("getMessages", { channelId, limit: 20, skip: newSkip }, (response) => {
           if (response?.error) {
             setIsLoading(false);
             return;
           }
-          
+
           if (Array.isArray(response)) {
-            const newMessages = response.map(normalizeMessage).filter(msg => msg !== null);
+            const newMessages = response.map(normalizeMessage).filter((msg) => msg !== null);
             setMessages((prev) => [...newMessages, ...prev]);
             setHasMore(response.length === 20);
             setPage((prev) => prev + 1);
-            
+
             setTimeout(() => {
               const newScrollHeight = container.scrollHeight;
               container.scrollTop = newScrollHeight - oldScrollHeight;
@@ -340,12 +335,12 @@ export default function ChatLayout({ user, channelId, logout }) {
     if (selectedImage) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        messageData.image = e.target.result;
+        messageData.image = e.target.result; // Base64 image
         socketRef.current.emit("sendMessage", messageData, onMessageSent);
       };
       reader.onerror = () => {
-        setError("Failed to read image file.");
-        toast.error("Failed to read image file.");
+        setError("Gagal membaca file image.");
+        toast.error("Gagal membaca file image.");
         setIsUploading(false);
       };
       reader.readAsDataURL(selectedImage);
@@ -358,21 +353,21 @@ export default function ChatLayout({ user, channelId, logout }) {
     (e) => {
       const value = e.target.value;
       setNewMsg(value);
-      
+
       if (!socketRef.current) return;
-      
-      socketRef.current.emit("typing", { 
-        channelId, 
-        isTyping: value.length > 0 
+
+      socketRef.current.emit("typing", {
+        channelId,
+        isTyping: value.length > 0,
       });
-      
+
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      
+
       if (value.length > 0) {
         typingTimeoutRef.current = setTimeout(() => {
-          socketRef.current.emit("typing", { 
-            channelId, 
-            isTyping: false 
+          socketRef.current.emit("typing", {
+            channelId,
+            isTyping: false,
           });
         }, 3000);
       }
@@ -384,11 +379,11 @@ export default function ChatLayout({ user, channelId, logout }) {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      toast.error("Only image files are allowed.");
+      toast.error("Hanya file image yang diizinkan.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size too large (max 5MB).");
+      toast.error("Ukuran image terlalu besar (maks 5MB).");
       return;
     }
     setSelectedImage(file);
@@ -404,11 +399,11 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   const saveEdit = useCallback(() => {
     if (!socketRef.current || !editText.trim() || !editingId) return;
-    
-    socketRef.current.emit("editMessage", { 
-      id: editingId, 
-      text: editText, 
-      channelId 
+
+    socketRef.current.emit("editMessage", {
+      id: editingId,
+      text: editText,
+      channelId,
     }, (response) => {
       if (response?.error) {
         toast.error(response.error);
@@ -422,11 +417,11 @@ export default function ChatLayout({ user, channelId, logout }) {
   const handleDelete = useCallback(
     (id) => {
       if (!socketRef.current) return;
-      
-      if (window.confirm("Are you sure you want to delete this message?")) {
-        socketRef.current.emit("deleteMessage", { 
-          id, 
-          channelId 
+
+      if (window.confirm("Yakin ingin menghapus pesan ini?")) {
+        socketRef.current.emit("deleteMessage", {
+          id,
+          channelId,
         }, (response) => {
           if (response?.error) {
             toast.error(response.error);
@@ -442,15 +437,15 @@ export default function ChatLayout({ user, channelId, logout }) {
   if (!channelId) {
     return (
       <div className="p-4 text-foreground">
-        Invalid channel. Redirecting...
+        Channel tidak valid. Mengalihkan...
       </div>
     );
   }
 
   return (
     <div key={`${theme}-${forceUpdate}`} className="flex flex-col h-screen bg-background text-foreground font-sans">
-      <ToastContainer 
-        position="top-right" 
+      <ToastContainer
+        position="top-right"
         autoClose={3000}
         theme={theme}
         toastClassName="bg-background text-foreground border-border border"
@@ -458,7 +453,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       />
       <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
-          <span className="hidden md:inline">Hi, {userDisplayName}</span>
+          <span className="hidden md:inline">Hai, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
           <span className="text-sm opacity-75">Channel: {channelId}</span>
         </div>
@@ -488,13 +483,13 @@ export default function ChatLayout({ user, channelId, logout }) {
                 onClick={() => setShowOnlineUsers(!showOnlineUsers)}
                 className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
               >
-                {showOnlineUsers ? "Hide Online Users" : "Show Online Users"}
+                {showOnlineUsers ? "Sembunyikan Pengguna Online" : "Tampilkan Pengguna Online"}
               </button>
               <button
                 onClick={toggleTheme}
                 className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
               >
-                Switch to {theme === "light" ? "Dark" : "Light"} Mode
+                Ganti ke Mode {theme === "light" ? "Gelap" : "Terang"}
               </button>
               <button
                 onClick={() => {
@@ -502,7 +497,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                 }}
                 className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
               >
-                Logout
+                Keluar
               </button>
             </div>
           )}
@@ -511,7 +506,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
       {showOnlineUsers && (
         <div className="bg-muted p-4">
-          <h3 className="font-bold">Online Users ({onlineUsers.length})</h3>
+          <h3 className="font-bold">Pengguna Online ({onlineUsers.length})</h3>
           <ul className="mt-2 space-y-1">
             {onlineUsers.map((u) => (
               <li key={u.userId} className="text-sm">
@@ -570,21 +565,23 @@ export default function ChatLayout({ user, channelId, logout }) {
                   d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
                 />
               </svg>
-              <p>No messages in this channel yet. Start the conversation!</p>
+              <p>Tidak ada pesan di channel ini. Mulai percakapan!</p>
             </div>
           </div>
         ) : (
           messages.map((msg) => {
-            // Penanganan error untuk pengecekan kepemilikan pesan
             let isOwn = false;
             try {
-              isOwn = user?.id && msg.senderId && 
-                msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
+              isOwn =
+                user?.id &&
+                msg.senderId &&
+                msg.senderId.toString() ===
+                  (typeof user.id === "string" ? user.id : user.id.toString());
             } catch (error) {
-              console.error("Error checking message ownership:", error, msg, user);
+              console.error("Error cek kepemilikan pesan:", error, msg, user);
               isOwn = false;
             }
-            
+
             return (
               <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                 <div
@@ -594,23 +591,27 @@ export default function ChatLayout({ user, channelId, logout }) {
                 >
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-bold opacity-80">
-                      {msg.senderName || (isOwn ? "You" : "Unknown")}
+                      {msg.senderName || (isOwn ? "Anda" : "Tidak Diketahui")}
                     </span>
                     <span className="text-xs opacity-70">
                       {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("id-ID") : ""}
-                      {msg.updatedAt && " (edited)"}
+                      {msg.updatedAt && " (diedit)"}
                     </span>
                   </div>
                   {msg.image && (
                     <div className="my-2">
                       <img
                         src={msg.image}
-                        alt="Message image"
+                        alt="Image pesan"
                         className="max-w-full rounded-lg max-h-64 object-cover"
+                        onError={(e) => {
+                          e.target.src = "/placeholder-image.png"; // Fallback jika image gagal load
+                          toast.error("Gagal memuat image.");
+                        }}
                       />
                     </div>
                   )}
-                  {msg.text && <span className="block text-base">{msg.text}</span>}
+                  {msg.text && <span className="block text-base">{msg.displayText || msg.text}</span>} {/* Dukung displayText jika dari backend */}
                   {editingId === msg._id ? (
                     <div className="flex flex-col space-y-2 mt-2">
                       <input
@@ -633,7 +634,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                           onClick={saveEdit}
                           className="bg-primary px-3 py-1 rounded text-primary-foreground text-sm"
                         >
-                          Save
+                          Simpan
                         </button>
                         <button
                           onClick={() => {
@@ -642,7 +643,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                           }}
                           className="bg-muted px-3 py-1 rounded text-foreground text-sm"
                         >
-                          Cancel
+                          Batal
                         </button>
                       </div>
                     </div>
@@ -659,7 +660,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                           onClick={() => handleDelete(msg._id)}
                           className="text-xs bg-destructive text-destructive-foreground px-2 py-1 rounded hover:bg-destructive/90 transition-colors"
                         >
-                          Delete
+                          Hapus
                         </button>
                       </div>
                     )
@@ -674,7 +675,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
       {imagePreview && (
         <div className="p-4 bg-muted">
-          <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
+          <img src={imagePreview} alt="Pratinjau" className="max-h-32 rounded-lg" />
           <button
             onClick={() => {
               setSelectedImage(null);
@@ -683,7 +684,7 @@ export default function ChatLayout({ user, channelId, logout }) {
             }}
             className="mt-2 text-sm text-destructive"
           >
-            Remove Image
+            Hapus Image
           </button>
         </div>
       )}
@@ -691,7 +692,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       <div className="p-4 bg-secondary">
         {typingUsers.length > 0 && (
           <div className="text-sm text-muted-foreground mb-2">
-            {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
+            {typingUsers.map((u) => u.displayName || u.username).join(", ")} sedang mengetik...
           </div>
         )}
         <div className="flex space-x-2">
@@ -733,7 +734,7 @@ export default function ChatLayout({ user, channelId, logout }) {
               }
             }}
             className="flex-1 p-2 rounded border-border bg-background text-foreground"
-            placeholder="Type a message..."
+            placeholder="Ketik pesan..."
             disabled={isUploading}
           />
           <button
