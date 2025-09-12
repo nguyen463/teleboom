@@ -79,7 +79,20 @@ export const useAuth = () => {
       if (response.data.valid) {
         // Jika token valid, gunakan data user yang sudah disimpan.
         const parsedUser = JSON.parse(storedUser);
-        const userWithId = { ...parsedUser, id: parsedUser._id, token };
+        
+        // PERBAIKAN: Gunakan parsedUser.id, atau fallback ke _id
+        const userId = parsedUser.id || parsedUser._id;
+
+        if (!userId) {
+          // Jika ID tidak ditemukan, anggap data user korup dan hapus.
+          sessionStorage.removeItem("chat-app-token");
+          sessionStorage.removeItem("chat-app-user");
+          setUser(null);
+          router.push("/login");
+          return;
+        }
+
+        const userWithId = { ...parsedUser, id: userId, token };
         setUser(userWithId);
         
         // Sambungkan socket setelah autentikasi berhasil
