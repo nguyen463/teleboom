@@ -20,6 +20,7 @@ function ChatContainer() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
+  // Fungsi untuk mengambil data channel dari API
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
 
@@ -43,6 +44,7 @@ function ChatContainer() {
 
       setChannels(channelsData);
 
+      // Otomatis memilih channel jika ada yang dipilih di URL atau jika ini yang pertama
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(ch => ch._id === urlChannelId || ch.id === urlChannelId);
         if (channelExists && urlChannelId && urlChannelId !== "undefined") {
@@ -62,24 +64,28 @@ function ChatContainer() {
     }
   }, [user, api, urlChannelId, selectedChannelId, logout]);
 
+  // Panggil fetchChannels saat komponen dimuat atau saat user data tersedia
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
   }, [user, channels.length, channelsLoading, fetchChannels]);
 
+  // Sinkronkan selectedChannelId dengan query param saat berubah
   useEffect(() => {
     if (urlChannelId && urlChannelId !== "undefined" && urlChannelId !== selectedChannelId && !manualSelectionRef.current) {
       handleSelectChannel(urlChannelId);
     }
   }, [urlChannelId, selectedChannelId]);
 
+  // Handler saat user memilih channel
   const handleSelectChannel = useCallback(
     (channelId) => {
       if (!channelId || channelId === "undefined") return;
       manualSelectionRef.current = true;
       setSelectedChannelId(channelId);
 
+      // Perbarui URL
       const params = new URLSearchParams(searchParams.toString());
       params.set("id", channelId);
       const newUrl = `${pathname}?${params.toString()}`;
@@ -97,6 +103,15 @@ function ChatContainer() {
     router.push("/channels/new");
   }, [router]);
 
+  // PENTING: Handle pengalihan ke login jika user tidak ada
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log("Tidak ada pengguna yang terautentikasi. Mengalihkan ke halaman login...");
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  // Guard: Kalo loading, show loader. Kalo no user, return null (middleware udah handle redirect)
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
@@ -108,12 +123,14 @@ function ChatContainer() {
     );
   }
 
+  // Kembali ke null jika tidak ada user, router.push sudah berjalan
   if (!user) {
     return null;
   }
 
   return (
     <div className="flex h-screen bg-background text-foreground">
+      {/* Sidebar */}
       <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
@@ -128,98 +145,105 @@ function ChatContainer() {
         />
       </div>
       
+      {/* Chat Area - Wrap Suspense buat loading */}
       <div className="flex-1 flex flex-col" role="main">
-        {selectedChannelId ? (
-          <ChatLayout
-            user={user}
-            channelId={selectedChannelId}
-            logout={logout}
-            key={selectedChannelId}
-          />
-        ) : (
+        <Suspense fallback={
           <div className="flex items-center justify-center h-full bg-background">
-            <div className="text-center p-6 max-w-md text-foreground">
-              {channelsLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-foreground">Memuat channels...</p>
-                </>
-              ) : error ? (
-                <>
-                  <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-destructive-foreground mb-2">{error}</p>
-                  <button
-                    onClick={refetchChannels}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    Coba Lagi
-                  </button>
-                </>
-              ) : channels.length === 0 ? (
-                <>
-                  <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-foreground mb-2">Belum ada channel</p>
-                  <button
-                    onClick={handleCreateChannel}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    Buat Channel Pertama
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-8 w-8"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
-                      />
-                    </svg>
-                  </div>
-                  <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
-                </>
-              )}
-            </div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
-        )}
+        }>
+          {selectedChannelId ? (
+            <ChatLayout
+              user={user}
+              channelId={selectedChannelId}
+              logout={logout}
+              key={selectedChannelId}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full bg-background">
+              <div className="text-center p-6 max-w-md text-foreground">
+                {channelsLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-foreground">Memuat channels...</p>
+                  </>
+                ) : error ? (
+                  <>
+                    <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-destructive-foreground mb-2">{error}</p>
+                    <button
+                      onClick={refetchChannels}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      Coba Lagi
+                    </button>
+                  </>
+                ) : channels.length === 0 ? (
+                  <>
+                    <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-foreground mb-2">Belum ada channel</p>
+                    <button
+                      onClick={handleCreateChannel}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      Buat Channel Pertama
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </Suspense>
       </div>
     </div>
   );
