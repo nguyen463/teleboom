@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import ChannelSelector from "@/components/ChannelSelector";
-import ChatLayout from "@/components/ChatLayout";
+import ChannelSelector from "../../components/ChannelSelector";
+import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
