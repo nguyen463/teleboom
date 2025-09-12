@@ -35,6 +35,15 @@ export default function ChatLayout({ user, channelId, logout }) {
   const messagesContainerRef = useRef(null);
   const router = useRouter();
 
+  // Log user data untuk debugging
+  useEffect(() => {
+    console.log("User data passed to ChatLayout:", user);
+    if (!user?.id) {
+      console.warn("user.id is undefined, buttons Edit/Hapus may not appear");
+      setError("User ID tidak ditemukan. Fitur edit/hapus mungkin tidak tersedia.");
+    }
+  }, [user]);
+
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
     setTheme(savedTheme);
@@ -63,62 +72,72 @@ export default function ChatLayout({ user, channelId, logout }) {
     setIsLoading(true);
 
     if (socketRef.current) {
+      socketRef.current.emit("leaveChannel", channelId); // Pastikan leave channel sebelum disconnect
       socketRef.current.disconnect();
       socketRef.current = null;
     }
   }, [channelId]);
 
-  // Normalisasi message yang lebih robust
-  const normalizeMessage = useCallback((msg) => {
-    if (!msg) return null;
+  // Normalisasi message
+  const normalizeMessage = useCallback(
+    (msg) => {
+      if (!msg) return null;
 
-    try {
-      let senderIdStr = "";
-      if (msg.senderId) {
-        if (typeof msg.senderId === "object" && msg.senderId._id) {
-          senderIdStr = msg.senderId._id.toString();
-        } else if (typeof msg.senderId === "string") {
-          senderIdStr = msg.senderId;
-        } else if (typeof msg.senderId === "number") {
-          senderIdStr = msg.senderId.toString();
+      try {
+        let senderIdStr = "";
+        if (msg.senderId) {
+          if (typeof msg.senderId === "object" && msg.senderId._id) {
+            senderIdStr = msg.senderId._id.toString();
+          } else if (typeof msg.senderId === "string") {
+            senderIdStr = msg.senderId;
+          } else if (typeof msg.senderId === "number") {
+            senderIdStr = msg.senderId.toString();
+          }
         }
-      }
 
-      let channelIdStr = "";
-      if (msg.channelId) {
-        if (typeof msg.channelId === "object" && msg.channelId.toString) {
-          channelIdStr = msg.channelId.toString();
-        } else if (typeof msg.channelId === "string") {
-          channelIdStr = msg.channelId;
-        } else if (typeof msg.channelId === "number") {
-          channelIdStr = msg.channelId.toString();
+        let channelIdStr = "";
+        if (msg.channelId) {
+          if (typeof msg.channelId === "object" && msg.channelId.toString) {
+            channelIdStr = msg.channelId.toString();
+          } else if (typeof msg.channelId === "string") {
+            channelIdStr = msg.channelId;
+          } else if (typeof msg.channelId === "number") {
+            channelIdStr = msg.channelId.toString();
+          }
         }
-      }
 
-      let senderName = "Tidak Diketahui";
-      if (msg.senderId) {
-        if (typeof msg.senderId === "object") {
-          senderName = msg.senderId.displayName || msg.senderId.username || "Tidak Diketahui";
-        } else if (msg.senderName) {
-          senderName = msg.senderName;
+        let senderName = "Tidak Diketahui";
+        if (msg.senderId) {
+          if (typeof msg.senderId === "object") {
+            senderName = msg.senderId.displayName || msg.senderId.username || "Tidak Diketahui";
+          } else if (msg.senderName) {
+            senderName = msg.senderName;
+          }
         }
+
+        const normalized = {
+          ...msg,
+          _id: msg._id ? msg._id.toString() : Math.random().toString(),
+          senderId: senderIdStr,
+          channelId: channelIdStr,
+          senderName: senderName,
+        };
+
+        console.log("Normalized message:", {
+          senderIdStr,
+          userId: user?.id,
+          msg,
+          normalized,
+        });
+
+        return normalized;
+      } catch (error) {
+        console.error("Error normalizing message:", error, msg);
+        return null;
       }
-
-      // Log untuk debugging
-      console.log("Normalized message:", { senderIdStr, userId: user?.id, msg });
-
-      return {
-        ...msg,
-        _id: msg._id ? msg._id.toString() : Math.random().toString(),
-        senderId: senderIdStr,
-        channelId: channelIdStr,
-        senderName: senderName,
-      };
-    } catch (error) {
-      console.error("Error normalizing message:", error, msg);
-      return null;
-    }
-  }, [user?.id]);
+    },
+    [user?.id]
+  );
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -130,10 +149,6 @@ export default function ChatLayout({ user, channelId, logout }) {
       setIsLoading(false);
       setTimeout(() => router.push("/channels"), 2000);
       return;
-    }
-
-    if (socketRef.current) {
-      socketRef.current.disconnect();
     }
 
     const socket = io(SOCKET_URL, {
@@ -243,7 +258,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("userTyping", (userData) => {
       try {
-        if (userData && userData.userId !== user.id) {
+        if (userData && userData.userId !== user?.id) {
           setTypingUsers((prev) => {
             const filtered = prev.filter((u) => u.userId !== userData.userId);
             return userData.isTyping ? [...filtered, userData] : filtered;
@@ -268,6 +283,7 @@ export default function ChatLayout({ user, channelId, logout }) {
       if (socketRef.current) {
         socketRef.current.emit("leaveChannel", channelId);
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
@@ -434,12 +450,12 @@ export default function ChatLayout({ user, channelId, logout }) {
     [channelId]
   );
 
-  const userDisplayName = user?.displayName || user?.username;
+  const userDisplayName = user?.displayName || user?.username || "Pengguna";
 
-  if (!channelId) {
+  if (!channelId || !user?.token) {
     return (
       <div className="p-4 text-foreground">
-        Channel tidak valid. Mengalihkan...
+        Channel atau token tidak valid. Mengalihkan...
       </div>
     );
   }
@@ -574,18 +590,22 @@ export default function ChatLayout({ user, channelId, logout }) {
           messages.map((msg) => {
             let isOwn = false;
             try {
-              // Perbaikan logika isOwn untuk lebih toleran
               isOwn =
                 user?.id &&
                 msg.senderId &&
                 (msg.senderId === user.id ||
-                  (typeof msg.senderId === "object" && msg.senderId._id && msg.senderId._id.toString() === user.id.toString()));
-              // Log untuk debug
+                  (typeof msg.senderId === "object" &&
+                    msg.senderId._id &&
+                    msg.senderId._id.toString() === user.id.toString()));
               console.log("isOwn check:", {
                 userId: user?.id,
                 senderId: msg.senderId,
                 isOwn,
+                messageId: msg._id,
               });
+              if (isOwn) {
+                console.log("Rendering buttons for message:", msg._id);
+              }
             } catch (error) {
               console.error("Error cek kepemilikan pesan:", error, msg, user);
               isOwn = false;
