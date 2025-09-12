@@ -1,5 +1,5 @@
+"use client";
 
-// components/ThemeContext.js
 import { createContext, useState, useEffect, useCallback } from "react";
 
 export const ThemeContext = createContext();
