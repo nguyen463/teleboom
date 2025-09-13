@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "../utils/auth";
+import { useAuth } from "@/app/utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
