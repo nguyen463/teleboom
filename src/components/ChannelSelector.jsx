@@ -2,12 +2,13 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
   user,
   channels = [],
-  loading = false,
+  loading,
   selectedChannelId,
   onSelectChannel,
   onRefetch,
@@ -21,7 +22,6 @@ export default function ChannelSelector({
   const menuRef = useRef(null);
   const router = useRouter();
 
-  // Tutup menu kalau klik di luar
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -34,7 +34,6 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
-  // Tutup menu kalau tekan ESC
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === "Escape") {
@@ -47,77 +46,42 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
-  // Debugging (cek user & channels)
-  useEffect(() => {
-    console.log("User:", user);
-    console.log("Channels:", channels);
-  }, [user, channels]);
-
-  // Render tombol channel
   const channelButtons = useMemo(
     () =>
       (channels || []).map((channel) => {
         const channelId = channel._id || channel.id;
         const isSelected = channelId === selectedChannelId;
-
-        // Owner bisa dari beberapa field
-        const channelOwnerId =
-          channel.ownerId?._id ||
-          channel.ownerId ||
-          channel.createdBy ||
-          channel.userId;
-
-        const isOwner =
-          user?._id === channelOwnerId || user?.id === channelOwnerId;
+        
+        const channelOwnerId = channel.ownerId?._id || channel.ownerId;
+        const isOwner = user?.id === channelOwnerId;
 
         return (
           <div key={channelId} className="relative flex items-center group">
             <button
               onClick={() => onSelectChannel(channelId)}
               className={`flex-1 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                isSelected
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-muted"
+                isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
               }`}
               aria-selected={isSelected}
-              aria-label={`Select channel ${channel.name}${
-                channel.description ? ` - ${channel.description}` : ""
-              }`}
+              aria-label={`Select channel ${channel.name}${channel.description ? ` - ${channel.description}` : ""}`}
             >
               <div className="font-medium">#{channel.name}</div>
               {channel.description && (
-                <div className="text-xs opacity-75 truncate">
-                  {channel.description}
-                </div>
+                <div className="text-xs opacity-75 truncate">{channel.description}</div>
               )}
             </button>
-
-            {/* Tombol hapus hanya muncul untuk owner */}
             {isOwner && (
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm(`Yakin ingin menghapus channel "${channel.name}"?`)) {
-                    onDeleteChannel(channelId);
-                  }
+                  e.stopPropagation(); // Stop event bubbling to parent button
+                  onDeleteChannel(channelId);
                 }}
-                className="absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity`}
                 aria-label={`Delete channel ${channel.name}`}
                 title={`Delete channel ${channel.name}`}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </button>
             )}
@@ -129,7 +93,6 @@ export default function ChannelSelector({
 
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
-      {/* Header */}
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
@@ -146,16 +109,9 @@ export default function ChannelSelector({
               viewBox="0 0 24 24"
               stroke="currentColor"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
-
-          {/* Menu Dropdown */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -170,12 +126,7 @@ export default function ChannelSelector({
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
             {showMenu && (
@@ -215,33 +166,20 @@ export default function ChannelSelector({
           </div>
         </div>
       </div>
-
-      {/* Daftar Channel */}
-      <div
-        className="flex-1 overflow-y-auto p-2"
-        role="listbox"
-        aria-label="Channel list"
-      >
+      <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
-          // Loading state
           <div className="flex justify-center items-center h-20">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
           </div>
         ) : error ? (
-          // Error state
-          <div
-            className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm"
-            role="alert"
-          >
+          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
             {error}
           </div>
-        ) : channels.length === 0 ? (
-          // Empty state
+        ) : (channels?.length ?? 0) === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
             Tidak ada channels. Klik tombol + untuk membuat channel baru.
           </div>
         ) : (
-          // Channel list
           <div className="space-y-1" role="list">
             {channelButtons}
           </div>
