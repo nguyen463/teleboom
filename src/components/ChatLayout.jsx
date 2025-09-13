@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, useContext } from "react";
 import { io } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import "react-toastify/dist/Toastify.css";
 
 import { ThemeContext } from "../components/ThemeContext";
 
@@ -560,14 +560,14 @@ export default function ChatLayout({ user, channelId, logout }) {
             }
 
             return (
-              <div
-                key={msg._id}
+              <div 
+                key={msg._id} 
                 className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 onMouseEnter={() => setHoveredMessageId(msg._id)}
                 onMouseLeave={() => setHoveredMessageId(null)}
               >
                 <div
-                  className={`max-w-lg p-3 rounded-2xl shadow-sm border ${
+                  className={`max-w-lg p-3 rounded-2xl shadow-sm border relative ${
                     isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground border-border"
                   }`}
                 >
@@ -590,62 +590,65 @@ export default function ChatLayout({ user, channelId, logout }) {
                     </div>
                   )}
                   {msg.text && <span className="block text-base">{msg.text}</span>}
-                  {editingId === msg._id ? (
-                    <div className="flex flex-col space-y-2 mt-2">
-                      <input
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            saveEdit();
-                          } else if (e.key === "Escape") {
-                            setEditingId(null);
-                            setEditText("");
-                          }
-                        }}
-                        className="flex-1 p-2 rounded border-border bg-background text-foreground"
-                        autoFocus
-                      />
-                      <div className="flex space-x-2 self-end">
-                        <button
-                          onClick={saveEdit}
-                          className="bg-primary px-3 py-1 rounded text-primary-foreground text-sm"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditText("");
-                          }}
-                          className="bg-muted px-3 py-1 rounded text-foreground text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                  
+                  {/* Container ikon yang selalu ada */}
+                  {isOwn && (
+                    <div className={`absolute top-0 right-0 p-1 flex space-x-1 transition-opacity duration-200 ${hoveredMessageId === msg._id ? 'opacity-100' : 'opacity-0'}`}>
+                      <button
+                        onClick={() => handleEdit(msg)}
+                        className="p-1 rounded-full text-foreground/80 hover:bg-background/20 transition-colors"
+                        aria-label="Edit message"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(msg._id)}
+                        className="p-1 rounded-full text-foreground/80 hover:bg-background/20 transition-colors"
+                        aria-label="Delete message"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
                     </div>
-                  ) : (
-                    isOwn && hoveredMessageId === msg._id && (
-                      <div className="flex space-x-2 mt-3 justify-end">
-                        <button
-                          onClick={() => handleEdit(msg)}
-                          className="text-sm p-1 rounded-full text-foreground/80 hover:bg-background/20 transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(msg._id)}
-                          className="text-sm p-1 rounded-full text-foreground/80 hover:bg-background/20 transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        </button>
-                      </div>
-                    )
+                  )}
+                  {editingId === msg._id && (
+                     <div className="flex flex-col space-y-2 mt-2">
+                       <input
+                         value={editText}
+                         onChange={(e) => setEditText(e.target.value)}
+                         onKeyDown={(e) => {
+                           if (e.key === "Enter") {
+                             e.preventDefault();
+                             saveEdit();
+                           } else if (e.key === "Escape") {
+                             setEditingId(null);
+                             setEditText("");
+                           }
+                         }}
+                         className="flex-1 p-2 rounded border-border bg-background text-foreground"
+                         autoFocus
+                       />
+                       <div className="flex space-x-2 self-end">
+                         <button
+                           onClick={saveEdit}
+                           className="bg-primary px-3 py-1 rounded text-primary-foreground text-sm"
+                         >
+                           Save
+                         </button>
+                         <button
+                           onClick={() => {
+                             setEditingId(null);
+                             setEditText("");
+                           }}
+                           className="bg-muted px-3 py-1 rounded text-foreground text-sm"
+                         >
+                           Cancel
+                         </button>
+                       </div>
+                     </div>
                   )}
                 </div>
               </div>
