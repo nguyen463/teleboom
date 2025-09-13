@@ -34,7 +34,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [isMember, setIsMember] = useState(false); 
-  const [isOwner, setIsOwner] = useState(false); // State baru untuk pemilik
+  const [isOwner, setIsOwner] = useState(false);
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -101,7 +101,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           setIsMember(true);
           setIsOwner(response.isOwner);
           toast.success("Joined channel successfully!");
-          // Reload messages after joining
           socketRef.current.emit("getMessages", { channelId, limit: 20, skip: 0 }, (msgResponse) => {
             if (msgResponse && msgResponse.error) {
               toast.error(msgResponse.error);
@@ -120,6 +119,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           });
         } else {
           toast.error(response?.error || "Failed to join channel.");
+          setIsLoading(false);
         }
       });
     }
@@ -186,7 +186,6 @@ export default function ChatLayout({ user, channelId, logout }) {
     socket.on("connect", () => {
       setConnectionStatus("connected");
       setError(null);
-      setIsLoading(true);
       console.log("🔗 Socket connected, ID:", socket.id);
 
       socket.emit("checkMembership", channelId, (response) => {
@@ -200,25 +199,35 @@ export default function ChatLayout({ user, channelId, logout }) {
         if (response?.isMember) {
           setIsMember(true);
           setIsOwner(response.isOwner);
-          if (response.isOwner) {
-            toast.info("You're the owner, automatically joined.");
-          }
 
-          socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (msgResponse) => {
-            if (msgResponse && msgResponse.error) {
-              toast.error(msgResponse.error);
-              setError(msgResponse.error);
-            } else if (Array.isArray(msgResponse)) {
-              const normalizedMessages = msgResponse.map(normalizeMessage).filter(msg => msg !== null);
-              setMessages(normalizedMessages);
-              setPage(0);
-              setHasMore(msgResponse.length === 20);
-              setTimeout(() => scrollToBottom(), 100);
-            } else {
-              toast.error("Invalid response format for messages.");
-              setError("Invalid response format for messages.");
-            }
-            setIsLoading(false);
+          // Jika anggota, langsung join channel dan ambil pesan
+          socket.emit("joinChannel", channelId, (joinResponse) => {
+              if(joinResponse?.success) {
+                  if (joinResponse.isOwner) {
+                      toast.info("You're the owner, automatically joined.");
+                  }
+                  socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (msgResponse) => {
+                      if (msgResponse && msgResponse.error) {
+                          toast.error(msgResponse.error);
+                          setError(msgResponse.error);
+                      } else if (Array.isArray(msgResponse)) {
+                          const normalizedMessages = msgResponse.map(normalizeMessage).filter(msg => msg !== null);
+                          setMessages(normalizedMessages);
+                          setPage(0);
+                          setHasMore(msgResponse.length === 20);
+                          setTimeout(() => scrollToBottom(), 100);
+                      } else {
+                          toast.error("Invalid response format for messages.");
+                          setError("Invalid response format for messages.");
+                      }
+                      setIsLoading(false);
+                  });
+              } else {
+                  toast.error(joinResponse?.error || "Failed to join channel.");
+                  setIsLoading(false);
+                  setIsMember(false);
+                  setIsOwner(false);
+              }
           });
         } else {
           setIsMember(false);
@@ -320,8 +329,8 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     return () => {
+      // Hilangkan pemanggilan `leaveChannel` otomatis di sini
       if (socketRef.current) {
-        socketRef.current.emit("leaveChannel", channelId);
         socketRef.current.disconnect();
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -512,7 +521,6 @@ export default function ChatLayout({ user, channelId, logout }) {
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hi, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
-          {/* <span className="text-sm opacity-75">Channel: {channelId}</span> */}
         </div>
         <div className="relative">
           <button
@@ -548,10 +556,13 @@ export default function ChatLayout({ user, channelId, logout }) {
               >
                 Switch to {theme === "light" ? "Dark" : "Light"} Mode
               </button>
-              {isOwner && (
+              {isMember && (
                 <button
                   onClick={leaveChannel}
-                  className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
+                  disabled={isOwner}
+                  className={`block w-full text-left px-4 py-2 transition-colors ${
+                    isOwner ? 'text-gray-500 cursor-not-allowed' : 'hover:bg-destructive hover:text-destructive-foreground text-destructive'
+                  }`}
                 >
                   Leave Channel
                 </button>
