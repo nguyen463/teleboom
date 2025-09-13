@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense, useContext } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "@/app/utils/auth";
-import { ThemeContext } from "../../components/ThemeContext";
+import { useTheme } from "../../components/ThemeContext";
 
+// Komponen utama yang menampung semua logika klien
 function ChannelsPageContent() {
   const { user, loading: authLoading, api, logout } = useAuth();
-  const { theme, toggleTheme } = useContext(ThemeContext);
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -38,7 +39,7 @@ function ChannelsPageContent() {
     return () => {
       socket.off("channelCreated");
     };
-  }, [user, api, channels.length, fetchChannels]);
+  }, [user, api, channels.length]);
   
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
@@ -80,7 +81,7 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, channels.length, selectedChannelId, logout]);
+  }, [user, id, api, router, channels.length, selectedChannelId]);
 
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
