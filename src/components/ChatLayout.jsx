@@ -176,17 +176,9 @@ export default function ChatLayout({ user, channelId, logout }) {
     socket.on("newMessage", (msg) => {
       try {
         if (msg && msg.channelId && msg.channelId.toString() === channelId) {
-          const container = messagesContainerRef.current;
-          const isScrolledToBottom = container &&
-            (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
-
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
-
-            if (isScrolledToBottom) {
-              setTimeout(() => scrollToBottom(), 100);
-            }
           }
         }
       } catch (error) {
@@ -568,8 +560,8 @@ export default function ChatLayout({ user, channelId, logout }) {
             }
 
             return (
-              <div 
-                key={msg._id} 
+              <div
+                key={msg._id}
                 className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 onMouseEnter={() => setHoveredMessageId(msg._id)}
                 onMouseLeave={() => setHoveredMessageId(null)}
@@ -640,7 +632,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                           onClick={() => handleEdit(msg)}
                           className="text-sm p-1 rounded-full text-foreground/80 hover:bg-background/20 transition-colors"
                         >
-                          {/* Ikon Pensil untuk Edit */}
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                           </svg>
@@ -649,7 +640,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                           onClick={() => handleDelete(msg._id)}
                           className="text-sm p-1 rounded-full text-foreground/80 hover:bg-background/20 transition-colors"
                         >
-                          {/* Ikon Ember untuk Delete */}
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                           </svg>
