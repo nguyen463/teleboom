@@ -22,6 +22,7 @@ export default function ChannelSelector({
   const menuRef = useRef(null);
   const router = useRouter();
 
+  // Klik di luar menu untuk menutup dropdown
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -34,11 +35,10 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
+  // Escape key untuk menutup dropdown
   useEffect(() => {
     function handleEscape(event) {
-      if (event.key === "Escape") {
-        setShowMenu(false);
-      }
+      if (event.key === "Escape") setShowMenu(false);
     }
     if (showMenu) {
       document.addEventListener("keydown", handleEscape);
@@ -46,13 +46,14 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
+  // Generate tombol channel
   const channelButtons = useMemo(
     () =>
       (channels || []).map((channel) => {
         const channelId = channel?._id || channel?.id;
         const isSelected = channelId === selectedChannelId;
 
-        // Perbaikan: pakai createdBy dari backend
+        // Pastikan ownerId dari backend
         const channelOwnerId = channel?.createdBy?._id ?? channel?.createdBy ?? null;
         const isOwner = channelOwnerId && user?.id === channelOwnerId;
 
@@ -68,13 +69,13 @@ export default function ChannelSelector({
                 channel?.description ? ` - ${channel.description}` : ""
               }`}
             >
-              <div className="font-medium">#{channel?.name}</div>
+              <div className="font-medium">#{channel?.name ?? "Private"}</div>
               {channel?.description && (
                 <div className="text-xs opacity-75 truncate">{channel.description}</div>
               )}
             </button>
 
-            {/* Tombol hapus untuk pemilik channel */}
+            {/* Tombol hapus hanya untuk owner */}
             {isOwner && (
               <button
                 onClick={(e) => {
@@ -109,9 +110,11 @@ export default function ChannelSelector({
 
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
+      {/* Header */}
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
+          {/* Tombol buat channel */}
           <button
             onClick={onCreateChannel}
             className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
@@ -128,6 +131,8 @@ export default function ChannelSelector({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
+
+          {/* Dropdown menu */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -183,6 +188,7 @@ export default function ChannelSelector({
         </div>
       </div>
 
+      {/* List Channel */}
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
