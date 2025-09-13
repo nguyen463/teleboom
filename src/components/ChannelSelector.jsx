@@ -1,4 +1,3 @@
-// ChannelSelector.jsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -20,6 +19,7 @@ export default function ChannelSelector({
 }) {
   const { theme, toggleTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
+  const [hoveredChannelId, setHoveredChannelId] = useState(null);
   const menuRef = useRef(null);
   const router = useRouter();
 
@@ -69,7 +69,12 @@ export default function ChannelSelector({
             }
 
             return (
-              <div key={channelId} className="relative flex items-center group">
+              <div 
+                key={channelId} 
+                className="relative flex items-center group"
+                onMouseEnter={() => setHoveredChannelId(channelId)}
+                onMouseLeave={() => setHoveredChannelId(null)}
+              >
                 <button
                   onClick={() => onSelectChannel(channelId)}
                   className={`flex-1 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
@@ -86,8 +91,8 @@ export default function ChannelSelector({
                   )}
                 </button>
 
-                {/* Tombol hapus hanya untuk owner */}
-                {isOwner && (
+                {/* Tombol hapus hanya untuk owner dan saat di-hover */}
+                {isOwner && hoveredChannelId === channelId && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -117,7 +122,7 @@ export default function ChannelSelector({
             );
           })
         : [],
-    [channels, selectedChannelId, onSelectChannel, onDeleteChannel, user]
+    [channels, selectedChannelId, onSelectChannel, onDeleteChannel, user, hoveredChannelId]
   );
 
   return (
