@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense, useContext } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "@/app/utils/auth";
 import { ThemeContext } from "../../components/ThemeContext";
-import { useContext } from "react";
 
 function ChannelsPageContent() {
-  const { user, loading: authLoading, api } = useAuth();
-  // PERBAIKAN: Menggunakan useContext secara langsung
+  const { user, loading: authLoading, api, logout } = useAuth();
   const { theme, toggleTheme } = useContext(ThemeContext);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,7 +38,7 @@ function ChannelsPageContent() {
     return () => {
       socket.off("channelCreated");
     };
-  }, [user, api, channels.length]);
+  }, [user, api, channels.length, fetchChannels]);
   
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
@@ -82,7 +80,7 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, channels.length, selectedChannelId]);
+  }, [user, id, api, router, channels.length, selectedChannelId, logout]);
 
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
@@ -285,7 +283,6 @@ function ChannelsPageContent() {
   );
 }
 
-// Komponen utama yang akan di-export
 export default function ChannelsPage() {
   return (
     <Suspense
