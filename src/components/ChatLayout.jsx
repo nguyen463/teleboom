@@ -180,7 +180,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
             
-            // Tambahkan kembali logika scroll otomatis
             const container = messagesContainerRef.current;
             const isScrolledToBottom = container &&
               (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
@@ -444,7 +443,8 @@ export default function ChatLayout({ user, channelId, logout }) {
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hi, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
-          <span className="text-sm opacity-75">Channel: {channelId}</span>
+          {/* Baris ini telah dihapus atau dikomentari */}
+          {/* <span className="text-sm opacity-75">Channel: {channelId}</span> */}
         </div>
         <div className="relative">
           <button
@@ -569,8 +569,8 @@ export default function ChatLayout({ user, channelId, logout }) {
             }
 
             return (
-              <div
-                key={msg._id}
+              <div 
+                key={msg._id} 
                 className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 onMouseEnter={() => setHoveredMessageId(msg._id)}
                 onMouseLeave={() => setHoveredMessageId(null)}
@@ -606,7 +606,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                       {msg.text}
                     </span>
                   )}
-
+                  
                   {isOwn && (
                     <div className={`absolute top-0 right-0 p-1 flex space-x-1 transition-opacity duration-200 ${hoveredMessageId === msg._id ? 'opacity-100' : 'opacity-0'}`}>
                       <button
