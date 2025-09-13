@@ -31,6 +31,9 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [showMenu, setShowMenu] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
 
+  // Tambahkan state baru untuk melacak pesan yang sedang di-hover
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
+
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -558,8 +561,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           messages.map((msg) => {
             let isOwn = false;
             try {
-              // Tambahkan console.log untuk debugging
-              console.log('user.id:', user.id, '| msg.senderId:', msg.senderId);
               isOwn = user?.id && msg.senderId &&
                 msg.senderId.toString() === (typeof user.id === 'string' ? user.id : user.id.toString());
             } catch (error) {
@@ -568,7 +569,12 @@ export default function ChatLayout({ user, channelId, logout }) {
             }
 
             return (
-              <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
+              <div 
+                key={msg._id} 
+                className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                onMouseEnter={() => setHoveredMessageId(msg._id)}
+                onMouseLeave={() => setHoveredMessageId(null)}
+              >
                 <div
                   className={`max-w-lg p-3 rounded-2xl shadow-sm border ${
                     isOwn ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground border-border"
@@ -629,7 +635,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                       </div>
                     </div>
                   ) : (
-                    isOwn && (
+                    isOwn && hoveredMessageId === msg._id && (
                       <div className="flex space-x-2 mt-3 justify-end">
                         <button
                           onClick={() => handleEdit(msg)}
@@ -742,4 +748,4 @@ export default function ChatLayout({ user, channelId, logout }) {
       </div>
     </div>
   );
-}  
+}
