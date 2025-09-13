@@ -1,3 +1,4 @@
+// ChannelsPage.jsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
@@ -17,11 +18,15 @@ export default function ChannelsPage() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const manualSelectionRef = useRef(false);
+  const [isManualSelection, setIsManualSelection] = useState(false);
 
   // Fetch channels dari API
   const fetchChannels = useCallback(async () => {
-    if (!user?.token) return;
+    if (!user?.token || !api?.get) {
+      setError("Autentikasi tidak valid. Silakan login kembali.");
+      router.push("/login");
+      return;
+    }
 
     setChannelsLoading(true);
     setError(null);
@@ -41,13 +46,21 @@ export default function ChannelsPage() {
         channelsData = [data.channel];
       }
 
-      setChannels(channelsData || []);
+      if (!Array.isArray(channelsData)) {
+        console.warn("Unexpected API response format:", response.data);
+        throw new Error("Format data channel tidak valid.");
+      }
+
+      setChannels(channelsData);
 
       // Auto select channel jika belum ada selection manual
-      if (!manualSelectionRef.current && channelsData.length > 0) {
+      if (!isManualSelection && channelsData.length > 0) {
         const channelExists = channelsData.find(ch => ch._id === id || ch.id === id);
-        if (channelExists && id && id !== "undefined") {
+        if (channelExists && id) {
           setSelectedChannelId(id);
+        } else if (id && !channelExists) {
+          setError("Channel tidak ditemukan.");
+          handleSelectChannel(null); // Hapus id dari URL
         } else if (channelsData.length > 0 && !selectedChannelId) {
           setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
         }
@@ -61,33 +74,30 @@ export default function ChannelsPage() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, selectedChannelId]);
+  }, [user, id, api, router, selectedChannelId, isManualSelection]);
 
   // Refetch manual
   const refetchChannels = useCallback(() => {
-    manualSelectionRef.current = false;
+    setIsManualSelection(false);
     fetchChannels();
   }, [fetchChannels]);
 
   // Handle select channel
   const handleSelectChannel = useCallback(
     (channelId) => {
-      if (!channelId || channelId === "undefined") return;
-      manualSelectionRef.current = true;
+      if (!channelId) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("id");
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+        setSelectedChannelId(null);
+        return;
+      }
+      setIsManualSelection(true);
       setSelectedChannelId(channelId);
 
       const params = new URLSearchParams(searchParams.toString());
-      if (channelId) {
-        params.set("id", channelId);
-      } else {
-        params.delete("id");
-      }
-      const newUrl = `${pathname}?${params.toString()}`;
-      router.push(newUrl, { scroll: false });
-
-      setTimeout(() => {
-        manualSelectionRef.current = false;
-      }, 100);
+      params.set("id", channelId);
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [searchParams, pathname, router]
   );
@@ -119,7 +129,7 @@ export default function ChannelsPage() {
         }
       } catch (err) {
         console.error("Gagal menghapus channel:", err);
-        alert("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
+        setError("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
       }
     }
   }, [api, channels, selectedChannelId, handleSelectChannel]);
@@ -139,17 +149,25 @@ export default function ChannelsPage() {
     socket.on("channelCreated", (newChannel) => {
       setChannels(prev => [...prev, newChannel]);
     });
+    socket.on("channelDeleted", (deletedChannelId) => {
+      setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== deletedChannelId));
+      if (selectedChannelId === deletedChannelId) {
+        handleSelectChannel(channels[0]?._id || channels[0]?.id || null);
+      }
+    });
 
     return () => {
       socket.off("channelCreated");
+      socket.off("channelDeleted");
     };
-  }, [user, api]);
+  }, [user, api, selectedChannelId, handleSelectChannel, channels]);
 
   // Auto-update jika URL id berubah
   useEffect(() => {
-    if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
+    if (id && id !== selectedChannelId && !isManualSelection) {
       handleSelectChannel(id);
     }
+    setIsManualSelection(false);
   }, [id, selectedChannelId, handleSelectChannel]);
 
   if (authLoading) {
@@ -165,10 +183,10 @@ export default function ChannelsPage() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
+      <div className="w-64 md:w-80 lg:w-96 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
-          channels={channels || []}
+          channels={channels}
           loading={channelsLoading}
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
@@ -183,11 +201,12 @@ export default function ChannelsPage() {
         <Suspense
           fallback={
             <div className="flex items-center justify-center h-full bg-background">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+              <p className="text-foreground">Memuat chat...</p>
             </div>
           }
         >
-          {selectedChannelId && selectedChannelId !== "undefined" ? (
+          {selectedChannelId ? (
             <ChatLayout
               user={user}
               channelId={selectedChannelId}
