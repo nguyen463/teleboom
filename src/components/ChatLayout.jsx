@@ -33,7 +33,8 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [forceUpdate, setForceUpdate] = useState(0);
 
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
-  const [isMember, setIsMember] = useState(false); // State baru untuk keanggotaan
+  const [isMember, setIsMember] = useState(false); 
+  const [isOwner, setIsOwner] = useState(false); // State baru untuk pemilik
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -93,19 +94,36 @@ export default function ChatLayout({ user, channelId, logout }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Tambahkan fungsi untuk bergabung dan keluar dari channel
   const joinChannel = useCallback(() => {
     if (socketRef.current) {
       socketRef.current.emit("joinChannel", channelId, (response) => {
         if (response?.success) {
           setIsMember(true);
+          setIsOwner(response.isOwner);
           toast.success("Joined channel successfully!");
+          // Reload messages after joining
+          socketRef.current.emit("getMessages", { channelId, limit: 20, skip: 0 }, (msgResponse) => {
+            if (msgResponse && msgResponse.error) {
+              toast.error(msgResponse.error);
+              setError(msgResponse.error);
+            } else if (Array.isArray(msgResponse)) {
+              const normalizedMessages = msgResponse.map(normalizeMessage).filter(msg => msg !== null);
+              setMessages(normalizedMessages);
+              setPage(0);
+              setHasMore(msgResponse.length === 20);
+              setTimeout(() => scrollToBottom(), 100);
+            } else {
+              toast.error("Invalid response format for messages.");
+              setError("Invalid response format for messages.");
+            }
+            setIsLoading(false);
+          });
         } else {
           toast.error(response?.error || "Failed to join channel.");
         }
       });
     }
-  }, [channelId]);
+  }, [channelId, normalizeMessage, scrollToBottom]);
 
   const leaveChannel = useCallback(() => {
     if (socketRef.current) {
@@ -133,7 +151,8 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTypingUsers([]);
     setError(null);
     setIsLoading(true);
-    setIsMember(false); // Reset keanggotaan saat channelId berubah
+    setIsMember(false);
+    setIsOwner(false);
 
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -170,11 +189,21 @@ export default function ChatLayout({ user, channelId, logout }) {
       setIsLoading(true);
       console.log("🔗 Socket connected, ID:", socket.id);
 
-      // Cek keanggotaan saat terhubung
       socket.emit("checkMembership", channelId, (response) => {
+        if (response?.error) {
+          toast.error(response.error);
+          setError(response.error);
+          setIsLoading(false);
+          return;
+        }
+
         if (response?.isMember) {
           setIsMember(true);
-          // Jika anggota, langsung ambil pesan
+          setIsOwner(response.isOwner);
+          if (response.isOwner) {
+            toast.info("You're the owner, automatically joined.");
+          }
+
           socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (msgResponse) => {
             if (msgResponse && msgResponse.error) {
               toast.error(msgResponse.error);
@@ -193,6 +222,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           });
         } else {
           setIsMember(false);
+          setIsOwner(false);
           setIsLoading(false);
           toast.info("You need to join this channel to see messages.");
         }
@@ -518,6 +548,14 @@ export default function ChatLayout({ user, channelId, logout }) {
               >
                 Switch to {theme === "light" ? "Dark" : "Light"} Mode
               </button>
+              {isOwner && (
+                <button
+                  onClick={leaveChannel}
+                  className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
+                >
+                  Leave Channel
+                </button>
+              )}
               <button
                 onClick={() => {
                   logout();
