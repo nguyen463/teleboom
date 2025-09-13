@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/utils/auth";
+import { useAuth } from "@/app/utils/auth"; // ✅ jangan dihapus
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
@@ -55,12 +55,17 @@ export default function ChannelSelector({
             const channelId = channel?._id || channel?.id;
             const isSelected = channelId === selectedChannelId;
 
-            // Pastikan ownerId dari backend
-            const channelOwnerId = channel?.createdBy?._id ?? channel?.createdBy ?? null;
-            const isOwner = channelOwnerId && user?.id === channelOwnerId;
+            // Ambil owner ID, bisa populated object atau hanya ObjectId
+            const channelOwnerId =
+              channel?.owner?._id || channel?.createdBy?._id || channel?.owner || channel?.createdBy || null;
+
+            const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
 
             if (!channelOwnerId) {
-              console.warn(`Channel ${channel?.name} has invalid createdBy data:`, channel?.createdBy);
+              console.warn(
+                `⚠️ Channel ${channel?.name} tidak punya owner yang valid:`,
+                channel?.owner || channel?.createdBy
+              );
             }
 
             return (
@@ -75,7 +80,7 @@ export default function ChannelSelector({
                     channel?.description ? ` - ${channel.description}` : ""
                   }`}
                 >
-                  <div className="font-medium">#{channel?.name ?? "Private"}</div>
+                  <div className="font-medium">#{channel?.name ?? "Tanpa Nama"}</div>
                   {channel?.description && (
                     <div className="text-xs opacity-75 truncate">{channel.description}</div>
                   )}
