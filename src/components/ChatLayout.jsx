@@ -1,3 +1,4 @@
+// src/components/ChatLayout.js
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useContext } from "react";
@@ -32,6 +33,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [forceUpdate, setForceUpdate] = useState(0);
 
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [isMember, setIsMember] = useState(false); // State baru untuk keanggotaan
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -91,6 +93,34 @@ export default function ChatLayout({ user, channelId, logout }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
+  // Tambahkan fungsi untuk bergabung dan keluar dari channel
+  const joinChannel = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit("joinChannel", channelId, (response) => {
+        if (response?.success) {
+          setIsMember(true);
+          toast.success("Joined channel successfully!");
+        } else {
+          toast.error(response?.error || "Failed to join channel.");
+        }
+      });
+    }
+  }, [channelId]);
+
+  const leaveChannel = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit("leaveChannel", channelId, (response) => {
+        if (response?.success) {
+          setIsMember(false);
+          setMessages([]);
+          toast.info("Left channel.");
+        } else {
+          toast.error(response?.error || "Failed to leave channel.");
+        }
+      });
+    }
+  }, [channelId]);
+
   useEffect(() => {
     setMessages([]);
     setPage(0);
@@ -103,6 +133,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTypingUsers([]);
     setError(null);
     setIsLoading(true);
+    setIsMember(false); // Reset keanggotaan saat channelId berubah
 
     if (socketRef.current) {
       socketRef.current.disconnect();
@@ -138,24 +169,32 @@ export default function ChatLayout({ user, channelId, logout }) {
       setError(null);
       setIsLoading(true);
       console.log("🔗 Socket connected, ID:", socket.id);
-      socket.emit("joinChannel", channelId);
 
-      socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (response) => {
-        if (response && response.error) {
-          toast.error(response.error);
-          setError(response.error);
-          setIsLoading(false);
-        } else if (Array.isArray(response)) {
-          const normalizedMessages = response.map(normalizeMessage).filter(msg => msg !== null);
-          setMessages(normalizedMessages);
-          setPage(0);
-          setHasMore(response.length === 20);
-          setIsLoading(false);
-          setTimeout(() => scrollToBottom(), 100);
+      // Cek keanggotaan saat terhubung
+      socket.emit("checkMembership", channelId, (response) => {
+        if (response?.isMember) {
+          setIsMember(true);
+          // Jika anggota, langsung ambil pesan
+          socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (msgResponse) => {
+            if (msgResponse && msgResponse.error) {
+              toast.error(msgResponse.error);
+              setError(msgResponse.error);
+            } else if (Array.isArray(msgResponse)) {
+              const normalizedMessages = msgResponse.map(normalizeMessage).filter(msg => msg !== null);
+              setMessages(normalizedMessages);
+              setPage(0);
+              setHasMore(msgResponse.length === 20);
+              setTimeout(() => scrollToBottom(), 100);
+            } else {
+              toast.error("Invalid response format for messages.");
+              setError("Invalid response format for messages.");
+            }
+            setIsLoading(false);
+          });
         } else {
-          toast.error("Invalid response format");
-          setError("Invalid response format");
+          setIsMember(false);
           setIsLoading(false);
+          toast.info("You need to join this channel to see messages.");
         }
       });
     });
@@ -175,7 +214,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("newMessage", (msg) => {
       try {
-        if (msg && msg.channelId && msg.channelId.toString() === channelId) {
+        if (isMember && msg && msg.channelId && msg.channelId.toString() === channelId) {
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
@@ -196,7 +235,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("editMessage", (msg) => {
       try {
-        if (msg && msg.channelId && msg.channelId.toString() === channelId) {
+        if (isMember && msg && msg.channelId && msg.channelId.toString() === channelId) {
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) =>
@@ -213,7 +252,7 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("deleteMessage", (id) => {
       try {
-        if (id) {
+        if (isMember && id) {
           setMessages((prev) => prev.filter((m) => m._id !== id.toString()));
         }
       } catch (error) {
@@ -257,14 +296,14 @@ export default function ChatLayout({ user, channelId, logout }) {
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [user, channelId, router, normalizeMessage, logout, scrollToBottom]);
+  }, [user, channelId, router, normalizeMessage, logout, scrollToBottom, isMember]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
-      if (container.scrollTop === 0 && hasMore && !isLoading) {
+      if (container.scrollTop === 0 && hasMore && !isLoading && isMember) {
         setIsLoading(true);
         const oldScrollHeight = container.scrollHeight;
         const newSkip = (page + 1) * 20;
@@ -295,10 +334,10 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [hasMore, isLoading, page, channelId, normalizeMessage]);
+  }, [hasMore, isLoading, page, channelId, normalizeMessage, isMember]);
 
   const sendMessage = useCallback(() => {
-    if (!socketRef.current || (!newMsg.trim() && !selectedImage) || isUploading) return;
+    if (!socketRef.current || !isMember || (!newMsg.trim() && !selectedImage) || isUploading) return;
     setIsUploading(true);
 
     const messageData = { text: newMsg.trim(), channelId };
@@ -335,14 +374,14 @@ export default function ChatLayout({ user, channelId, logout }) {
     } else {
       socketRef.current.emit("sendMessage", messageData, onMessageSent);
     }
-  }, [newMsg, selectedImage, isUploading, channelId]);
+  }, [newMsg, selectedImage, isUploading, channelId, isMember]);
 
   const handleTyping = useCallback(
     (e) => {
       const value = e.target.value;
       setNewMsg(value);
 
-      if (!socketRef.current) return;
+      if (!socketRef.current || !isMember) return;
 
       socketRef.current.emit("typing", {
         channelId,
@@ -360,7 +399,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         }, 3000);
       }
     },
-    [channelId]
+    [channelId, isMember]
   );
 
   const handleImageSelect = (e) => {
@@ -386,7 +425,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   };
 
   const saveEdit = useCallback(() => {
-    if (!socketRef.current || !editText.trim() || !editingId) return;
+    if (!socketRef.current || !editText.trim() || !editingId || !isMember) return;
 
     socketRef.current.emit("editMessage", {
       id: editingId,
@@ -400,11 +439,11 @@ export default function ChatLayout({ user, channelId, logout }) {
         setEditText("");
       }
     });
-  }, [editingId, editText, channelId]);
+  }, [editingId, editText, channelId, isMember]);
 
   const handleDelete = useCallback(
     (id) => {
-      if (!socketRef.current) return;
+      if (!socketRef.current || !isMember) return;
 
       if (window.confirm("Are you sure you want to delete this message?")) {
         socketRef.current.emit("deleteMessage", {
@@ -417,7 +456,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         });
       }
     },
-    [channelId]
+    [channelId, isMember]
   );
 
   const userDisplayName = user?.displayName || user?.username;
@@ -443,7 +482,6 @@ export default function ChatLayout({ user, channelId, logout }) {
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hi, {userDisplayName}</span>
           <span className="text-sm opacity-75">({connectionStatus})</span>
-          {/* Baris ini telah dihapus atau dikomentari */}
           {/* <span className="text-sm opacity-75">Channel: {channelId}</span> */}
         </div>
         <div className="relative">
@@ -514,7 +552,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 bg-background"
       >
-        {isLoading && page === 0 ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <svg
               className="animate-spin h-8 w-8 text-primary"
@@ -536,6 +574,19 @@ export default function ChatLayout({ user, channelId, logout }) {
                 d="M4 12a8 8 0 018-8v8h8a8 8 0 01-8 8v-8H4z"
               ></path>
             </svg>
+          </div>
+        ) : !isMember ? (
+          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM12 11a7 7 0 01-7 7v2h14v-2a7 7 0 01-7-7z" />
+            </svg>
+            <p>You need to join this channel to see messages.</p>
+            <button
+              onClick={joinChannel}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Join Channel
+            </button>
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -689,75 +740,88 @@ export default function ChatLayout({ user, channelId, logout }) {
         </div>
       )}
 
-      <div className="p-4 bg-secondary">
-        {typingUsers.length > 0 && (
-          <div className="text-sm text-muted-foreground mb-2">
-            {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
+      <div className="p-4 bg-secondary flex justify-between items-center">
+        {isMember ? (
+          <div className="flex-1">
+            {typingUsers.length > 0 && (
+              <div className="text-sm text-muted-foreground mb-2">
+                {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
+              </div>
+            )}
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={newMsg}
+                onChange={handleTyping}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                className="flex-1 p-2 rounded border-border bg-background text-foreground"
+                placeholder="Type a message..."
+                disabled={isUploading}
+              />
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 bg-muted text-foreground rounded-full hover:bg-border transition-colors"
+                disabled={isUploading}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={sendMessage}
+                className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
+                disabled={isUploading || (!newMsg.trim() && !selectedImage)}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 text-center">
+            <button
+              onClick={joinChannel}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Join Channel
+            </button>
           </div>
         )}
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={newMsg}
-            onChange={handleTyping}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-            className="flex-1 p-2 rounded border-border bg-background text-foreground"
-            placeholder="Type a message..."
-            disabled={isUploading}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            onChange={handleImageSelect}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 bg-muted text-foreground rounded-full hover:bg-border transition-colors"
-            disabled={isUploading}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-          <button
-            onClick={sendMessage}
-            className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
-            disabled={isUploading || (!newMsg.trim() && !selectedImage)}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-              />
-            </svg>
-          </button>
-        </div>
       </div>
     </div>
   );
