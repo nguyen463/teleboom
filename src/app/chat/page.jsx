@@ -7,13 +7,13 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
-function ChatContainer() {
-  const { user, loading, logout, api } = useAuth();
+function ChannelsPageContent() {
+  const { user, loading: authLoading, api } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const urlChannelId = searchParams.get("id");
+  const id = searchParams.get("id");
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [channels, setChannels] = useState([]);
@@ -21,14 +21,36 @@ function ChatContainer() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
+  useEffect(() => {
+    if (!user || !api?.socket) {
+      return;
+    }
+    const socket = api.socket;
+    
+    socket.on("channelCreated", (newChannel) => {
+      setChannels(prev => [...prev, newChannel]);
+    });
+    
+    if (!channels.length) {
+      fetchChannels();
+    }
+    
+    return () => {
+      socket.off("channelCreated");
+    };
+  }, [user, api, channels.length, fetchChannels]);
+  
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
+
     setChannelsLoading(true);
     setError(null);
+
     try {
       const response = await api.get("/api/channels");
       const data = response.data || { channels: [] };
       let channelsData = [];
+
       if (Array.isArray(data)) {
         channelsData = data;
       } else if (Array.isArray(data.channels)) {
@@ -38,12 +60,14 @@ function ChatContainer() {
       } else if (data.channel) {
         channelsData = [data.channel];
       }
-      setChannels(channelsData);
+
+      setChannels(channelsData || []);
+
       if (!manualSelectionRef.current && channelsData.length > 0) {
-        const channelExists = channelsData.find(ch => ch._id === urlChannelId || ch.id === urlChannelId);
-        if (channelExists && urlChannelId && urlChannelId !== "undefined") {
-          setSelectedChannelId(urlChannelId);
-        } else if (!selectedChannelId) {
+        const channelExists = channelsData.find(ch => ch._id === id || ch.id === id);
+        if (channelExists && id && id !== "undefined") {
+          setSelectedChannelId(id);
+        } else if (channelsData.length > 0 && !selectedChannelId) {
           setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
         }
       }
@@ -51,34 +75,43 @@ function ChatContainer() {
       console.error("Error fetching channels:", err);
       setError("Gagal memuat channels. Silakan coba lagi.");
       if (err.response?.status === 401) {
-        logout();
+        router.push("/login");
       }
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, api, urlChannelId, selectedChannelId, logout]);
+  }, [user, id, api, router, channels.length, selectedChannelId]);
 
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
-  }, [user, channels.length, channelsLoading, fetchChannels]);
+  }, [user, fetchChannels, channels.length, channelsLoading]);
 
   useEffect(() => {
-    if (urlChannelId && urlChannelId !== "undefined" && urlChannelId !== selectedChannelId && !manualSelectionRef.current) {
-      handleSelectChannel(urlChannelId);
+    if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
+      handleSelectChannel(id);
     }
-  }, [urlChannelId, selectedChannelId]);
+  }, [id, selectedChannelId, handleSelectChannel]);
 
   const handleSelectChannel = useCallback(
     (channelId) => {
       if (!channelId || channelId === "undefined") return;
       manualSelectionRef.current = true;
       setSelectedChannelId(channelId);
+
       const params = new URLSearchParams(searchParams.toString());
-      params.set("id", channelId);
+      if (channelId) {
+        params.set("id", channelId);
+      } else {
+        params.delete("id");
+      }
       const newUrl = `${pathname}?${params.toString()}`;
       router.push(newUrl, { scroll: false });
+
+      setTimeout(() => {
+        manualSelectionRef.current = false;
+      }, 100);
     },
     [searchParams, pathname, router]
   );
@@ -92,11 +125,18 @@ function ChatContainer() {
     router.push("/channels/new");
   }, [router]);
 
+  const handleLogout = useCallback(() => {
+    sessionStorage.removeItem("chat-app-user");
+    sessionStorage.removeItem("chat-app-token");
+    router.push("/login");
+  }, [router]);
+
   const handleDeleteChannel = useCallback(async (channelId) => {
     if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
       try {
         await api.delete(`/api/channels/${channelId}`);
         setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== channelId));
+        
         if (selectedChannelId === channelId) {
           const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
           const newSelectedId = newChannels[0]?._id || newChannels[0]?.id || null;
@@ -109,13 +149,11 @@ function ChatContainer() {
     }
   }, [api, channels, selectedChannelId, handleSelectChannel]);
 
-  if (loading) {
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-foreground">Memverifikasi token...</p>
-        </div>
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+        <p className="text-foreground">Memeriksa autentikasi...</p>
       </div>
     );
   }
@@ -129,34 +167,35 @@ function ChatContainer() {
       <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
-          channels={channels}
+          channels={channels || []}
           loading={channelsLoading}
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
           onRefetch={refetchChannels}
           onCreateChannel={handleCreateChannel}
-          onLogout={logout}
+          onLogout={handleLogout}
           error={error}
           onDeleteChannel={handleDeleteChannel}
         />
       </div>
-      
-      <div className="flex-1 flex flex-col" role="main">
-        <Suspense fallback={
-          <div className="flex items-center justify-center h-full bg-background">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        }>
-          {selectedChannelId ? (
+      <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-full bg-background">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          }
+        >
+          {selectedChannelId && selectedChannelId !== "undefined" ? (
             <ChatLayout
               user={user}
               channelId={selectedChannelId}
-              logout={logout}
+              onLogout={handleLogout}
               key={selectedChannelId}
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-background">
-              <div className="text-center p-6 max-w-md text-foreground">
+              <div className="text-center p-6 max-w-md">
                 {channelsLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
@@ -244,8 +283,7 @@ function ChatContainer() {
   );
 }
 
-// Komponen utama yang akan di-export, menggunakan Suspense
-export default function AppWrapper() {
+export default function ChannelsPage() {
   return (
     <Suspense
       fallback={
@@ -254,7 +292,7 @@ export default function AppWrapper() {
         </div>
       }
     >
-      <ChatContainer />
+      <ChannelsPageContent />
     </Suspense>
   );
 }
