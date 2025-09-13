@@ -10,8 +10,18 @@ import { ThemeContext } from "../components/ThemeContext";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
 
-export default function ChatLayout({ user, channelId, logout }) {
+export default function ChatLayout({ initialUser, channelId, logout }) {
   const { theme, toggleTheme } = useContext(ThemeContext);
+  const router = useRouter();
+
+  // --- User state dengan persistence ---
+  const [user, setUser] = useState(() => {
+    if (initialUser?.token) return initialUser;
+    const storedUser = localStorage.getItem("user");
+    const storedToken = localStorage.getItem("token");
+    if (storedUser && storedToken) return { ...JSON.parse(storedUser), token: storedToken };
+    return null;
+  });
 
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
@@ -37,26 +47,28 @@ export default function ChatLayout({ user, channelId, logout }) {
   const typingTimeoutRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const longPressTimeoutRef = useRef(null);
-  const router = useRouter();
 
-  // Normalize message data
+  // --- Normalisasi pesan ---
   const normalizeMessage = useCallback(
     (msg) => {
       if (!msg) return null;
       try {
-        let senderIdStr = '';
+        let senderIdStr = "";
         if (msg.senderId) {
-          if (typeof msg.senderId === 'object' && msg.senderId._id) senderIdStr = msg.senderId._id.toString();
+          if (typeof msg.senderId === "object" && msg.senderId._id)
+            senderIdStr = msg.senderId._id.toString();
           else senderIdStr = msg.senderId.toString();
         }
-        let channelIdStr = '';
+        let channelIdStr = "";
         if (msg.channelId) {
-          if (typeof msg.channelId === 'object' && msg.channelId.toString) channelIdStr = msg.channelId.toString();
+          if (typeof msg.channelId === "object" && msg.channelId.toString)
+            channelIdStr = msg.channelId.toString();
           else channelIdStr = msg.channelId.toString();
         }
         let senderName = "Unknown";
         if (msg.senderId) {
-          if (typeof msg.senderId === 'object') senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
+          if (typeof msg.senderId === "object")
+            senderName = msg.senderId.displayName || msg.senderId.username || "Unknown";
           else if (msg.senderName) senderName = msg.senderName;
         }
         return {
@@ -64,7 +76,7 @@ export default function ChatLayout({ user, channelId, logout }) {
           _id: msg._id ? msg._id.toString() : Math.random().toString(),
           senderId: senderIdStr,
           channelId: channelIdStr,
-          senderName
+          senderName,
         };
       } catch (error) {
         console.error("Error normalizing message:", error, msg);
@@ -78,7 +90,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Reset on channel change
+  // --- Reset state saat channel berubah ---
   useEffect(() => {
     setMessages([]);
     setPage(0);
@@ -91,23 +103,26 @@ export default function ChatLayout({ user, channelId, logout }) {
     setTypingUsers([]);
     setError(null);
     setIsLoading(true);
-
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
   }, [channelId]);
 
-  // Socket connection
+  // --- Redirect jika user tidak ditemukan ---
   useEffect(() => {
-    if (!user?.token || !channelId) {
-      setError("Token or channelId not found. Redirecting...");
-      setIsLoading(false);
-      setTimeout(() => router.push("/channels"), 2000);
-      return;
+    if (!user?.token) {
+      router.push("/login");
+    } else {
+      // Simpan user di localStorage agar persistent
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("token", user.token);
     }
+  }, [user, router]);
 
-    if (socketRef.current) socketRef.current.disconnect();
+  // --- Socket connection ---
+  useEffect(() => {
+    if (!user?.token || !channelId) return;
 
     const socket = io(SOCKET_URL, {
       auth: { token: user.token },
@@ -123,7 +138,6 @@ export default function ChatLayout({ user, channelId, logout }) {
       setConnectionStatus("connected");
       setError(null);
       socket.emit("joinChannel", channelId);
-
       socket.emit("getMessages", { channelId, limit: 20, skip: 0 }, (res) => {
         if (Array.isArray(res)) {
           const normalized = res.map(normalizeMessage).filter(Boolean);
@@ -150,9 +164,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     socket.on("editMessage", (msg) => {
       const normalized = normalizeMessage(msg);
       if (!normalized || normalized.channelId !== channelId) return;
-      setMessages((prev) =>
-        prev.map((m) => (m._id === normalized._id ? normalized : m))
-      );
+      setMessages((prev) => prev.map((m) => (m._id === normalized._id ? normalized : m)));
       if (editingId === normalized._id) {
         setEditingId(null);
         setEditText("");
@@ -186,7 +198,7 @@ export default function ChatLayout({ user, channelId, logout }) {
     };
   }, [user, channelId, router, normalizeMessage, logout, scrollToBottom, editingId]);
 
-  // Infinite scroll
+  // --- Infinite scroll ---
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -195,7 +207,6 @@ export default function ChatLayout({ user, channelId, logout }) {
         setIsLoading(true);
         const skip = (page + 1) * 20;
         const oldScrollHeight = container.scrollHeight;
-
         socketRef.current.emit("getMessages", { channelId, limit: 20, skip }, (res) => {
           if (Array.isArray(res)) {
             const newMsgs = res.map(normalizeMessage).filter(Boolean);
@@ -206,9 +217,7 @@ export default function ChatLayout({ user, channelId, logout }) {
               container.scrollTop = container.scrollHeight - oldScrollHeight;
               setIsLoading(false);
             }, 0);
-          } else {
-            setIsLoading(false);
-          }
+          } else setIsLoading(false);
         });
       }
     };
@@ -216,27 +225,27 @@ export default function ChatLayout({ user, channelId, logout }) {
     return () => container.removeEventListener("scroll", onScroll);
   }, [hasMore, isLoading, page, channelId, normalizeMessage]);
 
-  const handleTyping = useCallback((e) => {
-    const value = e.target.value;
-    setNewMsg(value);
-    if (!socketRef.current) return;
-
-    socketRef.current.emit("typing", { channelId, isTyping: value.length > 0 });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    if (value.length > 0) {
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current.emit("typing", { channelId, isTyping: false });
-      }, 3000);
-    }
-  }, [channelId]);
+  // --- Handle typing ---
+  const handleTyping = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setNewMsg(value);
+      if (!socketRef.current) return;
+      socketRef.current.emit("typing", { channelId, isTyping: value.length > 0 });
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (value.length > 0) {
+        typingTimeoutRef.current = setTimeout(() => {
+          socketRef.current.emit("typing", { channelId, isTyping: false });
+        }, 3000);
+      }
+    },
+    [channelId]
+  );
 
   const sendMessage = useCallback(() => {
     if (!socketRef.current || (!newMsg.trim() && !selectedImage)) return;
     setIsUploading(true);
-
     const messageData = { text: newMsg.trim(), channelId };
-
     const onSent = (res) => {
       if (res?.error) toast.error(res.error);
       setNewMsg("");
@@ -244,7 +253,6 @@ export default function ChatLayout({ user, channelId, logout }) {
       setImagePreview(null);
       setIsUploading(false);
     };
-
     if (selectedImage) {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -252,9 +260,7 @@ export default function ChatLayout({ user, channelId, logout }) {
         socketRef.current.emit("sendMessage", messageData, onSent);
       };
       reader.readAsDataURL(selectedImage);
-    } else {
-      socketRef.current.emit("sendMessage", messageData, onSent);
-    }
+    } else socketRef.current.emit("sendMessage", messageData, onSent);
   }, [newMsg, selectedImage, channelId]);
 
   const handleEdit = (msg) => {
@@ -269,15 +275,18 @@ export default function ChatLayout({ user, channelId, logout }) {
     setEditText("");
   }, [editingId, editText, channelId]);
 
-  const handleDelete = useCallback((id) => {
-    if (!socketRef.current) return;
-    if (!confirm("Are you sure?")) return;
-    socketRef.current.emit("deleteMessage", { id, channelId });
-  }, [channelId]);
+  const handleDelete = useCallback(
+    (id) => {
+      if (!socketRef.current) return;
+      if (!confirm("Are you sure?")) return;
+      socketRef.current.emit("deleteMessage", { id, channelId });
+    },
+    [channelId]
+  );
 
   const userDisplayName = user?.displayName || user?.username;
 
-  // Klik di luar untuk tutup tombol mobile
+  // Klik di luar untuk menutup menu mobile
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".message-item")) setActiveMessageId(null);
@@ -286,16 +295,11 @@ export default function ChatLayout({ user, channelId, logout }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Long press untuk mobile
+  // Long press mobile
   const handleTouchStart = (id) => {
-    longPressTimeoutRef.current = setTimeout(() => {
-      setActiveMessageId(id);
-    }, 500); // 0.5 detik hold
+    longPressTimeoutRef.current = setTimeout(() => setActiveMessageId(id), 500);
   };
-
-  const handleTouchEnd = () => {
-    clearTimeout(longPressTimeoutRef.current);
-  };
+  const handleTouchEnd = () => clearTimeout(longPressTimeoutRef.current);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground font-sans">
@@ -369,12 +373,12 @@ export default function ChatLayout({ user, channelId, logout }) {
                       <button onClick={() => { setEditingId(null); setEditText(""); }} className="bg-muted px-3 py-1 rounded text-foreground text-sm">Cancel</button>
                     </div>
                   </div>
-                ) : activeMessageId === msg._id && isOwn && (
+                ) : activeMessageId === msg._id && isOwn ? (
                   <div className="absolute top-1 right-1 flex space-x-1 opacity-0 animate-fadeIn">
                     <button onClick={() => handleEdit(msg)} className="text-xs bg-background text-foreground px-2 py-1 rounded hover:bg-accent transition-opacity duration-300">Edit</button>
                     <button onClick={() => handleDelete(msg._id)} className="text-xs bg-destructive text-destructive-foreground px-2 py-1 rounded hover:bg-destructive/90 transition-opacity duration-300">Delete</button>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           );
