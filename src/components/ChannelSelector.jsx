@@ -52,16 +52,8 @@ export default function ChannelSelector({
         ? channels.map((channel) => {
             const channelId = channel?._id || channel?.id;
             const isSelected = channelId === selectedChannelId;
-            const channelOwnerId =
-              channel?.owner?._id || channel?.createdBy?._id || channel?.owner || channel?.createdBy || null;
+            const channelOwnerId = channel?.owner?._id || channel?.owner;
             const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
-
-            if (!channelOwnerId) {
-              console.warn(
-                `⚠️ Channel ${channel?.name} tidak punya owner yang valid:`,
-                channel?.owner || channel?.createdBy
-              );
-            }
 
             return (
               <div
