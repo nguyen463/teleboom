@@ -1,4 +1,3 @@
-// ChannelsPage.jsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
@@ -8,19 +7,26 @@ import ChatLayout from "@/components/ChatLayout";
 import { useAuth } from "../utils/auth";
 
 export default function ChannelsPage() {
-  const { user, loading: authLoading, api } = useAuth();
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <ChannelsPageContent />
+    </Suspense>
+  );
+}
+
+function ChannelsPageContent() {
+  const { user, loading: authLoading, logout, api } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const id = searchParams.get("id");
+  const urlChannelId = searchParams.get("id");
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isManualSelection, setIsManualSelection] = useState(false);
 
-  // Fetch channels dari API
+  // Refetch channels dari API
   const fetchChannels = useCallback(async () => {
     if (!user?.token || !api?.get) {
       setError("Autentikasi tidak valid. Silakan login kembali.");
@@ -33,18 +39,7 @@ export default function ChannelsPage() {
 
     try {
       const response = await api.get("/api/channels");
-      const data = response.data || { channels: [] };
-      let channelsData = [];
-
-      if (Array.isArray(data)) {
-        channelsData = data;
-      } else if (Array.isArray(data.channels)) {
-        channelsData = data.channels;
-      } else if (Array.isArray(data.data)) {
-        channelsData = data.data;
-      } else if (data.channel) {
-        channelsData = [data.channel];
-      }
+      const channelsData = response.data || [];
 
       if (!Array.isArray(channelsData)) {
         console.warn("Unexpected API response format:", response.data);
@@ -52,79 +47,71 @@ export default function ChannelsPage() {
       }
 
       setChannels(channelsData);
+      
+      const currentChannelExists = channelsData.find(ch => (ch._id || ch.id) === urlChannelId);
 
-      // Auto select channel jika belum ada selection manual
-      if (!isManualSelection && channelsData.length > 0) {
-        const channelExists = channelsData.find(ch => ch._id === id || ch.id === id);
-        if (channelExists && id) {
-          setSelectedChannelId(id);
-        } else if (id && !channelExists) {
-          setError("Channel tidak ditemukan.");
-          handleSelectChannel(null); // Hapus id dari URL
-        } else if (channelsData.length > 0 && !selectedChannelId) {
-          setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
-        }
+      if (urlChannelId && currentChannelExists) {
+        setSelectedChannelId(urlChannelId);
+      } else if (channelsData.length > 0) {
+        // Pilih channel pertama jika tidak ada ID di URL atau ID tidak valid
+        const firstChannelId = channelsData[0]._id || channelsData[0].id;
+        setSelectedChannelId(firstChannelId);
+        handleSetUrlChannelId(firstChannelId);
+      } else {
+        setSelectedChannelId(null);
+        handleSetUrlChannelId(null);
       }
+
     } catch (err) {
       console.error("Error fetching channels:", err);
       setError("Gagal memuat channels. Silakan coba lagi.");
       if (err.response?.status === 401) {
-        router.push("/login");
+        logout();
       }
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, selectedChannelId, isManualSelection]);
+  }, [user, api, router, urlChannelId, logout]);
 
-  // Refetch manual
-  const refetchChannels = useCallback(() => {
-    setIsManualSelection(false);
-    fetchChannels();
-  }, [fetchChannels]);
-
-  // Handle select channel
-  const handleSelectChannel = useCallback(
+  // Handle set URL
+  const handleSetUrlChannelId = useCallback(
     (channelId) => {
-      if (!channelId) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.delete("id");
-        router.push(`${pathname}?${params.toString()}`, { scroll: false });
-        setSelectedChannelId(null);
-        return;
-      }
-      setIsManualSelection(true);
-      setSelectedChannelId(channelId);
-
       const params = new URLSearchParams(searchParams.toString());
-      params.set("id", channelId);
+      if (channelId) {
+        params.set("id", channelId);
+      } else {
+        params.delete("id");
+      }
       router.push(`${pathname}?${params.toString()}`, { scroll: false });
     },
     [searchParams, pathname, router]
   );
+  
+  const handleSelectChannel = useCallback(
+    (channelId) => {
+      setSelectedChannelId(channelId);
+      handleSetUrlChannelId(channelId);
+    },
+    [handleSetUrlChannelId]
+  );
 
-  // Handle create channel
   const handleCreateChannel = useCallback(() => {
     router.push("/channels/new");
   }, [router]);
 
-  // Handle logout
   const handleLogout = useCallback(() => {
-    sessionStorage.removeItem("chat-app-user");
-    sessionStorage.removeItem("chat-app-token");
-    router.push("/login");
-  }, [router]);
+    logout();
+  }, [logout]);
 
-  // Handle delete channel
   const handleDeleteChannel = useCallback(async (channelId) => {
     if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
       try {
         await api.delete(`/api/channels/${channelId}`);
-        setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== channelId));
-
-        // Auto-select channel lain jika yang dihapus adalah yang aktif
+        const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
+        setChannels(newChannels);
+        
         if (selectedChannelId === channelId) {
-          const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
-          const newSelectedId = newChannels[0]?._id || newChannels[0]?.id || null;
+          const newSelectedId = newChannels.length > 0 ? (newChannels[0]._id || newChannels[0].id) : null;
           handleSelectChannel(newSelectedId);
         }
       } catch (err) {
@@ -134,25 +121,45 @@ export default function ChannelsPage() {
     }
   }, [api, channels, selectedChannelId, handleSelectChannel]);
 
-  // Fetch channels pertama kali
+  // Fetch channels saat user terautentikasi dan pertama kali dimuat
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
   }, [user, channels.length, channelsLoading, fetchChannels]);
+  
+  // Sinkronisasi URL dengan state lokal
+  useEffect(() => {
+      if (urlChannelId && selectedChannelId !== urlChannelId) {
+          const channelExists = channels.some(ch => (ch._id || ch.id) === urlChannelId);
+          if (channelExists) {
+              setSelectedChannelId(urlChannelId);
+          } else if (!channelsLoading) {
+              // Jika ID di URL tidak valid, redirect ke channel pertama
+              const firstChannelId = channels.length > 0 ? (channels[0]._id || channels[0].id) : null;
+              handleSetUrlChannelId(firstChannelId);
+          }
+      }
+  }, [urlChannelId, selectedChannelId, channels, channelsLoading, handleSetUrlChannelId]);
 
   // Socket real-time listener
   useEffect(() => {
     if (!user || !api?.socket) return;
 
     const socket = api.socket;
+    
+    // Pastikan listener tidak menumpuk
+    socket.off("channelCreated");
+    socket.off("channelDeleted");
+    
     socket.on("channelCreated", (newChannel) => {
       setChannels(prev => [...prev, newChannel]);
     });
     socket.on("channelDeleted", (deletedChannelId) => {
       setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== deletedChannelId));
       if (selectedChannelId === deletedChannelId) {
-        handleSelectChannel(channels[0]?._id || channels[0]?.id || null);
+        const newSelectedId = channels.length > 0 ? (channels[0]?._id || channels[0]?.id) : null;
+        handleSelectChannel(newSelectedId);
       }
     });
 
@@ -160,15 +167,8 @@ export default function ChannelsPage() {
       socket.off("channelCreated");
       socket.off("channelDeleted");
     };
-  }, [user, api, selectedChannelId, handleSelectChannel, channels]);
+  }, [user, api, selectedChannelId, handleSelectChannel, channels.length]);
 
-  // Auto-update jika URL id berubah
-  useEffect(() => {
-    if (id && id !== selectedChannelId && !isManualSelection) {
-      handleSelectChannel(id);
-    }
-    setIsManualSelection(false);
-  }, [id, selectedChannelId, handleSelectChannel]);
 
   if (authLoading) {
     return (
@@ -190,7 +190,7 @@ export default function ChannelsPage() {
           loading={channelsLoading}
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
-          onRefetch={refetchChannels}
+          onRefetch={fetchChannels}
           onCreateChannel={handleCreateChannel}
           onLogout={handleLogout}
           error={error}
@@ -198,89 +198,79 @@ export default function ChannelsPage() {
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center h-full bg-background">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
-              <p className="text-foreground">Memuat chat...</p>
-            </div>
-          }
-        >
-          {selectedChannelId ? (
+        <div className="flex items-center justify-center h-full bg-background">
+          {channelsLoading ? (
+            <LoadingState message="Memuat channels..." />
+          ) : error ? (
+            <ErrorState message={error} onRetry={fetchChannels} />
+          ) : selectedChannelId ? (
             <ChatLayout
               user={user}
               channelId={selectedChannelId}
-              onLogout={handleLogout}
+              logout={handleLogout}
               key={selectedChannelId}
             />
           ) : (
-            <div className="flex items-center justify-center h-full bg-background">
-              <div className="text-center p-6 max-w-md">
-                {channelsLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-foreground">Memuat channels...</p>
-                  </>
-                ) : error ? (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-destructive-foreground mb-2">{error}</p>
-                    <button
-                      onClick={refetchChannels}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      Coba Lagi
-                    </button>
-                  </>
-                ) : channels.length === 0 ? (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-foreground mb-2">Belum ada channel</p>
-                    <button
-                      onClick={handleCreateChannel}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      Buat Channel Pertama
-                    </button>
-                  </>
-                ) : (
-                  <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
-                )}
-              </div>
-            </div>
+            <EmptyState onCreateChannel={handleCreateChannel} />
           )}
-        </Suspense>
+        </div>
       </div>
     </div>
   );
+}
+
+function LoadingScreen() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-background">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+      <p className="text-foreground">Memuat aplikasi...</p>
+    </div>
+  );
+}
+
+function LoadingState({ message }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-foreground">{message}</p>
+        </div>
+    );
+}
+
+function ErrorState({ message, onRetry }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <p className="text-destructive-foreground mb-2">{message}</p>
+            <button
+                onClick={onRetry}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+                Coba Lagi
+            </button>
+        </div>
+    );
+}
+
+function EmptyState({ onCreateChannel }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+            </div>
+            <p className="text-foreground mb-2">Belum ada channel</p>
+            <button
+                onClick={onCreateChannel}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+                Buat Channel Pertama
+            </button>
+        </div>
+    );
 }
