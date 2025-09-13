@@ -51,11 +51,14 @@ export default function ChannelSelector({
         const channelId = channel._id || channel.id;
         const isSelected = channelId === selectedChannelId;
         
-        // Ambil ID pemilik channel dari data yang diterima
         const channelOwnerId = channel.ownerId?._id || channel.ownerId;
-        
-        // Periksa apakah user saat ini adalah pemilik channel
         const isOwner = user?.id === channelOwnerId;
+
+        console.log(`Channel: ${channel.name}`);
+        console.log(`  User ID:    ${user?.id}`);
+        console.log(`  Owner ID:   ${channelOwnerId}`);
+        console.log(`  Match:      ${isOwner}`);
+        console.log("---");
 
         return (
           <div key={channelId} className="relative flex items-center group">
