@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import ChannelSelector from "@/components/ChannelSelector";
-import ChatLayout from "@/components/ChatLayout";
-import { useAuth } from "../utils/auth";
+import ChannelSelector from "../../components/ChannelSelector";
+import ChatLayout from "../../components/ChatLayout";
+import { useAuth } from "../../utils/auth";
+import { useTheme } from "../../components/ThemeContext";
 
-export default function ChannelsPage() {
+function ChannelsContainer() {
   const { user, loading: authLoading, api } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -278,5 +280,19 @@ export default function ChannelsPage() {
         </Suspense>
       </div>
     </div>
+  );
+}
+
+export default function ChannelsPageWrapper() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        </div>
+      }
+    >
+      <ChannelsContainer />
+    </Suspense>
   );
 }
