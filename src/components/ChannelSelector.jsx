@@ -1,8 +1,9 @@
+// ChannelSelector.jsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/utils/auth"; // ✅ jangan dihapus
+import { useAuth } from "@/app/utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
@@ -23,7 +24,6 @@ export default function ChannelSelector({
   const menuRef = useRef(null);
   const router = useRouter();
 
-  // Klik di luar menu untuk menutup dropdown
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -36,7 +36,6 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
-  // Escape key untuk menutup dropdown
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === "Escape") setShowMenu(false);
@@ -47,18 +46,14 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
-  // Generate tombol channel
   const channelButtons = useMemo(
     () =>
       Array.isArray(channels)
         ? channels.map((channel) => {
             const channelId = channel?._id || channel?.id;
             const isSelected = channelId === selectedChannelId;
-
-            // Ambil owner ID, bisa populated object atau hanya ObjectId
             const channelOwnerId =
               channel?.owner?._id || channel?.createdBy?._id || channel?.owner || channel?.createdBy || null;
-
             const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
 
             if (!channelOwnerId) {
@@ -69,8 +64,8 @@ export default function ChannelSelector({
             }
 
             return (
-              <div 
-                key={channelId} 
+              <div
+                key={channelId}
                 className="relative flex items-center group"
                 onMouseEnter={() => setHoveredChannelId(channelId)}
                 onMouseLeave={() => setHoveredChannelId(null)}
@@ -91,7 +86,6 @@ export default function ChannelSelector({
                   )}
                 </button>
 
-                {/* Tombol hapus hanya untuk owner dan saat di-hover */}
                 {isOwner && hoveredChannelId === channelId && (
                   <button
                     onClick={(e) => {
@@ -127,11 +121,9 @@ export default function ChannelSelector({
 
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
-      {/* Header */}
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
-          {/* Tombol buat channel */}
           <button
             onClick={onCreateChannel}
             className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
@@ -149,7 +141,6 @@ export default function ChannelSelector({
             </svg>
           </button>
 
-          {/* Dropdown menu */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -207,7 +198,6 @@ export default function ChannelSelector({
         </div>
       </div>
 
-      {/* List Channel */}
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
