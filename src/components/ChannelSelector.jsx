@@ -8,7 +8,7 @@ import { useTheme } from "./ThemeContext";
 export default function ChannelSelector({
   user,
   channels = [],
-  loading,
+  loading = false,
   selectedChannelId,
   onSelectChannel,
   onRefetch,
@@ -76,7 +76,7 @@ export default function ChannelSelector({
                   e.stopPropagation(); // Stop event bubbling to parent button
                   onDeleteChannel(channelId);
                 }}
-                className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity`}
+                className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-100`} // PERBAIKAN: Selalu terlihat untuk debugging
                 aria-label={`Delete channel ${channel.name}`}
                 title={`Delete channel ${channel.name}`}
               >
