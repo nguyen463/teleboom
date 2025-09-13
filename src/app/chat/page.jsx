@@ -4,10 +4,9 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
-import { useAuth } from "../utils/auth";
+import { useAuth } from "../../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
-// Komponen utama yang menampung semua logika klien
 function ChatContainer() {
   const { user, loading, logout, api } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -22,7 +21,6 @@ function ChatContainer() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
-  // Fungsi untuk mengambil data channel dari API
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
     setChannelsLoading(true);
@@ -60,14 +58,12 @@ function ChatContainer() {
     }
   }, [user, api, urlChannelId, selectedChannelId, logout]);
 
-  // Panggil fetchChannels saat user data tersedia
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
   }, [user, channels.length, channelsLoading, fetchChannels]);
 
-  // Sinkronkan selectedChannelId dengan query param saat berubah
   useEffect(() => {
     if (urlChannelId && urlChannelId !== "undefined" && urlChannelId !== selectedChannelId && !manualSelectionRef.current) {
       handleSelectChannel(urlChannelId);
