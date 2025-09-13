@@ -20,21 +20,10 @@ function ChannelsPageContent() {
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
-
-  // Gunakan useRef untuk memastikan fetch hanya dilakukan sekali
   const hasFetchedChannels = useRef(false);
 
-  // Perbaikan: useEffect hanya berjalan sekali saat user tersedia
   useEffect(() => {
-    if (user && !hasFetchedChannels.current) {
-      fetchChannels();
-      hasFetchedChannels.current = true;
-    }
-  }, [user, fetchChannels]);
-
-  // Listener untuk pembaruan channel
-  useEffect(() => {
-    if (!user || !api?.socket) {
+    if (!user || !api?.socket || hasFetchedChannels.current) {
       return;
     }
     const socket = api.socket;
@@ -43,10 +32,14 @@ function ChannelsPageContent() {
       setChannels(prev => [...prev, newChannel]);
     });
     
+    if (!channelsLoading) {
+      fetchChannels();
+    }
+    
     return () => {
       socket.off("channelCreated");
     };
-  }, [user, api]);
+  }, [user, api, fetchChannels, channelsLoading]);
   
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
@@ -83,7 +76,7 @@ function ChannelsPageContent() {
       console.error("Error fetching channels:", err);
       setError("Gagal memuat channels. Silakan coba lagi.");
       if (err.response?.status === 401) {
-        router.push("/login");
+        logout();
       }
     } finally {
       setChannelsLoading(false);
