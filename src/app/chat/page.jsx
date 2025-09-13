@@ -21,6 +21,7 @@ function ChannelsPageContent() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
+  // ---------------- Fetch channels ----------------
   const fetchChannels = useCallback(async () => {
     if (!user?.token || channelsLoading) return;
 
@@ -44,6 +45,7 @@ function ChannelsPageContent() {
 
       setChannels(channelsData || []);
 
+      // Auto select channel if not manually selected
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(
           (ch) => ch._id === id || ch.id === id
@@ -71,20 +73,28 @@ function ChannelsPageContent() {
     }
   }, [user, fetchChannels, channels.length, channelsLoading]);
 
+  // ---------------- Socket.IO ----------------
   useEffect(() => {
     if (!user || !api?.socket) return;
-
     const socket = api.socket;
 
+    // Logging connect/disconnect
+    socket.on("connect", () => console.log("Socket connected:", socket.id));
+    socket.on("disconnect", () => console.log("Socket disconnected"));
+
+    // Channel created listener
     socket.on("channelCreated", (newChannel) => {
       setChannels((prev) => [...prev, newChannel]);
     });
 
     return () => {
+      socket.off("connect");
+      socket.off("disconnect");
       socket.off("channelCreated");
     };
   }, [user, api]);
 
+  // ---------------- Channel selection ----------------
   const handleSelectChannel = useCallback(
     (channelId) => {
       if (!channelId || channelId === "undefined") return;
@@ -92,17 +102,13 @@ function ChannelsPageContent() {
       setSelectedChannelId(channelId);
 
       const params = new URLSearchParams(searchParams.toString());
-      if (channelId) {
-        params.set("id", channelId);
-      } else {
-        params.delete("id");
-      }
+      params.set("id", channelId);
       const newUrl = `${pathname}?${params.toString()}`;
       router.push(newUrl, { scroll: false });
 
       setTimeout(() => {
         manualSelectionRef.current = false;
-      }, 100);
+      }, 200); // sedikit lebih aman
     },
     [searchParams, pathname, router]
   );
@@ -123,6 +129,7 @@ function ChannelsPageContent() {
     fetchChannels();
   }, [fetchChannels]);
 
+  // ---------------- Create / Delete / Logout ----------------
   const handleCreateChannel = useCallback(() => {
     router.push("/channels/new");
   }, [router]);
@@ -152,13 +159,16 @@ function ChannelsPageContent() {
           }
         } catch (err) {
           console.error("Gagal menghapus channel:", err);
-          alert("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
+          alert(
+            "Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya."
+          );
         }
       }
     },
     [api, channels, selectedChannelId, handleSelectChannel]
   );
 
+  // ---------------- Render ----------------
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -169,6 +179,7 @@ function ChannelsPageContent() {
   }
 
   if (!user) {
+    router.push("/login");
     return null;
   }
 
