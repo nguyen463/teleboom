@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
-import { something } from './src/app/utils/auth.js;
+import { something } from './src/app/utils/auth.js';
 import { useTheme } from "../../components/ThemeContext";
 
 function ChatContainer() {
