@@ -19,33 +19,7 @@ export default function ChannelsPage() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
-  // Implementasi real-time listener untuk channel
-  // Asumsi: Backend menggunakan Socket.IO dan emit event "channelCreated"
-  // Jika menggunakan Firestore, ganti dengan onSnapshot
-  useEffect(() => {
-    if (!user || !api?.socket) {
-      return;
-    }
-
-    const socket = api.socket;
-    
-    // Listener untuk pembaruan channel
-    socket.on("channelCreated", (newChannel) => {
-      setChannels(prev => [...prev, newChannel]);
-    });
-    
-    // Panggil fetchChannels saat user dan socket siap
-    if (!channels.length) {
-      fetchChannels();
-    }
-    
-    // Membersihkan listener saat komponen di-unmount
-    return () => {
-      socket.off("channelCreated");
-    };
-  }, [user, api, channels.length]);
-  
-  // Fungsi fetchChannels diubah menjadi fetch saja, bukan listener
+  // Fetch channels dari API
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
 
@@ -69,6 +43,7 @@ export default function ChannelsPage() {
 
       setChannels(channelsData || []);
 
+      // Auto select channel jika belum ada selection manual
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(ch => ch._id === id || ch.id === id);
         if (channelExists && id && id !== "undefined") {
@@ -86,20 +61,15 @@ export default function ChannelsPage() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, channels.length, selectedChannelId]);
+  }, [user, id, api, router, selectedChannelId]);
 
-  useEffect(() => {
-    if (user && !channels.length && !channelsLoading) {
-      fetchChannels();
-    }
-  }, [user, fetchChannels, channels.length, channelsLoading]);
+  // Refetch manual
+  const refetchChannels = useCallback(() => {
+    manualSelectionRef.current = false;
+    fetchChannels();
+  }, [fetchChannels]);
 
-  useEffect(() => {
-    if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
-      handleSelectChannel(id);
-    }
-  }, [id, selectedChannelId, handleSelectChannel]);
-
+  // Handle select channel
   const handleSelectChannel = useCallback(
     (channelId) => {
       if (!channelId || channelId === "undefined") return;
@@ -122,30 +92,26 @@ export default function ChannelsPage() {
     [searchParams, pathname, router]
   );
 
-  const refetchChannels = useCallback(() => {
-    manualSelectionRef.current = false;
-    fetchChannels();
-  }, [fetchChannels]);
-
+  // Handle create channel
   const handleCreateChannel = useCallback(() => {
     router.push("/channels/new");
   }, [router]);
 
+  // Handle logout
   const handleLogout = useCallback(() => {
     sessionStorage.removeItem("chat-app-user");
     sessionStorage.removeItem("chat-app-token");
     router.push("/login");
   }, [router]);
 
-  // Tambahkan fungsi untuk menghapus channel
+  // Handle delete channel
   const handleDeleteChannel = useCallback(async (channelId) => {
     if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
       try {
         await api.delete(`/api/channels/${channelId}`);
-        // Jika berhasil, perbarui daftar channel secara lokal
         setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== channelId));
-        
-        // Alihkan pengguna jika channel yang aktif dihapus
+
+        // Auto-select channel lain jika yang dihapus adalah yang aktif
         if (selectedChannelId === channelId) {
           const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
           const newSelectedId = newChannels[0]?._id || newChannels[0]?.id || null;
@@ -158,6 +124,34 @@ export default function ChannelsPage() {
     }
   }, [api, channels, selectedChannelId, handleSelectChannel]);
 
+  // Fetch channels pertama kali
+  useEffect(() => {
+    if (user && !channels.length && !channelsLoading) {
+      fetchChannels();
+    }
+  }, [user, channels.length, channelsLoading, fetchChannels]);
+
+  // Socket real-time listener
+  useEffect(() => {
+    if (!user || !api?.socket) return;
+
+    const socket = api.socket;
+    socket.on("channelCreated", (newChannel) => {
+      setChannels(prev => [...prev, newChannel]);
+    });
+
+    return () => {
+      socket.off("channelCreated");
+    };
+  }, [user, api]);
+
+  // Auto-update jika URL id berubah
+  useEffect(() => {
+    if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
+      handleSelectChannel(id);
+    }
+  }, [id, selectedChannelId, handleSelectChannel]);
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -167,13 +161,10 @@ export default function ChannelsPage() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* Ganti kelas hardcode dengan kelas tema */}
       <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
@@ -185,7 +176,7 @@ export default function ChannelsPage() {
           onCreateChannel={handleCreateChannel}
           onLogout={handleLogout}
           error={error}
-          onDeleteChannel={handleDeleteChannel} // Teruskan prop ini
+          onDeleteChannel={handleDeleteChannel}
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
@@ -264,25 +255,7 @@ export default function ChannelsPage() {
                     </button>
                   </>
                 ) : (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
-                  </>
+                  <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
                 )}
               </div>
             </div>
