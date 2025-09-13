@@ -21,27 +21,8 @@ function ChannelsPageContent() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
-  useEffect(() => {
-    if (!user || !api?.socket) {
-      return;
-    }
-    const socket = api.socket;
-    
-    socket.on("channelCreated", (newChannel) => {
-      setChannels(prev => [...prev, newChannel]);
-    });
-    
-    if (!channels.length) {
-      fetchChannels();
-    }
-    
-    return () => {
-      socket.off("channelCreated");
-    };
-  }, [user, api, channels.length, fetchChannels]);
-  
   const fetchChannels = useCallback(async () => {
-    if (!user?.token) return;
+    if (!user?.token || channelsLoading) return; // ✅ cegah loop fetch terus
 
     setChannelsLoading(true);
     setError(null);
@@ -64,10 +45,12 @@ function ChannelsPageContent() {
       setChannels(channelsData || []);
 
       if (!manualSelectionRef.current && channelsData.length > 0) {
-        const channelExists = channelsData.find(ch => ch._id === id || ch.id === id);
+        const channelExists = channelsData.find(
+          (ch) => ch._id === id || ch.id === id
+        );
         if (channelExists && id && id !== "undefined") {
           setSelectedChannelId(id);
-        } else if (channelsData.length > 0 && !selectedChannelId) {
+        } else if (!selectedChannelId) {
           setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
         }
       }
@@ -80,19 +63,27 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, channels.length, selectedChannelId]);
+  }, [user, id, api, router, selectedChannelId, channelsLoading]);
 
   useEffect(() => {
-    if (user && !channels.length && !channelsLoading) {
+    if (user && !channelsLoading && channels.length === 0) {
       fetchChannels();
     }
   }, [user, fetchChannels, channels.length, channelsLoading]);
 
   useEffect(() => {
-    if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
-      handleSelectChannel(id);
-    }
-  }, [id, selectedChannelId, handleSelectChannel]);
+    if (!user || !api?.socket) return;
+
+    const socket = api.socket;
+
+    socket.on("channelCreated", (newChannel) => {
+      setChannels((prev) => [...prev, newChannel]);
+    });
+
+    return () => {
+      socket.off("channelCreated");
+    };
+  }, [user, api]);
 
   const handleSelectChannel = useCallback(
     (channelId) => {
@@ -116,6 +107,17 @@ function ChannelsPageContent() {
     [searchParams, pathname, router]
   );
 
+  useEffect(() => {
+    if (
+      id &&
+      id !== "undefined" &&
+      id !== selectedChannelId &&
+      !manualSelectionRef.current
+    ) {
+      handleSelectChannel(id);
+    }
+  }, [id, selectedChannelId, handleSelectChannel]);
+
   const refetchChannels = useCallback(() => {
     manualSelectionRef.current = false;
     fetchChannels();
@@ -131,23 +133,31 @@ function ChannelsPageContent() {
     router.push("/login");
   }, [router]);
 
-  const handleDeleteChannel = useCallback(async (channelId) => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
-      try {
-        await api.delete(`/api/channels/${channelId}`);
-        setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== channelId));
-        
-        if (selectedChannelId === channelId) {
-          const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
-          const newSelectedId = newChannels[0]?._id || newChannels[0]?.id || null;
-          handleSelectChannel(newSelectedId);
+  const handleDeleteChannel = useCallback(
+    async (channelId) => {
+      if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
+        try {
+          await api.delete(`/api/channels/${channelId}`);
+          setChannels((prev) =>
+            prev.filter((ch) => (ch._id || ch.id) !== channelId)
+          );
+
+          if (selectedChannelId === channelId) {
+            const newChannels = channels.filter(
+              (ch) => (ch._id || ch.id) !== channelId
+            );
+            const newSelectedId =
+              newChannels[0]?._id || newChannels[0]?.id || null;
+            handleSelectChannel(newSelectedId);
+          }
+        } catch (err) {
+          console.error("Gagal menghapus channel:", err);
+          alert("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
         }
-      } catch (err) {
-        console.error("Gagal menghapus channel:", err);
-        alert("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
       }
-    }
-  }, [api, channels, selectedChannelId, handleSelectChannel]);
+    },
+    [api, channels, selectedChannelId, handleSelectChannel]
+  );
 
   if (authLoading) {
     return (
@@ -178,7 +188,11 @@ function ChannelsPageContent() {
           onDeleteChannel={handleDeleteChannel}
         />
       </div>
-      <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
+      <div
+        className="flex-1 flex flex-col bg-background"
+        role="main"
+        aria-label="Chat area"
+      >
         <Suspense
           fallback={
             <div className="flex items-center justify-center h-full bg-background">
