@@ -1,10 +1,10 @@
+// LoginPage.jsx
 "use client";
 
 import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from '../utils/auth';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -24,21 +24,27 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Create a new object with the correct key for the backend API
+    const loginData = {
+      credential: formData.email, // <--- Corrected this line
+      password: formData.password,
+    };
+
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, formData);
+      const response = await axios.post(`${API_URL}/api/auth/login`, loginData);
       const { token, user } = response.data;
 
-      // PENTING: Mengganti localStorage dengan sessionStorage
       sessionStorage.setItem("chat-app-token", token);
       sessionStorage.setItem("chat-app-user", JSON.stringify(user));
 
       console.log("Token berhasil disimpan di sessionStorage.");
       console.log("Data user yang disimpan:", sessionStorage.getItem("chat-app-user"));
 
-      router.push("/chat");
+      router.push("/channels"); // Redirect to /channels instead of /chat
     } catch (err) {
       console.error("Kesalahan saat login:", err);
-      setError(err.response?.data?.message || "Login gagal. Periksa kembali email dan password Anda.");
+      setError(err.response?.data?.message || "Login gagal. Periksa kembali kredensial Anda.");
     } finally {
       setLoading(false);
     }
