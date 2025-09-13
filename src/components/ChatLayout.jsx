@@ -179,6 +179,15 @@ export default function ChatLayout({ user, channelId, logout }) {
           const normalizedMsg = normalizeMessage(msg);
           if (normalizedMsg) {
             setMessages((prev) => [...prev, normalizedMsg]);
+            
+            // Tambahkan kembali logika scroll otomatis
+            const container = messagesContainerRef.current;
+            const isScrolledToBottom = container &&
+              (container.scrollHeight - container.clientHeight <= container.scrollTop + 50);
+
+            if (isScrolledToBottom) {
+              setTimeout(() => scrollToBottom(), 100);
+            }
           }
         }
       } catch (error) {
