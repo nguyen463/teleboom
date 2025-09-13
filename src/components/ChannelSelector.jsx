@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
@@ -21,7 +22,6 @@ export default function ChannelSelector({
   const menuRef = useRef(null);
   const router = useRouter();
 
-  // Handle click outside menu
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -34,7 +34,6 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
-  // Handle escape key
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === "Escape") {
@@ -47,15 +46,14 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
-  // Render list of channels
   const channelButtons = useMemo(
     () =>
       (channels || []).map((channel) => {
         const channelId = channel?._id || channel?.id;
         const isSelected = channelId === selectedChannelId;
 
-        // Ambil ownerId secara aman
-        const channelOwnerId = channel?.ownerId ?? channel?.owner?._id ?? null;
+        // Perbaikan: pakai createdBy dari backend
+        const channelOwnerId = channel?.createdBy?._id ?? channel?.createdBy ?? null;
         const isOwner = channelOwnerId && user?.id === channelOwnerId;
 
         return (
@@ -76,11 +74,11 @@ export default function ChannelSelector({
               )}
             </button>
 
-            {/* Tombol hapus untuk owner */}
+            {/* Tombol hapus untuk pemilik channel */}
             {isOwner && (
               <button
                 onClick={(e) => {
-                  e.stopPropagation(); // Prevent selecting channel
+                  e.stopPropagation();
                   onDeleteChannel(channelId);
                 }}
                 className="absolute right-2 p-2 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -111,7 +109,6 @@ export default function ChannelSelector({
 
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
-      {/* Header */}
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
@@ -131,8 +128,6 @@ export default function ChannelSelector({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
-
-          {/* Menu dropdown */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -150,7 +145,6 @@ export default function ChannelSelector({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-
             {showMenu && (
               <div
                 className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200"
@@ -189,7 +183,6 @@ export default function ChannelSelector({
         </div>
       </div>
 
-      {/* Channel list */}
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
