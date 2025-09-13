@@ -5,11 +5,13 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "@/app/utils/auth";
-import { useTheme } from "../../components/ThemeContext";
+import { ThemeContext } from "../../components/ThemeContext";
+import { useContext } from "react";
 
-function ChannelsContainer() {
+function ChannelsPageContent() {
   const { user, loading: authLoading, api } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  // PERBAIKAN: Menggunakan useContext secara langsung
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -283,7 +285,8 @@ function ChannelsContainer() {
   );
 }
 
-export default function ChannelsPageWrapper() {
+// Komponen utama yang akan di-export
+export default function ChannelsPage() {
   return (
     <Suspense
       fallback={
@@ -292,7 +295,7 @@ export default function ChannelsPageWrapper() {
         </div>
       }
     >
-      <ChannelsContainer />
+      <ChannelsPageContent />
     </Suspense>
   );
 }
