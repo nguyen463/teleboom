@@ -1,6 +1,7 @@
+// ChannelsPage.jsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "@/components/ChannelSelector";
 import ChatLayout from "@/components/ChatLayout";
@@ -26,11 +27,10 @@ function ChannelsPageContent() {
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Refetch channels dari API
   const fetchChannels = useCallback(async () => {
     if (!user?.token || !api?.get) {
       setError("Autentikasi tidak valid. Silakan login kembali.");
-      router.push("/login");
+      logout();
       return;
     }
 
@@ -53,7 +53,6 @@ function ChannelsPageContent() {
       if (urlChannelId && currentChannelExists) {
         setSelectedChannelId(urlChannelId);
       } else if (channelsData.length > 0) {
-        // Pilih channel pertama jika tidak ada ID di URL atau ID tidak valid
         const firstChannelId = channelsData[0]._id || channelsData[0].id;
         setSelectedChannelId(firstChannelId);
         handleSetUrlChannelId(firstChannelId);
@@ -71,9 +70,8 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, api, router, urlChannelId, logout]);
+  }, [user, api, router, urlChannelId, logout, pathname, searchParams]);
 
-  // Handle set URL
   const handleSetUrlChannelId = useCallback(
     (channelId) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -99,10 +97,6 @@ function ChannelsPageContent() {
     router.push("/channels/new");
   }, [router]);
 
-  const handleLogout = useCallback(() => {
-    logout();
-  }, [logout]);
-
   const handleDeleteChannel = useCallback(async (channelId) => {
     if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
       try {
@@ -121,34 +115,16 @@ function ChannelsPageContent() {
     }
   }, [api, channels, selectedChannelId, handleSelectChannel]);
 
-  // Fetch channels saat user terautentikasi dan pertama kali dimuat
   useEffect(() => {
     if (user && !channels.length && !channelsLoading) {
       fetchChannels();
     }
   }, [user, channels.length, channelsLoading, fetchChannels]);
   
-  // Sinkronisasi URL dengan state lokal
-  useEffect(() => {
-      if (urlChannelId && selectedChannelId !== urlChannelId) {
-          const channelExists = channels.some(ch => (ch._id || ch.id) === urlChannelId);
-          if (channelExists) {
-              setSelectedChannelId(urlChannelId);
-          } else if (!channelsLoading) {
-              // Jika ID di URL tidak valid, redirect ke channel pertama
-              const firstChannelId = channels.length > 0 ? (channels[0]._id || channels[0].id) : null;
-              handleSetUrlChannelId(firstChannelId);
-          }
-      }
-  }, [urlChannelId, selectedChannelId, channels, channelsLoading, handleSetUrlChannelId]);
-
-  // Socket real-time listener
   useEffect(() => {
     if (!user || !api?.socket) return;
-
     const socket = api.socket;
     
-    // Pastikan listener tidak menumpuk
     socket.off("channelCreated");
     socket.off("channelDeleted");
     
@@ -168,7 +144,6 @@ function ChannelsPageContent() {
       socket.off("channelDeleted");
     };
   }, [user, api, selectedChannelId, handleSelectChannel, channels.length]);
-
 
   if (authLoading) {
     return (
@@ -192,7 +167,7 @@ function ChannelsPageContent() {
           onSelectChannel={handleSelectChannel}
           onRefetch={fetchChannels}
           onCreateChannel={handleCreateChannel}
-          onLogout={handleLogout}
+          onLogout={logout}
           error={error}
           onDeleteChannel={handleDeleteChannel}
         />
@@ -207,7 +182,7 @@ function ChannelsPageContent() {
             <ChatLayout
               user={user}
               channelId={selectedChannelId}
-              logout={handleLogout}
+              logout={logout}
               key={selectedChannelId}
             />
           ) : (
