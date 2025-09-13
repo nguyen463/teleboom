@@ -6,7 +6,6 @@ import { useAuth } from "@/app/utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
-  user,
   channels = [],
   loading = false,
   selectedChannelId,
@@ -17,6 +16,7 @@ export default function ChannelSelector({
   onDeleteChannel,
   error,
 }) {
+  const { user } = useAuth(); // ambil user dari context
   const { theme, toggleTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
