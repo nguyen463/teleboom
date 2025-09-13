@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense, useContext } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "@/app/utils/auth";
-import { useTheme } from "../../components/ThemeContext";
+import { ThemeContext } from "../../components/ThemeContext";
 
-// Komponen utama yang menampung semua logika klien
 function ChannelsPageContent() {
   const { user, loading: authLoading, api, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -22,6 +21,18 @@ function ChannelsPageContent() {
   const [error, setError] = useState(null);
   const manualSelectionRef = useRef(false);
 
+  // Gunakan useRef untuk memastikan fetch hanya dilakukan sekali
+  const hasFetchedChannels = useRef(false);
+
+  // Perbaikan: useEffect hanya berjalan sekali saat user tersedia
+  useEffect(() => {
+    if (user && !hasFetchedChannels.current) {
+      fetchChannels();
+      hasFetchedChannels.current = true;
+    }
+  }, [user, fetchChannels]);
+
+  // Listener untuk pembaruan channel
   useEffect(() => {
     if (!user || !api?.socket) {
       return;
@@ -32,14 +43,10 @@ function ChannelsPageContent() {
       setChannels(prev => [...prev, newChannel]);
     });
     
-    if (!channels.length) {
-      fetchChannels();
-    }
-    
     return () => {
       socket.off("channelCreated");
     };
-  }, [user, api, channels.length]);
+  }, [user, api]);
   
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
@@ -81,13 +88,7 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, channels.length, selectedChannelId]);
-
-  useEffect(() => {
-    if (user && !channels.length && !channelsLoading) {
-      fetchChannels();
-    }
-  }, [user, fetchChannels, channels.length, channelsLoading]);
+  }, [user, id, api, router, selectedChannelId, logout]);
 
   useEffect(() => {
     if (id && id !== "undefined" && id !== selectedChannelId && !manualSelectionRef.current) {
