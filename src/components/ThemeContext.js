@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useState, useEffect, useCallback } from "react";
+import { createContext, useState, useEffect, useCallback, useContext } from "react";
 
 export const ThemeContext = createContext();
 
@@ -28,3 +28,6 @@ export function ThemeProvider({ children }) {
     </ThemeContext.Provider>
   );
 }
+
+// Tambahkan hook kustom ini agar bisa diimpor oleh komponen lain
+export const useTheme = () => useContext(ThemeContext);
