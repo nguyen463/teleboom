@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { something } from '../app/utils/auth';
+import { useAuth } from "../utils/auth";
 import { useTheme } from "./ThemeContext";
 
 export default function ChannelSelector({
@@ -54,12 +54,6 @@ export default function ChannelSelector({
         
         const channelOwnerId = channel.ownerId?._id || channel.ownerId;
         const isOwner = user?.id === channelOwnerId;
-
-        console.log(`Channel: ${channel.name}`);
-        console.log(`  User ID:    ${user?.id}`);
-        console.log(`  Owner ID:   ${channelOwnerId}`);
-        console.log(`  Match:      ${isOwner}`);
-        console.log("---");
 
         return (
           <div key={channelId} className="relative flex items-center group">
