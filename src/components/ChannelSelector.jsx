@@ -46,14 +46,29 @@ export default function ChannelSelector({
     }
   }, [showMenu]);
 
+  // Debug: lihat struktur channel & user
+  useEffect(() => {
+    console.log("User:", user);
+    console.log("Channels:", channels);
+  }, [user, channels]);
+
   const channelButtons = useMemo(
     () =>
       (channels || []).map((channel) => {
         const channelId = channel._id || channel.id;
         const isSelected = channelId === selectedChannelId;
-        
-        const channelOwnerId = channel.ownerId?._id || channel.ownerId;
-        const isOwner = user?.id === channelOwnerId;
+
+        // Cari owner ID dari berbagai kemungkinan field
+        const channelOwnerId =
+          channel.ownerId?._id ||
+          channel.ownerId ||
+          channel.createdBy ||
+          channel.userId;
+
+        // Cek user._id / user.id match dengan channel owner
+        const isOwner =
+          user?._id === channelOwnerId ||
+          user?.id === channelOwnerId;
 
         return (
           <div key={channelId} className="relative flex items-center group">
@@ -70,18 +85,31 @@ export default function ChannelSelector({
                 <div className="text-xs opacity-75 truncate">{channel.description}</div>
               )}
             </button>
+
+            {/* Tombol hapus hanya muncul untuk owner */}
             {isOwner && (
               <button
                 onClick={(e) => {
-                  e.stopPropagation(); // Stop event bubbling to parent button
+                  e.stopPropagation(); // Stop event bubbling
                   onDeleteChannel(channelId);
                 }}
-                className={`absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity`}
+                className="absolute right-2 p-2 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                 aria-label={`Delete channel ${channel.name}`}
                 title={`Delete channel ${channel.name}`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
                 </svg>
               </button>
             )}
