@@ -569,8 +569,8 @@ export default function ChatLayout({ user, channelId, logout }) {
             }
 
             return (
-              <div 
-                key={msg._id} 
+              <div
+                key={msg._id}
                 className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 onMouseEnter={() => setHoveredMessageId(msg._id)}
                 onMouseLeave={() => setHoveredMessageId(null)}
@@ -598,9 +598,15 @@ export default function ChatLayout({ user, channelId, logout }) {
                       />
                     </div>
                   )}
-                  {msg.text && <span className="block text-base">{msg.text}</span>}
-                  
-                  {/* Container ikon yang selalu ada */}
+                  {msg.text && (
+                    <span
+                      className="block text-base whitespace-pre-wrap break-words"
+                      style={{ overflowWrap: "break-word" }}
+                    >
+                      {msg.text}
+                    </span>
+                  )}
+
                   {isOwn && (
                     <div className={`absolute top-0 right-0 p-1 flex space-x-1 transition-opacity duration-200 ${hoveredMessageId === msg._id ? 'opacity-100' : 'opacity-0'}`}>
                       <button
