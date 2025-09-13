@@ -32,14 +32,13 @@ function ChannelsPageContent() {
       setChannels(prev => [...prev, newChannel]);
     });
     
-    if (!channelsLoading) {
-      fetchChannels();
-    }
+    fetchChannels();
+    hasFetchedChannels.current = true;
     
     return () => {
       socket.off("channelCreated");
     };
-  }, [user, api, fetchChannels, channelsLoading]);
+  }, [user, api, fetchChannels]);
   
   const fetchChannels = useCallback(async () => {
     if (!user?.token) return;
@@ -76,7 +75,7 @@ function ChannelsPageContent() {
       console.error("Error fetching channels:", err);
       setError("Gagal memuat channels. Silakan coba lagi.");
       if (err.response?.status === 401) {
-        logout();
+        router.push("/login");
       }
     } finally {
       setChannelsLoading(false);
