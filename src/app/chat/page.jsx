@@ -15,14 +15,15 @@ function ChannelsPageContent() {
   const pathname = usePathname();
   const id = searchParams.get("id");
 
-  const [selectedChannelId, setSelectedChannelId] = useState(null);
-  const [channels, setChannels] = useState([]);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [channels, setChannels] = useState<any[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const manualSelectionRef = useRef(false);
 
+  /** 🔹 Fetch channel list dari API */
   const fetchChannels = useCallback(async () => {
-    if (!user?.token || channelsLoading) return; // ✅ cegah loop fetch terus
+    if (!user?.token) return;
 
     setChannelsLoading(true);
     setError(null);
@@ -30,7 +31,7 @@ function ChannelsPageContent() {
     try {
       const response = await api.get("/api/channels");
       const data = response.data || { channels: [] };
-      let channelsData = [];
+      let channelsData: any[] = [];
 
       if (Array.isArray(data)) {
         channelsData = data;
@@ -42,8 +43,9 @@ function ChannelsPageContent() {
         channelsData = [data.channel];
       }
 
-      setChannels(channelsData || []);
+      setChannels(channelsData);
 
+      // 🔹 Set default channel
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(
           (ch) => ch._id === id || ch.id === id
@@ -54,7 +56,7 @@ function ChannelsPageContent() {
           setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching channels:", err);
       setError("Gagal memuat channels. Silakan coba lagi.");
       if (err.response?.status === 401) {
@@ -63,20 +65,21 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, selectedChannelId, channelsLoading]);
+  }, [user, id, api, router, selectedChannelId]);
 
+  /** 🔹 Fetch otomatis saat user tersedia */
   useEffect(() => {
-    if (user && !channelsLoading && channels.length === 0) {
+    if (user) {
       fetchChannels();
     }
-  }, [user, fetchChannels, channels.length, channelsLoading]);
+  }, [user, fetchChannels]);
 
+  /** 🔹 Socket listener untuk update channel realtime */
   useEffect(() => {
     if (!user || !api?.socket) return;
 
     const socket = api.socket;
-
-    socket.on("channelCreated", (newChannel) => {
+    socket.on("channelCreated", (newChannel: any) => {
       setChannels((prev) => [...prev, newChannel]);
     });
 
@@ -85,8 +88,9 @@ function ChannelsPageContent() {
     };
   }, [user, api]);
 
+  /** 🔹 Pilih channel */
   const handleSelectChannel = useCallback(
-    (channelId) => {
+    (channelId: string | null) => {
       if (!channelId || channelId === "undefined") return;
       manualSelectionRef.current = true;
       setSelectedChannelId(channelId);
@@ -107,6 +111,7 @@ function ChannelsPageContent() {
     [searchParams, pathname, router]
   );
 
+  /** 🔹 Sync jika URL berubah */
   useEffect(() => {
     if (
       id &&
@@ -118,23 +123,27 @@ function ChannelsPageContent() {
     }
   }, [id, selectedChannelId, handleSelectChannel]);
 
+  /** 🔹 Refetch channel */
   const refetchChannels = useCallback(() => {
     manualSelectionRef.current = false;
     fetchChannels();
   }, [fetchChannels]);
 
+  /** 🔹 Create channel */
   const handleCreateChannel = useCallback(() => {
     router.push("/channels/new");
   }, [router]);
 
+  /** 🔹 Logout */
   const handleLogout = useCallback(() => {
     sessionStorage.removeItem("chat-app-user");
     sessionStorage.removeItem("chat-app-token");
     router.push("/login");
   }, [router]);
 
+  /** 🔹 Delete channel */
   const handleDeleteChannel = useCallback(
-    async (channelId) => {
+    async (channelId: string) => {
       if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
         try {
           await api.delete(`/api/channels/${channelId}`);
@@ -159,6 +168,7 @@ function ChannelsPageContent() {
     [api, channels, selectedChannelId, handleSelectChannel]
   );
 
+  /** 🔹 Loading auth */
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -174,10 +184,11 @@ function ChannelsPageContent() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
+      {/* Sidebar Channel */}
       <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
-          channels={channels || []}
+          channels={channels}
           loading={channelsLoading}
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
@@ -188,11 +199,9 @@ function ChannelsPageContent() {
           onDeleteChannel={handleDeleteChannel}
         />
       </div>
-      <div
-        className="flex-1 flex flex-col bg-background"
-        role="main"
-        aria-label="Chat area"
-      >
+
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col bg-background" role="main">
         <Suspense
           fallback={
             <div className="flex items-center justify-center h-full bg-background">
@@ -217,76 +226,26 @@ function ChannelsPageContent() {
                   </>
                 ) : error ? (
                   <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
                     <p className="text-destructive-foreground mb-2">{error}</p>
                     <button
                       onClick={refetchChannels}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded"
                     >
                       Coba Lagi
                     </button>
                   </>
                 ) : channels.length === 0 ? (
                   <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                        />
-                      </svg>
-                    </div>
                     <p className="text-foreground mb-2">Belum ada channel</p>
                     <button
                       onClick={handleCreateChannel}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded mt-2"
                     >
                       Buat Channel Pertama
                     </button>
                   </>
                 ) : (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
-                  </>
+                  <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
                 )}
               </div>
             </div>
