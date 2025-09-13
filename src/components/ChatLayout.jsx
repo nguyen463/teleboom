@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, useContext } from "react";
 import { io } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/Toastify.css";
+import "react-toastify/dist/ReactToastify.css";
 
 import { ThemeContext } from "../components/ThemeContext";
 
