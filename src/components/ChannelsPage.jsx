@@ -145,6 +145,7 @@ function ChannelsPageContent() {
     };
   }, [user, api, selectedChannelId, handleSelectChannel, channels.length]);
 
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -173,7 +174,8 @@ function ChannelsPageContent() {
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
-        <div className="flex items-center justify-center h-full bg-background">
+        {/* Tambahkan min-h-full untuk memastikan tinggi minimum */}
+        <div className="flex items-center justify-center h-full min-h-full bg-background">
           {channelsLoading ? (
             <LoadingState message="Memuat channels..." />
           ) : error ? (
