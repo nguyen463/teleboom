@@ -1,3 +1,4 @@
+// ChannelsPage.jsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
@@ -58,7 +59,7 @@ function ChannelsPageContent() {
       }
     } catch (err) {
       console.error("Error fetching channels:", err);
-      setError("Gagal memuat channels. Silakan coba lagi.");
+      setError("Failed to load channels. Please try again.");
       if (err.response?.status === 401) {
         router.push("/login");
       }
@@ -78,9 +79,11 @@ function ChannelsPageContent() {
     if (!user || !api?.socket) return;
     const socket = api.socket;
 
+    // Logging connect/disconnect
     socket.on("connect", () => console.log("Socket connected:", socket.id));
     socket.on("disconnect", () => console.log("Socket disconnected"));
 
+    // Channel created listener
     socket.on("channelCreated", (newChannel) => {
       setChannels((prev) => [...prev, newChannel]);
     });
@@ -140,7 +143,7 @@ function ChannelsPageContent() {
 
   const handleDeleteChannel = useCallback(
     async (channelId) => {
-      if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
+      if (window.confirm("Are you sure you want to delete this channel?")) {
         try {
           await api.delete(`/api/channels/${channelId}`);
           setChannels((prev) =>
@@ -156,9 +159,9 @@ function ChannelsPageContent() {
             handleSelectChannel(newSelectedId);
           }
         } catch (err) {
-          console.error("Gagal menghapus channel:", err);
+          console.error("Failed to delete channel:", err);
           alert(
-            "Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya."
+            "Failed to delete channel. Only the channel owner can delete it."
           );
         }
       }
@@ -171,7 +174,7 @@ function ChannelsPageContent() {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
-        <p className="text-foreground">Memeriksa autentikasi...</p>
+        <p className="text-foreground">Checking authentication...</p>
       </div>
     );
   }
@@ -222,7 +225,7 @@ function ChannelsPageContent() {
                 {channelsLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-foreground">Memuat channels...</p>
+                    <p className="text-foreground">Loading channels...</p>
                   </>
                 ) : error ? (
                   <>
@@ -247,7 +250,7 @@ function ChannelsPageContent() {
                       onClick={refetchChannels}
                       className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      Coba Lagi
+                      Try again
                     </button>
                   </>
                 ) : channels.length === 0 ? (
@@ -268,12 +271,12 @@ function ChannelsPageContent() {
                         />
                       </svg>
                     </div>
-                    <p className="text-foreground mb-2">Belum ada channel</p>
+                    <p className="text-foreground mb-2">There are no channels yet</p>
                     <button
                       onClick={handleCreateChannel}
                       className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      Buat Channel Pertama
+                      Create First Channel
                     </button>
                   </>
                 ) : (
@@ -294,7 +297,7 @@ function ChannelsPageContent() {
                         />
                       </svg>
                     </div>
-                    <p className="text-foreground">Pilih channel untuk memulai obrolan</p>
+                    <p className="text-foreground">Select a channel to start a chat</p>
                   </>
                 )}
               </div>
