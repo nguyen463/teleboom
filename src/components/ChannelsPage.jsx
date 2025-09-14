@@ -29,7 +29,7 @@ function ChannelsPageContent() {
 
   const fetchChannels = useCallback(async () => {
     if (!user?.token || !api?.get) {
-      setError("Autentikasi tidak valid. Silakan login kembali.");
+      setError("Invalid authentication. Please log in again.");
       logout();
       return;
     }
@@ -43,7 +43,7 @@ function ChannelsPageContent() {
 
       if (!Array.isArray(channelsData)) {
         console.warn("Unexpected API response format:", response.data);
-        throw new Error("Format data channel tidak valid.");
+        throw new Error("Invalid channel data format.");
       }
 
       setChannels(channelsData);
@@ -63,7 +63,7 @@ function ChannelsPageContent() {
 
     } catch (err) {
       console.error("Error fetching channels:", err);
-      setError("Gagal memuat channels. Silakan coba lagi.");
+      setError("Failed to load channels. Please try again.");
       if (err.response?.status === 401) {
         logout();
       }
@@ -98,7 +98,7 @@ function ChannelsPageContent() {
   }, [router]);
 
   const handleDeleteChannel = useCallback(async (channelId) => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus channel ini?")) {
+    if (window.confirm("Are you sure you want to delete this channel?")) {
       try {
         await api.delete(`/api/channels/${channelId}`);
         const newChannels = channels.filter(ch => (ch._id || ch.id) !== channelId);
@@ -109,8 +109,8 @@ function ChannelsPageContent() {
           handleSelectChannel(newSelectedId);
         }
       } catch (err) {
-        console.error("Gagal menghapus channel:", err);
-        setError("Gagal menghapus channel. Hanya pemilik channel yang bisa menghapusnya.");
+        console.error("Failed to delete channel:", err);
+        setError("Failed to delete channel. Only the channel owner can delete it.");
       }
     }
   }, [api, channels, selectedChannelId, handleSelectChannel]);
@@ -150,7 +150,7 @@ function ChannelsPageContent() {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
-        <p className="text-foreground">Memeriksa autentikasi...</p>
+        <p className="text-foreground">Checking authentication...</p>
       </div>
     );
   }
@@ -174,10 +174,9 @@ function ChannelsPageContent() {
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
-        {/* Kontainer chat utama dengan min-h-full */}
         <div className="flex items-center justify-center h-full min-h-full bg-background">
           {channelsLoading ? (
-            <LoadingState message="Memuat channels..." />
+            <LoadingState message="Loading channels..." />
           ) : error ? (
             <ErrorState message={error} onRetry={fetchChannels} />
           ) : selectedChannelId ? (
@@ -200,7 +199,7 @@ function LoadingScreen() {
   return (
     <div className="flex items-center justify-center h-screen bg-background">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
-      <p className="text-foreground">Memuat aplikasi...</p>
+      <p className="text-foreground">Loading application...</p>
     </div>
   );
 }
@@ -227,7 +226,7 @@ function ErrorState({ message, onRetry }) {
                 onClick={onRetry}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
             >
-                Coba Lagi
+                Try Again
             </button>
         </div>
     );
@@ -241,12 +240,12 @@ function EmptyState({ onCreateChannel }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                 </svg>
             </div>
-            <p className="text-foreground mb-2">Belum ada channel</p>
+            <p className="text-foreground mb-2">No channels yet</p>
             <button
                 onClick={onCreateChannel}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
             >
-                Buat Channel Pertama
+                Create Your First Channel
             </button>
         </div>
     );
