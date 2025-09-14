@@ -44,7 +44,7 @@ export default function LoginPage() {
       router.push("/channels"); // Redirect to /channels instead of /chat
     } catch (err) {
       console.error("Kesalahan saat login:", err);
-      setError(err.response?.data?.message || "Login gagal. Periksa kembali kredensial Anda.");
+      setError(err.response?.data?.message || "Failed to log in. Please  check your credentials.");
     } finally {
       setLoading(false);
     }
