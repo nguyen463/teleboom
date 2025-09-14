@@ -565,14 +565,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                   Leave Channel
                 </button>
               )}
-              <button
-                onClick={() => {
-                  logout();
-                }}
-                className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
-              >
-                Logout
-              </button>
             </div>
           )}
         </div>
