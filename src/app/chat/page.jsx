@@ -1,6 +1,7 @@
+// ChannelsPage.jsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
@@ -13,13 +14,12 @@ function ChannelsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const id = searchParams.get("id");
+  const urlChannelId = searchParams.get("id");
 
   const [selectedChannelId, setSelectedChannelId] = useState(null);
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const manualSelectionRef = useRef(false);
 
   // ---------------- Fetch channels ----------------
   const fetchChannels = useCallback(async () => {
@@ -30,31 +30,28 @@ function ChannelsPageContent() {
 
     try {
       const response = await api.get("/api/channels");
-      const data = response.data || { channels: [] };
-      let channelsData = [];
+      const channelsData = response.data || [];
 
-      if (Array.isArray(data)) {
-        channelsData = data;
-      } else if (Array.isArray(data.channels)) {
-        channelsData = data.channels;
-      } else if (Array.isArray(data.data)) {
-        channelsData = data.data;
-      } else if (data.channel) {
-        channelsData = [data.channel];
+      if (!Array.isArray(channelsData)) {
+        console.warn("Unexpected API response format:", response.data);
+        throw new Error("Invalid channel data format.");
       }
 
       setChannels(channelsData || []);
 
-      // Auto select channel if not manually selected
-      if (!manualSelectionRef.current && channelsData.length > 0) {
-        const channelExists = channelsData.find(
-          (ch) => ch._id === id || ch.id === id
-        );
-        if (channelExists && id && id !== "undefined") {
-          setSelectedChannelId(id);
-        } else if (!selectedChannelId) {
-          setSelectedChannelId(channelsData[0]._id || channelsData[0].id);
-        }
+      const currentChannelExists = channelsData.find(
+        (ch) => ch._id === urlChannelId || ch.id === urlChannelId
+      );
+
+      if (urlChannelId && currentChannelExists) {
+        setSelectedChannelId(urlChannelId);
+      } else if (channelsData.length > 0) {
+        const firstChannelId = channelsData[0]._id || channelsData[0].id;
+        setSelectedChannelId(firstChannelId);
+        handleSetUrlChannelId(firstChannelId);
+      } else {
+        setSelectedChannelId(null);
+        handleSetUrlChannelId(null);
       }
     } catch (err) {
       console.error("Error fetching channels:", err);
@@ -65,69 +62,65 @@ function ChannelsPageContent() {
     } finally {
       setChannelsLoading(false);
     }
-  }, [user, id, api, router, selectedChannelId, channelsLoading]);
+  }, [user, urlChannelId, api, router, channelsLoading, selectedChannelId]);
 
   useEffect(() => {
-    if (user && !channelsLoading && channels.length === 0) {
+    if (user && !channelsLoading) {
       fetchChannels();
     }
-  }, [user, fetchChannels, channels.length, channelsLoading]);
+  }, [user, fetchChannels, channelsLoading]);
 
+  // ---------------- URL and Channel Selection ----------------
+  const handleSetUrlChannelId = useCallback(
+    (channelId) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (channelId) {
+        params.set("id", channelId);
+      } else {
+        params.delete("id");
+      }
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [searchParams, pathname, router]
+  );
+  
+  const handleSelectChannel = useCallback(
+    (channelId) => {
+      setSelectedChannelId(channelId);
+      handleSetUrlChannelId(channelId);
+    },
+    [handleSetUrlChannelId]
+  );
+  
+  // Perbaikan: Hapus useEffect duplikat. Logika sudah ada di fetchChannels.
+  
   // ---------------- Socket.IO ----------------
   useEffect(() => {
     if (!user || !api?.socket) return;
     const socket = api.socket;
-
-    // Logging connect/disconnect
-    socket.on("connect", () => console.log("Socket connected:", socket.id));
-    socket.on("disconnect", () => console.log("Socket disconnected"));
-
-    // Channel created listener
+    
+    // Clean up old listeners to prevent duplication
+    socket.off("channelCreated");
+    socket.off("channelDeleted");
+    
     socket.on("channelCreated", (newChannel) => {
-      setChannels((prev) => [...prev, newChannel]);
+      setChannels(prev => [...prev, newChannel]);
+    });
+    
+    socket.on("channelDeleted", (deletedChannelId) => {
+      setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== deletedChannelId));
+      if (selectedChannelId === deletedChannelId) {
+        const newSelectedId = channels.length > 0 ? (channels[0]?._id || channels[0]?.id) : null;
+        handleSelectChannel(newSelectedId);
+      }
     });
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
       socket.off("channelCreated");
+      socket.off("channelDeleted");
     };
-  }, [user, api]);
+  }, [user, api, selectedChannelId, handleSelectChannel, channels.length]);
 
-  // ---------------- Channel selection ----------------
-  const handleSelectChannel = useCallback(
-    (channelId) => {
-      if (!channelId || channelId === "undefined") return;
-      manualSelectionRef.current = true;
-      setSelectedChannelId(channelId);
-
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("id", channelId);
-      const newUrl = `${pathname}?${params.toString()}`;
-      router.push(newUrl, { scroll: false });
-
-      setTimeout(() => {
-        manualSelectionRef.current = false;
-      }, 200); // sedikit lebih aman
-    },
-    [searchParams, pathname, router]
-  );
-
-  useEffect(() => {
-    if (
-      id &&
-      id !== "undefined" &&
-      id !== selectedChannelId &&
-      !manualSelectionRef.current
-    ) {
-      handleSelectChannel(id);
-    }
-  }, [id, selectedChannelId, handleSelectChannel]);
-
-  const refetchChannels = useCallback(() => {
-    manualSelectionRef.current = false;
-    fetchChannels();
-  }, [fetchChannels]);
 
   // ---------------- Create / Delete / Logout ----------------
   const handleCreateChannel = useCallback(() => {
@@ -157,7 +150,8 @@ function ChannelsPageContent() {
               newChannels[0]?._id || newChannels[0]?.id || null;
             handleSelectChannel(newSelectedId);
           }
-        } catch (err) {Failed to delete channel
+        } catch (err) {
+          // ✅ FIX: Hapus teks yang tidak valid
           console.error("Failed to delete channel:", err);
           alert(
             "Failed to delete channel. Only the channel owner can delete it."
@@ -192,7 +186,7 @@ function ChannelsPageContent() {
           loading={channelsLoading}
           selectedChannelId={selectedChannelId}
           onSelectChannel={handleSelectChannel}
-          onRefetch={refetchChannels}
+          onRefetch={fetchChannels}
           onCreateChannel={handleCreateChannel}
           onLogout={handleLogout}
           error={error}
@@ -215,7 +209,7 @@ function ChannelsPageContent() {
             <ChatLayout
               user={user}
               channelId={selectedChannelId}
-              onLogout={handleLogout}
+              logout={handleLogout}
               key={selectedChannelId}
             />
           ) : (
@@ -246,7 +240,7 @@ function ChannelsPageContent() {
                     </div>
                     <p className="text-destructive-foreground mb-2">{error}</p>
                     <button
-                      onClick={refetchChannels}
+                      onClick={fetchChannels}
                       className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                       Try again
