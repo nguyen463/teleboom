@@ -36,7 +36,7 @@ export default function RegisterPage() {
 
       router.push("/chat");
     } catch (err) {
-      setError(err.response?.data?.message || "Registrasi gagal, coba lagi.");
+      setError(err.response?.data?.message || "Registration failed, please try again.");
     }
   };
 
