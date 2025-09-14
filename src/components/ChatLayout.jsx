@@ -33,7 +33,7 @@ export default function ChatLayout({ user, channelId, logout }) {
   const [forceUpdate, setForceUpdate] = useState(0);
 
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
-  const [isMember, setIsMember] = useState(false); 
+  const [isMember, setIsMember] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
   const socketRef = useRef(null);
@@ -200,7 +200,6 @@ export default function ChatLayout({ user, channelId, logout }) {
           setIsMember(true);
           setIsOwner(response.isOwner);
 
-          // Jika anggota, langsung join channel dan ambil pesan
           socket.emit("joinChannel", channelId, (joinResponse) => {
               if(joinResponse?.success) {
                   if (joinResponse.isOwner) {
@@ -329,7 +328,6 @@ export default function ChatLayout({ user, channelId, logout }) {
     });
 
     return () => {
-      // Hilangkan pemanggilan `leaveChannel` otomatis di sini
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
@@ -669,8 +667,8 @@ export default function ChatLayout({ user, channelId, logout }) {
             }
 
             return (
-              <div 
-                key={msg._id} 
+              <div
+                key={msg._id}
                 className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
                 onMouseEnter={() => setHoveredMessageId(msg._id)}
                 onMouseLeave={() => setHoveredMessageId(null)}
@@ -706,7 +704,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                       {msg.text}
                     </span>
                   )}
-                  
+
                   {isOwn && (
                     <div className={`absolute top-0 right-0 p-1 flex space-x-1 transition-opacity duration-200 ${hoveredMessageId === msg._id ? 'opacity-100' : 'opacity-0'}`}>
                       <button
