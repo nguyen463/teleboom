@@ -174,7 +174,7 @@ function ChannelsPageContent() {
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
-        {/* Tambahkan min-h-full untuk memastikan tinggi minimum */}
+        {/* Kontainer chat utama dengan min-h-full */}
         <div className="flex items-center justify-center h-full min-h-full bg-background">
           {channelsLoading ? (
             <LoadingState message="Memuat channels..." />
