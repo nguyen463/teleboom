@@ -380,9 +380,11 @@ export default function ChatLayout({ user, channelId, logout }) {
     const messageData = { text: newMsg.trim(), channelId };
 
     const onMessageSent = (response) => {
-      if (response?.error) {
-        setError(response.error);
-        toast.error(response.error);
+      // ✅ FIX: Penanganan error yang lebih robust
+      if (!response || response?.error) {
+        console.error("Failed to send message. Server response:", response);
+        setError(response?.error || "Failed to send message: Connection error.");
+        toast.error(response?.error || "Gagal mengirim pesan: Masalah koneksi.");
       } else {
         setNewMsg("");
         setSelectedImage(null);
@@ -447,9 +449,9 @@ export default function ChatLayout({ user, channelId, logout }) {
       toast.error("Only image files are allowed.");
       return;
     }
-    const maxSizeInBytes = 25 * 1024 * 1024; // ✅ FIX: Batas ukuran 25MB
+    const maxSizeInBytes = 25 * 1024 * 1024;
     if (file.size > maxSizeInBytes) {
-      toast.error("Image size too large (max 25MB)."); // ✅ FIX: Pesan kesalahan diperbarui
+      toast.error("Image size too large (max 25MB).");
       return;
     }
     setSelectedImage(file);
