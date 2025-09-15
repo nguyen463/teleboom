@@ -61,12 +61,19 @@ export default function ChannelSelector({
     if (!name) return;
 
     try {
+      const token = localStorage.getItem("chat-app-token");
+      if (!token) {
+        toast.error("❌ Token tidak ditemukan. Silakan login ulang.");
+        router.push("/login");
+        return;
+      }
+
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
         { name },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
