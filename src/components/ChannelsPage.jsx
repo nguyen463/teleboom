@@ -1,4 +1,3 @@
-// ChannelsPage.jsx
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
@@ -8,30 +7,55 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
-// Component untuk menampilkan daftar pengguna lain (konsep)
-function UserList({ user, onStartDm, onClose }) {
-  // TODO: Implementasi nyata harus fetch daftar user dari API
-  const allUsers = [
-    { id: 'user_id_2', displayName: 'Jane Doe' },
-    { id: 'user_id_3', displayName: 'Peter Pan' },
-    //... tambahkan user lain di sini
-  ];
+function UserList({ user, onStartDm, onClose, api }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true);
+      try {
+        // Asumsi ada API endpoint untuk mengambil daftar pengguna
+        const response = await api.get("/api/users");
+        const usersData = response.data.users || response.data;
+        setUsers(usersData);
+      } catch (err) {
+        console.error("Failed to fetch users:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, [api]);
 
   return (
-    <div className="flex flex-col h-full bg-secondary p-4">
-      <h2 className="text-xl font-bold mb-4">Start a new DM</h2>
-      <ul className="space-y-2 overflow-y-auto flex-1">
-        {allUsers.filter(u => u.id !== user.id).map(otherUser => (
-          <li key={otherUser.id}>
-            <button onClick={() => onStartDm(otherUser.id)} className="w-full text-left p-3 rounded-md hover:bg-muted transition-colors">
-              {otherUser.displayName}
-            </button>
-          </li>
-        ))}
+    <div className="w-1/4 min-w-64 bg-secondary border-r border-border flex flex-col h-screen">
+      <div className="p-4 border-b border-border">
+        <h2 className="text-xl font-bold">Start a new DM</h2>
+      </div>
+      <ul className="space-y-2 overflow-y-auto p-4 flex-1">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          users.filter(u => u._id !== user.id).map(otherUser => (
+            <li key={otherUser._id}>
+              <button
+                onClick={() => onStartDm(otherUser._id)}
+                className="w-full text-left p-3 rounded-md hover:bg-muted transition-colors"
+              >
+                {otherUser.displayName}
+              </button>
+            </li>
+          ))
+        )}
       </ul>
-      <button onClick={onClose} className="mt-4 w-full px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors">
-        Cancel
-      </button>
+      <div className="p-4 border-t border-border">
+        <button onClick={onClose} className="w-full px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors">
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -112,12 +136,6 @@ function ChannelsPageContent() {
     [handleSetUrlChannelId]
   );
 
-  const handleCreateChannel = useCallback(() => {
-    // Alih-alih mengarahkan ke halaman terpisah, tampilkan daftar pengguna
-    setShowUserList(true);
-  }, []);
-
-  // ✅ New function to handle starting a DM
   const handleStartDm = useCallback((otherUserId) => {
     if (api?.socket) {
       api.socket.emit("startDm", otherUserId, (response) => {
@@ -211,18 +229,16 @@ function ChannelsPageContent() {
         />;
     }
     if (channels.length === 0) {
-        return <EmptyState onCreateChannel={handleCreateChannel} />;
+        return <EmptyState onStartDm={() => setShowUserList(true)} />;
     }
     return <WelcomeState />;
   };
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* Jika ingin memulai DM, tampilkan daftar user */}
-      {showUserList && <UserList user={user} onStartDm={handleStartDm} onClose={() => setShowUserList(false)} />}
-      
-      {/* Tampilkan channel selector hanya jika tidak sedang dalam mode DM */}
-      {!showUserList && (
+      {showUserList ? (
+        <UserList user={user} onStartDm={handleStartDm} onClose={() => setShowUserList(false)} api={api} />
+      ) : (
         <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
           <ChannelSelector
             user={user}
@@ -231,7 +247,7 @@ function ChannelsPageContent() {
             selectedChannelId={selectedChannelId}
             onSelectChannel={handleSelectChannel}
             onRefetch={fetchChannels}
-            onCreateChannel={handleCreateChannel}
+            onStartDm={() => setShowUserList(true)}
             onLogout={logout}
             error={error}
             onDeleteChannel={handleDeleteChannel}
@@ -259,4 +275,96 @@ function ChannelsPageContent() {
   );
 }
 
-// ... (LoadingScreen, LoadingState, ErrorState, EmptyState, WelcomeState components) ...
+function LoadingScreen() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-background">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+      <p className="text-foreground">Checking authentication...</p>
+    </div>
+  );
+}
+
+function LoadingState({ message }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-foreground">{message}</p>
+        </div>
+    );
+}
+
+function ErrorState({ message, onRetry }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <p className="text-destructive-foreground mb-2">{message}</p>
+            <button
+                onClick={onRetry}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+                Try again
+            </button>
+        </div>
+    );
+}
+
+function EmptyState({ onStartDm }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+            </div>
+            <p className="text-foreground mb-2">No channels yet. Start a new DM or create a public channel.</p>
+            <button
+                onClick={onStartDm}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+                Start a New DM
+            </button>
+        </div>
+    );
+}
+
+function WelcomeState() {
+  return (
+    <div className="text-center p-6 max-w-md">
+      <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-8 w-8"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+          />
+        </svg>
+      </div>
+      <p className="text-foreground">Select a channel to start a chat</p>
+    </div>
+  );
+}
+
+export default function ChannelsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        </div>
+      }
+    >
+      <ChannelsPageContent />
+    </Suspense>
+  );
+}
