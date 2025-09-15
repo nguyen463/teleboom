@@ -1,10 +1,10 @@
 // app/create-channel/page.jsx
 "use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/app/utils/auth';
-import Link from 'next/link';
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/utils/auth";
+import Link from "next/link";
 
 export default function CreatePublicChannelPage() {
   const [name, setName] = useState("");
@@ -14,16 +14,23 @@ export default function CreatePublicChannelPage() {
   const router = useRouter();
   const { user } = useAuth();
 
+  // 🔑 URL backend dari environment variable
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://teleboom-backend.herokuapp.com";
+
   const handleCreateChannel = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
     try {
-      const response = await fetch('/api/channels', {
-        method: 'POST',
+      const response = await fetch(`${API_URL}/channels`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          // kalau pakai JWT token:
+          Authorization: user?.token ? `Bearer ${user.token}` : "",
         },
         body: JSON.stringify({
           name,
@@ -37,10 +44,10 @@ export default function CreatePublicChannelPage() {
       if (response.ok) {
         router.push(`/chat/${data.channel._id}`);
       } else {
-        setError(data.message || 'Failed to create channel');
+        setError(data.message || "Failed to create channel");
       }
     } catch (err) {
-      setError('An error occurred while creating the channel');
+      setError("An error occurred while creating the channel");
     } finally {
       setIsLoading(false);
     }
@@ -56,8 +63,8 @@ export default function CreatePublicChannelPage() {
         <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-md text-foreground">
           <h2 className="text-xl font-bold mb-4">Access Denied</h2>
           <p className="mb-4">You need to be logged in to create a channel.</p>
-          <Link 
-            href="/login" 
+          <Link
+            href="/login"
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             Go to Login
@@ -116,7 +123,9 @@ export default function CreatePublicChannelPage() {
 
             <form onSubmit={handleCreateChannel} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium mb-2">Channel Name</label>
+                <label className="block text-sm font-medium mb-2">
+                  Channel Name
+                </label>
                 <input
                   type="text"
                   value={name}
@@ -132,7 +141,9 @@ export default function CreatePublicChannelPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Description (Optional)</label>
+                <label className="block text-sm font-medium mb-2">
+                  Description (Optional)
+                </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
