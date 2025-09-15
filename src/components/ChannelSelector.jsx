@@ -13,7 +13,7 @@ export default function ChannelSelector({
   selectedChannelId,
   onSelectChannel,
   onRefetch,
-  onShowAddChannelModal,
+  onCreateChannel, // ✅ Gunakan prop onCreateChannel
   onLogout,
   onDeleteChannel,
   error,
@@ -121,7 +121,7 @@ export default function ChannelSelector({
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
           <button
-            onClick={onShowAddChannelModal}
+            onClick={onCreateChannel}
             className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
             aria-label="Create New Channel or Start DM"
             title="Create New Channel or Start DM"
