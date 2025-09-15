@@ -4,18 +4,18 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { useAuth } from "@/app/utils/auth"; // Menggunakan path alias yang benar
+import { useAuth } from "@/app/utils/auth"; // Using the correct path alias
 import Link from "next/link";
 
 export default function NewChannelPage() {
   const router = useRouter();
-  const { user, loading, api, logout } = useAuth(); // Menggunakan useAuth hook
+  const { user, loading, api, logout } = useAuth(); // Using useAuth hook
   const [name, setName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Periksa autentikasi. useAuth sudah menangani loading dan redirect.
-  // Kode ini hanya menunggu user dimuat dan melakukan redirect jika tidak ada
+  // Check authentication. useAuth already handles loading and redirect.
+  // This code just waits for the user to load and redirects if there is none.
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
@@ -26,18 +26,18 @@ export default function NewChannelPage() {
     if (e) e.preventDefault();
     
     if (!name.trim()) {
-      toast.error("Nama channel tidak boleh kosong!");
+      toast.error("Channel name cannot be empty!");
       return;
     }
 
     if (name.trim().length > 50) {
-      toast.error("Nama channel terlalu panjang (maks. 50 karakter)!");
+      toast.error("Channel name is too long (max. 50 characters)!");
       return;
     }
 
     if (!user?.token) {
-      toast.error("Token tidak valid. Silakan login kembali.");
-      logout(); // Panggil fungsi logout dari useAuth
+      toast.error("Invalid token. Please log in again.");
+      logout(); // Call the logout function from useAuth
       return;
     }
 
@@ -52,7 +52,7 @@ export default function NewChannelPage() {
         throw new Error("No channel ID in response");
       }
 
-      toast.success("Channel berhasil dibuat!");
+      toast.success("Channel created successfully!");
       
       setTimeout(() => {
         console.log("Debug: Redirecting to /channels?id=", channelId);
@@ -62,7 +62,7 @@ export default function NewChannelPage() {
     } catch (err) {
       console.error("Error creating channel:", err);
       
-      let errorMessage = "Gagal membuat channel";
+      let errorMessage = "Failed to create channel";
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
       } else if (err.response?.data?.error) {
@@ -79,19 +79,19 @@ export default function NewChannelPage() {
     }
   };
 
-  // Tampilkan loading screen jika useAuth masih loading
+  // Show a loading screen if useAuth is still loading
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-foreground">Memeriksa autentikasi...</p>
+          <p className="text-foreground">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
-  // Jika tidak ada user, redirect sudah dihandle oleh useEffect
+  // If there's no user, redirect is already handled by useEffect
   if (!user) {
     return null;
   }
@@ -111,19 +111,19 @@ export default function NewChannelPage() {
       />
       
       <div className="bg-card p-6 rounded-lg shadow-md w-full max-w-md border border-border">
-        <h1 className="text-2xl font-bold mb-6 text-center text-foreground">Buat Channel Baru</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center text-foreground">Create New Channel</h1>
         
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
-              Nama Channel
+              Channel Name
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Masukkan nama channel"
+              placeholder="Enter channel name"
               required
               maxLength={50}
             />
@@ -138,7 +138,7 @@ export default function NewChannelPage() {
               className="h-4 w-4 text-primary focus:ring-primary border-border rounded"
             />
             <label htmlFor="isPrivate" className="ml-2 block text-sm text-foreground">
-              Private Channel (hanya anggota yang bisa masuk)
+              Private Channel (members only)
             </label>
           </div>
 
@@ -149,7 +149,7 @@ export default function NewChannelPage() {
               className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
               disabled={isLoading}
             >
-              Batal
+              Cancel
             </button>
             <button
               type="submit"
@@ -159,17 +159,17 @@ export default function NewChannelPage() {
               {isLoading ? (
                 <>
                   <span className="animate-spin inline-block mr-2">⟳</span>
-                  Membuat...
+                  Creating...
                 </>
               ) : (
-                "Buat Channel"
+                "Create Channel"
               )}
             </button>
           </div>
         </form>
         <p className="mt-4 text-center text-sm text-foreground">
           <Link href="/channels" className="text-primary hover:underline">
-            Kembali ke Channels
+            Back to Channels
           </Link>
         </p>
       </div>
