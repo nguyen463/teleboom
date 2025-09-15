@@ -323,10 +323,12 @@ function ChannelsPageContent() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* Render AddChannelModal jika state aktif */}
       {showAddChannelModal && (
         <AddChannelModal 
-          onShowPublicChannelForm={() => setShowAddChannelModal(false) || setShowUserList(false) || router.push('/channels/new')} // Redirect ke halaman baru untuk sementara
+          onShowPublicChannelForm={() => {
+            setShowAddChannelModal(false);
+            router.push('/channels/new'); // ✅ Panggil form pembuatan channel publik
+          }}
           onShowUserList={() => {
             setShowAddChannelModal(false);
             setShowUserList(true);
@@ -335,7 +337,6 @@ function ChannelsPageContent() {
         />
       )}
       
-      {/* Render UserList jika state aktif */}
       {showUserList && (
         <UserList
           user={user}
@@ -345,7 +346,6 @@ function ChannelsPageContent() {
         />
       )}
 
-      {/* Render ChannelSelector jika tidak ada modal yang tampil */}
       {!showUserList && (
         <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
           <ChannelSelector
@@ -355,7 +355,7 @@ function ChannelsPageContent() {
             selectedChannelId={selectedChannelId}
             onSelectChannel={handleSelectChannel}
             onRefetch={fetchChannels}
-            onStartDm={() => setShowUserList(true)} // ✅ Panggil handleStartDm untuk membuka daftar user
+            onCreateChannel={() => setShowAddChannelModal(true)} // ✅ Tampilkan modal
             onLogout={logout}
             error={error}
             onDeleteChannel={handleDeleteChannel}
