@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
@@ -172,10 +171,10 @@ function ChannelsPageContent() {
     handleSetUrlChannelId(channelId);
   }, [handleSetUrlChannelId]);
 
-  const handleCreatePublicChannel = useCallback(async (name) => {
+  const handleCreatePublicChannel = useCallback(async (channelData) => {
     setIsCreating(true);
     try {
-      const res = await api.post("/api/channels", { name });
+      const res = await api.post("/api/channels", channelData);
       const channel = res.data.channel;
       if (!channel) throw new Error("No channel data in response");
       toast.success("Public channel created successfully!");
@@ -190,18 +189,23 @@ function ChannelsPageContent() {
     }
   }, [api, fetchChannels, handleSelectChannel]);
 
-  const handleStartDm = useCallback((otherUserId) => {
-    if (api?.socket) {
-      api.socket.emit("startDm", otherUserId, (response) => {
-        if (response?.success && response.channelId) {
-          toast.success("DM started successfully!");
-          setView('channels');
-          fetchChannels();
-          handleSelectChannel(response.channelId);
-        } else {
-          toast.error(response?.error || "Failed to start DM.");
-        }
-      });
+  const handleStartDm = useCallback(async (otherUserId) => {
+    setIsCreating(true);
+    try {
+      const response = await api.post("/api/channels/dm", { userId: otherUserId });
+      if (response.data?.channel) {
+        toast.success("DM started successfully!");
+        setView('channels');
+        fetchChannels();
+        handleSelectChannel(response.data.channel._id);
+      } else {
+        throw new Error("No channel data in response");
+      }
+    } catch (err) {
+      console.error("Error starting DM:", err);
+      toast.error(err.response?.data?.message || "Failed to start DM.");
+    } finally {
+      setIsCreating(false);
     }
   }, [api, fetchChannels, handleSelectChannel]);
 
@@ -317,6 +321,8 @@ function ChannelsPageContent() {
           onLogout={logout}
           error={error}
           onDeleteChannel={handleDeleteChannel}
+          onCreateChannel={handleCreatePublicChannel}
+          onCreateDM={handleStartDm}
         />
       </div>
       <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
