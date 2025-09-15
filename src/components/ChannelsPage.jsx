@@ -8,16 +8,91 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
-// ✅ Component untuk menampilkan daftar pengguna lain
+// Komponen untuk modal pilihan aksi
+function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-sm text-foreground space-y-4">
+        <h2 className="text-xl font-bold text-center">Create or Start</h2>
+        <p className="text-center text-sm text-muted-foreground">Choose an action to create a new channel or start a direct message.</p>
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={onShowPublicChannelForm}
+            className="w-full py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Create Public Channel
+          </button>
+          <button
+            onClick={onShowUserList}
+            className="w-full py-2 bg-secondary text-foreground rounded-md hover:bg-muted transition-colors"
+          >
+            Start a New DM
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full py-2 bg-transparent text-muted-foreground rounded-md hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Komponen untuk form pembuatan channel publik
+function PublicChannelForm({ onCreate, onClose, isLoading }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-md text-foreground">
+        <h2 className="text-xl font-bold mb-4">Create Public Channel</h2>
+        <form onSubmit={(e) => { e.preventDefault(); onCreate(name); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Channel Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="e.g., general-chat"
+              required
+              maxLength={50}
+            />
+          </div>
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {isLoading ? "Creating..." : "Create Channel"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Komponen untuk daftar pengguna DM
 function UserList({ user, onStartDm, onClose, api }) {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const response = await api.get("/api/users"); // Asumsi ada endpoint /api/users
+        const response = await api.get("/api/users");
         const usersData = response.data.users || response.data;
         setUsers(usersData);
       } catch (err) {
@@ -63,7 +138,6 @@ function UserList({ user, onStartDm, onClose, api }) {
 
 function ChannelsPageContent() {
   const { user, loading: authLoading, api, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -73,27 +147,23 @@ function ChannelsPageContent() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showAddChannelModal, setShowAddChannelModal] = useState(false);
   const [showUserList, setShowUserList] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const fetchChannels = useCallback(async () => {
     if (!user?.token || channelsLoading) return;
-
     setChannelsLoading(true);
     setError(null);
-
     try {
       const response = await api.get("/api/channels");
       const channelsData = response.data || [];
-
       if (!Array.isArray(channelsData)) {
         console.warn("Unexpected API response format:", response.data);
         throw new Error("Invalid channel data format.");
       }
-
       setChannels(channelsData || []);
-      
       const currentChannelExists = channelsData.find(ch => (ch._id || ch.id) === urlChannelId);
-
       if (urlChannelId && currentChannelExists) {
         setSelectedChannelId(urlChannelId);
       } else if (channelsData.length > 0) {
@@ -104,7 +174,6 @@ function ChannelsPageContent() {
         setSelectedChannelId(null);
         handleSetUrlChannelId(null);
       }
-
     } catch (err) {
       console.error("Error fetching channels:", err);
       setError("Failed to load channels. Please try again.");
@@ -136,6 +205,23 @@ function ChannelsPageContent() {
     },
     [handleSetUrlChannelId]
   );
+
+  const handleCreatePublicChannel = useCallback(async (name) => {
+    setIsCreating(true);
+    try {
+      const res = await api.post("/api/channels", { name, isPrivate: false });
+      const channelId = res.data.channel?._id || res.data._id;
+      if (!channelId) throw new Error("No channel ID in response");
+      toast.success("Public channel created successfully!");
+      setShowAddChannelModal(false);
+      handleSelectChannel(channelId);
+    } catch (err) {
+      console.error("Error creating public channel:", err);
+      toast.error(err.response?.data?.message || "Failed to create public channel.");
+    } finally {
+      setIsCreating(false);
+    }
+  }, [api, handleSelectChannel]);
 
   const handleStartDm = useCallback((otherUserId) => {
     if (api?.socket) {
@@ -237,9 +323,30 @@ function ChannelsPageContent() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {showUserList ? (
-        <UserList user={user} onStartDm={handleStartDm} onClose={() => setShowUserList(false)} api={api} />
-      ) : (
+      {/* Render AddChannelModal jika state aktif */}
+      {showAddChannelModal && (
+        <AddChannelModal 
+          onShowPublicChannelForm={() => setShowAddChannelModal(false) || setShowUserList(false) || router.push('/channels/new')} // Redirect ke halaman baru untuk sementara
+          onShowUserList={() => {
+            setShowAddChannelModal(false);
+            setShowUserList(true);
+          }}
+          onClose={() => setShowAddChannelModal(false)}
+        />
+      )}
+      
+      {/* Render UserList jika state aktif */}
+      {showUserList && (
+        <UserList
+          user={user}
+          onStartDm={handleStartDm}
+          onClose={() => setShowUserList(false)}
+          api={api}
+        />
+      )}
+
+      {/* Render ChannelSelector jika tidak ada modal yang tampil */}
+      {!showUserList && (
         <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
           <ChannelSelector
             user={user}
@@ -248,7 +355,7 @@ function ChannelsPageContent() {
             selectedChannelId={selectedChannelId}
             onSelectChannel={handleSelectChannel}
             onRefetch={fetchChannels}
-            onStartDm={() => setShowUserList(true)} // ✅ Perbaikan: Mengarahkan ke daftar user
+            onStartDm={() => setShowUserList(true)} // ✅ Panggil handleStartDm untuk membuka daftar user
             onLogout={logout}
             error={error}
             onDeleteChannel={handleDeleteChannel}
