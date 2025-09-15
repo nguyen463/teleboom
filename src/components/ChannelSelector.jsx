@@ -58,7 +58,7 @@ export default function ChannelSelector({
     if (!name) return;
 
     try {
-      const token = localStorage.getItem("chat-app-token");
+      const token = localStorage.getItem("token"); // sesuaikan dengan LoginPage.jsx
       if (!token) {
         toast.error("❌ Token tidak ditemukan. Silakan login ulang.");
         router.push("/login");
@@ -77,20 +77,23 @@ export default function ChannelSelector({
 
       if (res.status === 201) {
         toast.success("✅ Channel berhasil dibuat!");
-        const newChannel = res.data.channel;
-
-        // 🔹 Update channel list tanpa redirect
-        if (onRefetch) {
-          onRefetch();
-        }
+        if (onRefetch) onRefetch();
       }
     } catch (err) {
-      console.error("❌ Error create channel:", err.response?.data || err.message);
-      toast.error(err.response?.data?.message || "Gagal membuat channel");
+      const message = err.response?.data?.message || err.message || "Gagal membuat channel";
+      console.error("❌ Error create channel:", message);
+      toast.error(message);
+
+      // Jika token expired
+      if (message.toLowerCase().includes("token has expired") || message.toLowerCase().includes("unauthorized")) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        toast.info("🔑 Silakan login ulang.");
+        router.push("/login");
+      }
     }
   };
 
-  // Placeholder DM creation
   const handleCreateDM = () => {
     toast.info("🚧 Fitur Create DM belum diimplementasikan");
   };
@@ -122,9 +125,7 @@ export default function ChannelSelector({
                     isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                   }`}
                   aria-selected={isSelected}
-                  aria-label={`Select channel ${channelName}${
-                    channel?.description ? ` - ${channel.description}` : ""
-                  }`}
+                  aria-label={`Select channel ${channelName}${channel?.description ? ` - ${channel.description}` : ""}`}
                 >
                   <div className="font-medium">{isDM ? channelName : `#${channelName}`}</div>
                   {channel?.lastMessage?.text && (
@@ -181,13 +182,7 @@ export default function ChannelSelector({
               aria-label="Create New Channel or Start DM"
               title="Create New Channel or Start DM"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
@@ -218,29 +213,18 @@ export default function ChannelSelector({
               aria-label="Menu"
               aria-expanded={showMenu}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
             {showMenu && (
-              <div
-                className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200"
-                role="menu"
-                aria-labelledby="menu-button"
-              >
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
                 <button
                   onClick={() => {
                     if (onRefetch) onRefetch();
                     setShowMenu(false);
                   }}
                   className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
-                  role="menuitem"
                 >
                   Refresh Channels
                 </button>
@@ -258,7 +242,6 @@ export default function ChannelSelector({
                     }
                   }}
                   className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left focus:outline-none focus:bg-destructive/10"
-                  role="menuitem"
                 >
                   Logout
                 </button>
