@@ -3,7 +3,6 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/utils/auth";
 import { useTheme } from "./ThemeContext";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -28,7 +27,7 @@ export default function ChannelSelector({
   const addMenuRef = useRef(null);
   const router = useRouter();
 
-  // Handle click outside for both menus
+  // Handle click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -84,7 +83,7 @@ export default function ChannelSelector({
     }
   };
 
-  // ✅ API create DM (placeholder, bisa kamu isi sesuai route backend)
+  // ✅ API create DM (sementara placeholder)
   const handleCreateDM = () => {
     toast.info("🚧 Fitur Create DM belum diimplementasikan");
   };
@@ -166,7 +165,10 @@ export default function ChannelSelector({
           {/* Add Channel / DM Menu */}
           <div className="relative" ref={addMenuRef}>
             <button
-              onClick={() => setShowAddMenu(!showAddMenu)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAddMenu(!showAddMenu);
+              }}
               className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
               aria-label="Create New Channel or Start DM"
               title="Create New Channel or Start DM"
