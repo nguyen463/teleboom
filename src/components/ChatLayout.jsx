@@ -139,6 +139,20 @@ export default function ChatLayout({ user, channelId, logout }) {
     }
   }, [channelId]);
 
+  // ✅ New function: handle clearing all messages
+  const handleClearMessages = useCallback(() => {
+    if (!socketRef.current || !isOwner) return;
+    if (window.confirm("Are you sure you want to clear ALL messages in this channel? This action cannot be undone.")) {
+      socketRef.current.emit("clearChannelMessages", channelId, (response) => {
+        if (response?.error) {
+          toast.error(response.error);
+        } else {
+          toast.success("All messages cleared successfully!");
+        }
+      });
+    }
+  }, [socketRef.current, isOwner, channelId]);
+
   useEffect(() => {
     setMessages([]);
     setPage(0);
@@ -239,13 +253,13 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("disconnect", (reason) => {
       setConnectionStatus("disconnected");
-      setError("Disconnected from server, attempting to reconnect..."); // Pesan ini sekarang diatur di `error`
+      setError("Disconnected from server, attempting to reconnect...");
       console.log("🔍 Socket disconnected:", reason);
     });
 
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
-      setError("Connection failed: " + err.message); // Pesan ini sekarang diatur di `error`
+      setError("Connection failed: " + err.message);
       setIsLoading(false);
       toast.error("Connection failed: " + err.message);
     });
@@ -295,6 +309,15 @@ export default function ChatLayout({ user, channelId, logout }) {
         }
       } catch (error) {
         console.error("Error processing deleteMessage:", error, id);
+      }
+    });
+
+    // ✅ New listener: messagesCleared
+    socket.on("messagesCleared", ({ channelId: clearedChannelId }) => {
+      if (clearedChannelId === channelId) {
+        setMessages([]);
+        setHasMore(false);
+        setPage(0);
       }
     });
 
@@ -584,6 +607,15 @@ export default function ChatLayout({ user, channelId, logout }) {
                   Leave Channel
                 </button>
               )}
+              {/* ✅ New button for clearing messages */}
+              {isOwner && (
+                <button
+                  onClick={handleClearMessages}
+                  className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors text-yellow-500"
+                >
+                  Clear All Messages
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -602,10 +634,9 @@ export default function ChatLayout({ user, channelId, logout }) {
         </div>
       )}
 
-      {/* ✅ Hapus banner error yang mengganggu */}
-      {/* {error && (
+      {error && (
         <div className="bg-destructive text-destructive-foreground p-2 text-center">{error}</div>
-      )} */}
+      )}
 
       <div
         ref={messagesContainerRef}
@@ -725,7 +756,7 @@ export default function ChatLayout({ user, channelId, logout }) {
                         aria-label="Edit message"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2-8-2-8zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                         </svg>
                       </button>
                       <button
