@@ -96,8 +96,14 @@ export default function ChannelSelector({
             const isSelected = channelId === selectedChannelId;
             const channelOwnerId = channel?.owner?._id || channel?.owner;
             const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
+
             // ✅ Aman untuk DM, cek berbagai kemungkinan properti
-            const isDM = channel.isPrivate || channel.private || channel.type === "dm";
+            const isDM =
+              Boolean(channel.isPrivate) ||
+              Boolean(channel.private) ||
+              channel.type === "dm" ||
+              channel.channelType === "dm";
+
             const channelName = isDM
               ? channel.members?.find((m) => m._id !== user.id)?.displayName || "Direct Message"
               : channel.name || "Unnamed";
@@ -136,8 +142,10 @@ export default function ChannelSelector({
                       />
                     </svg>
                   )}
+
                   {/* Channel Name */}
                   <div className="font-medium truncate">{isDM ? channelName : `#${channelName}`}</div>
+
                   {channel?.lastMessage?.text && (
                     <div className="text-xs opacity-75 truncate">{channel.lastMessage.text}</div>
                   )}
