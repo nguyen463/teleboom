@@ -8,8 +8,6 @@ import { toast } from "react-toastify";
 import Link from "next/link";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL;
-
 export default function ChannelSelector({
   user,
   channels = [],
@@ -21,66 +19,79 @@ export default function ChannelSelector({
   onDeleteChannel,
   error,
 }) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [hoveredChannelId, setHoveredChannelId] = useState(null);
-  const [channelList, setChannelList] = useState(channels);
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
+  const [userSearch, setUserSearch] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [notifications, setNotifications] = useState({}); // channelId: count
+
   const menuRef = useRef(null);
   const addMenuRef = useRef(null);
   const router = useRouter();
 
-  // Initialize socket
+  // ---------------- Socket.io ----------------
   useEffect(() => {
-    if (!user?.token) return;
-    const socket = io(SOCKET_URL, { auth: { token: user.token } });
-    socketRef.current = socket;
+    if (!user?.id) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
-    socket.on("channelCreated", (newChannel) => {
-      setChannelList((prev) => {
-        if (prev.some((c) => c._id === newChannel._id)) return prev;
-        return [...prev, newChannel];
-      });
+    const socketClient = io(process.env.NEXT_PUBLIC_SOCKET_URL, {
+      auth: { token },
     });
 
-    return () => socket.disconnect();
-  }, [user?.token]);
+    socketClient.on("connect", () => console.log("✅ Socket connected"));
+    socketClient.on("disconnect", () => console.log("❌ Socket disconnected"));
 
-  // Update channel list if channels prop changes
-  useEffect(() => {
-    setChannelList(channels);
-  }, [channels]);
+    // Realtime channel update
+    socketClient.on("channel-updated", () => onRefetch?.());
+    socketClient.on("channel-created", () => onRefetch?.());
+    socketClient.on("message-new", (data) => {
+      setNotifications((prev) => ({
+        ...prev,
+        [data.channelId]: (prev[data.channelId] || 0) + 1,
+      }));
+      onRefetch?.();
+    });
 
-  // Click outside menu
+    setSocket(socketClient);
+    return () => socketClient.disconnect();
+  }, [user?.id]);
+
+  // ---------------- Click outside ----------------
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target)) setShowAddMenu(false);
-    };
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setShowMenu(false);
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) setShowAddMenu(false);
+    }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Escape key handler
+  // ---------------- Escape key ----------------
   useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape") {
+    function handleEscape(event) {
+      if (event.key === "Escape") {
         setShowMenu(false);
         setShowAddMenu(false);
       }
-    };
+    }
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
+  // ---------------- Create Channel ----------------
   const handleCreateChannel = async () => {
-    if (channelList.find((c) => c.owner?._id === user.id)) {
+    if (channels.find((c) => c.owner?._id === user.id)) {
       toast.error("❌ Anda hanya bisa membuat 1 channel");
       return;
     }
     const name = prompt("Masukkan nama channel:");
     if (!name) return;
+
     try {
       const token = localStorage.getItem("token");
       const res = await axios.post(
@@ -88,43 +99,72 @@ export default function ChannelSelector({
         { name },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (res.status === 201) {
-        toast.success("✅ Channel berhasil dibuat!");
-        if (onRefetch) onRefetch();
-      }
+      toast.success("✅ Channel berhasil dibuat!");
+      onRefetch?.();
+      socket?.emit("channel-created", res.data);
     } catch (err) {
+      console.error(err);
       toast.error(err.response?.data?.message || "Gagal membuat channel");
     }
   };
 
-  const handleCreateDM = async () => {
-    const otherUserId = prompt("Masukkan user ID untuk DM:");
-    if (!otherUserId) return;
-    if (!socketRef.current) return;
-
-    socketRef.current.emit("startDm", otherUserId, (res) => {
-      if (res.success) {
-        setChannelList((prev) => {
-          if (prev.some((c) => c._id === res.channelId)) return prev;
-          return [...prev, { _id: res.channelId, isPrivate: true, members: [user.id, otherUserId] }];
-        });
-        onSelectChannel(res.channelId);
-        toast.success("💬 DM berhasil dibuat!");
-      } else {
-        toast.error(res.error || "Gagal memulai DM");
+  // ---------------- Search User for DM ----------------
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (!userSearch) {
+        setSearchResults([]);
+        return;
       }
-    });
+      try {
+        setSearchLoading(true);
+        const token = localStorage.getItem("token");
+        const res = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/users/search?query=${encodeURIComponent(userSearch)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setSearchResults(res.data.users || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [userSearch]);
+
+  // ---------------- Create DM ----------------
+  const handleCreateDM = async (otherUserId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/channels/dm`,
+        { otherUserId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("✅ DM channel berhasil dibuat!");
+      onRefetch?.();
+      socket?.emit("dm-created", res.data.channel);
+      setShowAddMenu(false);
+      setUserSearch("");
+      setSearchResults([]);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Gagal membuat DM");
+    }
   };
 
+  // ---------------- Channel buttons ----------------
   const channelButtons = useMemo(
     () =>
-      Array.isArray(channelList)
-        ? channelList.map((channel) => {
-            const channelId = channel._id;
+      Array.isArray(channels)
+        ? channels.map((channel) => {
+            const channelId = channel?._id || channel?.id;
             const isSelected = channelId === selectedChannelId;
-            const isOwner = channel?.owner?._id === user.id;
+            const channelOwnerId = channel?.owner?._id || channel?.owner;
+            const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
 
-            const isDM = channel.isPrivate || channel.type === "dm" || channel.channelType === "dm";
+            const isDM = channel.type === "dm" || channel.channelType === "dm";
             const channelName = isDM
               ? channel.members?.find((m) => m._id !== user.id)?.displayName || "Direct Message"
               : channel.name || "Unnamed";
@@ -137,7 +177,10 @@ export default function ChannelSelector({
                 onMouseLeave={() => setHoveredChannelId(null)}
               >
                 <button
-                  onClick={() => onSelectChannel(channelId)}
+                  onClick={() => {
+                    onSelectChannel(channelId);
+                    setNotifications((prev) => ({ ...prev, [channelId]: 0 }));
+                  }}
                   className={`flex-1 flex items-center gap-2 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
                     isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                   }`}
@@ -158,7 +201,14 @@ export default function ChannelSelector({
                       />
                     </svg>
                   )}
-                  <div className="font-medium truncate">{isDM ? channelName : `#${channelName}`}</div>
+                  <div className="flex-1 flex justify-between items-center">
+                    <span className="font-medium truncate">{isDM ? channelName : `#${channelName}`}</span>
+                    {notifications[channelId] > 0 && (
+                      <span className="ml-2 bg-red-600 text-white rounded-full px-2 text-xs">
+                        {notifications[channelId]}
+                      </span>
+                    )}
+                  </div>
                 </button>
 
                 {isOwner && hoveredChannelId === channelId && (
@@ -167,72 +217,140 @@ export default function ChannelSelector({
                       e.stopPropagation();
                       onDeleteChannel(channelId);
                     }}
-                    className="absolute right-2 p-2 rounded-full bg-red-600 text-white hover:bg-red-700"
+                    className="absolute right-2 p-2 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
                   >
-                    Delete
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
                   </button>
                 )}
               </div>
             );
           })
         : [],
-    [channelList, selectedChannelId, hoveredChannelId]
+    [channels, selectedChannelId, onSelectChannel, onDeleteChannel, user, hoveredChannelId, notifications]
   );
 
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
       {/* Navbar */}
-      <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 bg-secondary z-10">
+      <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary shadow-sm">
         <h2 className="text-lg font-semibold">Channels</h2>
-
         <div className="flex items-center space-x-2">
+          {/* Add Menu */}
           <div className="relative" ref={addMenuRef}>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowAddMenu(!showAddMenu);
               }}
-              className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+              className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <span className="text-xl">+</span>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
             </button>
+
             {showAddMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-md shadow-lg py-1 z-20">
-                <button onClick={handleCreateChannel} className="block px-4 py-2 w-full text-left hover:bg-muted">
+              <div className="absolute right-0 mt-2 w-64 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                <button
+                  onClick={handleCreateChannel}
+                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
+                >
                   Create New Channel
                 </button>
-                <button onClick={handleCreateDM} className="block px-4 py-2 w-full text-left hover:bg-muted">
-                  Start DM
-                </button>
+
+                <div className="px-4 py-2 text-sm">
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search user for DM..."
+                    className="w-full border border-border rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {searchLoading && <div className="text-xs text-muted-foreground mt-1">Searching...</div>}
+                  {searchResults.length > 0 && (
+                    <div className="mt-1 max-h-40 overflow-y-auto border-t border-border rounded">
+                      {searchResults.map((u) => (
+                        <button
+                          key={u._id}
+                          onClick={() => handleCreateDM(u._id)}
+                          className="w-full text-left px-2 py-1 hover:bg-muted text-sm"
+                        >
+                          {u.displayName} ({u.username})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
+          {/* Profile Menu */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="p-2 rounded-full border"
+              className="p-2 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <img src={user.avatarUrl || "/default-avatar.png"} className="w-6 h-6 rounded-full" />
             </button>
             {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-md shadow-lg py-1 z-20">
-                <Link href="/profile" className="block px-4 py-2 hover:bg-muted">Profile</Link>
-                <button onClick={onLogout} className="block px-4 py-2 hover:bg-red-100 w-full text-left">Logout</button>
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20">
+                <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-muted">
+                  Profile
+                </Link>
+                <button
+                  onClick={onLogout}
+                  className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left"
+                >
+                  Logout
+                </button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Channel list */}
-      <div className="flex-1 overflow-y-auto p-2">
+      {/* Channel List */}
+      <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
-          <div className="flex justify-center items-center h-20">Loading...</div>
-        ) : channelList.length === 0 ? (
-          <div className="text-center text-muted-foreground">No channels yet.</div>
+          <div className="flex justify-center items-center h-20">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+          </div>
+        ) : error ? (
+          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
+            {typeof error === "string" ? error : "An unexpected error occurred"}
+          </div>
+        ) : !Array.isArray(channels) ? (
+          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
+            Error: Invalid channel data
+          </div>
+        ) : channels.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground">
+            No channels yet. Click the + button to create the first channel.
+          </div>
         ) : (
-          <div className="space-y-1">{channelButtons}</div>
+          <div className="space-y-1" role="list">
+            {channelButtons}
+          </div>
         )}
       </div>
     </div>
