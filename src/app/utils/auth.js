@@ -12,16 +12,16 @@ const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL ||
   "https://teleboom-694d2bc690c3.herokuapp.com";
 
-// Buat Axios instance global dengan interceptor
+// ===================== Axios Instance =====================
 const api = axios.create({
   baseURL: API_URL,
   timeout: 10000,
 });
 
-// Request Interceptor: Auto-add Bearer token dari sessionStorage
+// Request Interceptor: Auto-add Bearer token dari localStorage
 api.interceptors.request.use(
   (config) => {
-    const token = sessionStorage.getItem("chat-app-token");
+    const token = localStorage.getItem("token"); // ✅ konsisten dengan LoginPage.jsx
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -33,10 +33,10 @@ api.interceptors.request.use(
 // Response Interceptor: Handle 401 auto-logout
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     if (error.response?.status === 401) {
-      sessionStorage.removeItem("chat-app-token");
-      sessionStorage.removeItem("chat-app-user");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       if (typeof window !== "undefined") {
         window.location.href = "/login";
       }
@@ -45,6 +45,7 @@ api.interceptors.response.use(
   }
 );
 
+// ===================== Socket.io =====================
 const socket = io(SOCKET_URL, {
   autoConnect: false,
   reconnection: true,
@@ -53,19 +54,22 @@ const socket = io(SOCKET_URL, {
   reconnectionDelayMax: 5000,
 });
 
+// ===================== useAuth Hook =====================
 export const useAuth = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Sambungkan socket dengan token
   const connectSocket = (token) => {
     socket.auth = { token };
     socket.connect();
   };
 
+  // Cek autentikasi saat pertama kali hook dipakai
   const checkAuth = async () => {
-    const token = sessionStorage.getItem("chat-app-token");
-    const storedUser = sessionStorage.getItem("chat-app-user");
+    const token = localStorage.getItem("token"); // ✅ localStorage
+    const storedUser = localStorage.getItem("user");
 
     if (!token || !storedUser) {
       setUser(null);
@@ -74,19 +78,17 @@ export const useAuth = () => {
     }
 
     try {
+      // Pastikan backend punya route validate
       const response = await api.get("/api/auth/validate");
-      
+
       if (response.data.valid) {
-        // Jika token valid, gunakan data user yang sudah disimpan.
         const parsedUser = JSON.parse(storedUser);
-        
-        // PERBAIKAN: Gunakan parsedUser.id, atau fallback ke _id
         const userId = parsedUser.id || parsedUser._id;
 
         if (!userId) {
-          // Jika ID tidak ditemukan, anggap data user korup dan hapus.
-          sessionStorage.removeItem("chat-app-token");
-          sessionStorage.removeItem("chat-app-user");
+          // Jika data user korup
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
           setUser(null);
           router.push("/login");
           return;
@@ -94,21 +96,20 @@ export const useAuth = () => {
 
         const userWithId = { ...parsedUser, id: userId, token };
         setUser(userWithId);
-        
-        // Sambungkan socket setelah autentikasi berhasil
+
+        // Connect socket setelah autentikasi valid
         connectSocket(token);
       } else {
-        // Jika token tidak valid (meski ada), hapus.
-        sessionStorage.removeItem("chat-app-token");
-        sessionStorage.removeItem("chat-app-user");
+        // Token tidak valid
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
         setUser(null);
         router.push("/login");
       }
     } catch (err) {
-      // Tangani error API (misal 401, 500)
       console.warn("Auth validation failed:", err.response?.status || err.message);
-      sessionStorage.removeItem("chat-app-token");
-      sessionStorage.removeItem("chat-app-user");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       setUser(null);
       router.push("/login");
     } finally {
@@ -120,9 +121,10 @@ export const useAuth = () => {
     checkAuth();
   }, [router]);
 
+  // Logout
   const logout = () => {
-    sessionStorage.removeItem("chat-app-token");
-    sessionStorage.removeItem("chat-app-user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setUser(null);
     socket.disconnect();
     router.push("/login");
