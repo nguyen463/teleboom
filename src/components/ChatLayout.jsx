@@ -398,8 +398,9 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     if (selectedImage) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         messageData.image = e.target.result;
+        console.log(`Mengirim gambar dengan ukuran: ${messageData.image.length} bytes`);
         socketRef.current.emit("sendMessage", messageData, onMessageSent);
       };
       reader.onerror = () => {
@@ -446,8 +447,9 @@ export default function ChatLayout({ user, channelId, logout }) {
       toast.error("Only image files are allowed.");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size too large (max 5MB).");
+    const maxSizeInBytes = 25 * 1024 * 1024; // ✅ FIX: Batas ukuran 25MB
+    if (file.size > maxSizeInBytes) {
+      toast.error("Image size too large (max 25MB)."); // ✅ FIX: Pesan kesalahan diperbarui
       return;
     }
     setSelectedImage(file);
