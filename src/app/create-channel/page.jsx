@@ -1,230 +1,178 @@
-
-// app/create-channel/page.jsx
 "use client";
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/app/utils/auth';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { useAuth } from "@/app/utils/auth"; // Using the correct path alias
+import Link from "next/link";
 
-export default function CreatePublicChannelPage() {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+export default function NewChannelPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading, api, logout } = useAuth(); // Using useAuth hook
+  const [name, setName] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleCreateChannel = async (e) => {
-    e.preventDefault();
+  // Check authentication. useAuth already handles loading and redirect.
+  // This code just waits for the user to load and redirects if there is none.
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  const handleCreate = async (e) => {
+    if (e) e.preventDefault();
+    
+    if (!name.trim()) {
+      toast.error("Channel name cannot be empty!");
+      return;
+    }
+
+    if (name.trim().length > 50) {
+      toast.error("Channel name is too long (max. 50 characters)!");
+      return;
+    }
+
+    if (!user?.token) {
+      toast.error("Invalid token. Please log in again.");
+      logout(); // Call the logout function from useAuth
+      return;
+    }
+
     setIsLoading(true);
-    setError("");
-
     try {
-      const response = await fetch('/api/channels', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          description,
-          isPrivate: false,
-        }),
-      });
+      const res = await api.post("/api/channels", { name: name.trim(), isPrivate });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        router.push(`/chat/${data.channel._id}`);
-      } else {
-        setError(data.message || 'Failed to create channel');
+      console.log("Debug: Create response full:", res.data);
+      
+      const channelId = res.data.channel?._id || res.data._id || res.data.id;
+      if (!channelId) {
+        throw new Error("No channel ID in response");
       }
+
+      toast.success("Channel created successfully!");
+      
+      setTimeout(() => {
+        console.log("Debug: Redirecting to /channels?id=", channelId);
+        router.push(`/channels?id=${channelId}`);
+      }, 2000);
+      
     } catch (err) {
-      setError('An error occurred while creating the channel');
+      console.error("Error creating channel:", err);
+      
+      let errorMessage = "Failed to create channel";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = Object.values(err.response.data.details).join(', ');
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    router.back();
-  };
-
-  if (!user) {
+  // Show a loading screen if useAuth is still loading
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-md text-foreground">
-          <h2 className="text-xl font-bold mb-4">Access Denied</h2>
-          <p className="mb-4">You need to be logged in to create a channel.</p>
-          <Link 
-            href="/login" 
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Go to Login
-          </Link>
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-foreground">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
+  // If there's no user, redirect is already handled by useEffect
+  if (!user) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="bg-card border-b border-border p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold">
-            Teleboom
-          </Link>
-          <div className="flex items-center space-x-4">
-            <span>Hello, {user.username}</span>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 text-foreground">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+      
+      <div className="bg-card p-6 rounded-lg shadow-md w-full max-w-md border border-border">
+        <h1 className="text-2xl font-bold mb-6 text-center text-foreground">Create New Channel</h1>
+        
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Channel Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="Enter channel name"
+              required
+              maxLength={50}
+            />
           </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto p-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center mb-6">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="isPrivate"
+              checked={isPrivate}
+              onChange={(e) => setIsPrivate(e.target.checked)}
+              className="h-4 w-4 text-primary focus:ring-primary border-border rounded"
+            />
+            <label htmlFor="isPrivate" className="ml-2 block text-sm text-foreground">
+              Private Channel (members only)
+            </label>
+          </div>
+
+          <div className="flex space-x-3">
             <button
-              onClick={handleCancel}
-              className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+              type="button"
+              onClick={() => router.push("/channels")}
+              className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
+              disabled={isLoading}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                />
-              </svg>
+              Cancel
             </button>
-            <h1 className="text-2xl font-bold">Create Public Channel</h1>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+            >
+              {isLoading ? (
+                <>
+                  <span className="animate-spin inline-block mr-2">⟳</span>
+                  Creating...
+                </>
+              ) : (
+                "Create Channel"
+              )}
+            </button>
           </div>
-
-          <div className="bg-card p-6 rounded-lg shadow-md">
-            {error && (
-              <div className="mb-4 p-3 bg-destructive/10 text-destructive-foreground rounded-md">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateChannel} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium mb-2">Channel Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="e.g. general-chat"
-                  required
-                  maxLength={50}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {name.length}/50 characters
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Description (Optional)</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Describe the purpose of this channel"
-                  rows={3}
-                  maxLength={200}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {description.length}/200 characters
-                </p>
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                >
-                  {isLoading ? "Creating..." : "Create Channel"}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div className="mt-6 bg-card p-6 rounded-lg shadow-md">
-            <h2 className="text-lg font-semibold mb-3">About Public Channels</h2>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-primary mr-2 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                <span>Anyone can join public channels</span>
-              </li>
-              <li className="flex items-start">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-primary mr-2 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                <span>Messages are visible to all members</span>
-              </li>
-              <li className="flex items-start">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-primary mr-2 mt-0.5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                <span>You'll be the owner and can manage settings</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </main>
+        </form>
+        <p className="mt-4 text-center text-sm text-foreground">
+          <Link href="/channels" className="text-primary hover:underline">
+            Back to Channels
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
