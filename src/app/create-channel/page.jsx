@@ -80,13 +80,22 @@ export default function CreateChannelPage() {
             placeholder="opsional"
           />
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 disabled:opacity-50"
-        >
-          {loading ? "Membuat..." : "Buat Channel"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex-1 bg-muted text-foreground py-2 rounded-md hover:bg-muted/70"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 disabled:opacity-50"
+          >
+            {loading ? "Membuat..." : "Buat Channel"}
+          </button>
+        </div>
       </form>
     </div>
   );
