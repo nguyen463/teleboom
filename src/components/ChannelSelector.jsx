@@ -1,4 +1,3 @@
-// ChannelSelector.jsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -27,7 +26,7 @@ export default function ChannelSelector({
   const addMenuRef = useRef(null);
   const router = useRouter();
 
-  // Handle click outside
+  // Click outside handler
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -37,12 +36,11 @@ export default function ChannelSelector({
         setShowAddMenu(false);
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle escape key press
+  // Escape key handler
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === "Escape") {
@@ -50,12 +48,11 @@ export default function ChannelSelector({
         setShowAddMenu(false);
       }
     }
-
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
-  // ✅ API create channel
+  // ✅ Create new channel
   const handleCreateChannel = async () => {
     const name = prompt("Masukkan nama channel:");
     if (!name) return;
@@ -69,32 +66,36 @@ export default function ChannelSelector({
       }
 
       const res = await axios.post(
-  `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
-  { name },
-  {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`, // ✅ konsisten
-    },
-  }
-);
+        `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
+        { name },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (res.status === 201) {
         toast.success("✅ Channel berhasil dibuat!");
-        const newChannel = res.data;
-        if (onRefetch) onRefetch();
-        router.push(`/channels/${newChannel._id}`);
+        const newChannel = res.data.channel;
+
+        // 🔹 Update channel list tanpa redirect
+        if (onRefetch) {
+          onRefetch();
+        }
       }
     } catch (err) {
       console.error("❌ Error create channel:", err.response?.data || err.message);
-      toast.error(err.response?.data?.error || "Gagal membuat channel");
+      toast.error(err.response?.data?.message || "Gagal membuat channel");
     }
   };
 
-  // ✅ API create DM (sementara placeholder)
+  // Placeholder DM creation
   const handleCreateDM = () => {
     toast.info("🚧 Fitur Create DM belum diimplementasikan");
   };
 
+  // Channel buttons
   const channelButtons = useMemo(
     () =>
       Array.isArray(channels)
@@ -235,7 +236,7 @@ export default function ChannelSelector({
               >
                 <button
                   onClick={() => {
-                    onRefetch();
+                    if (onRefetch) onRefetch();
                     setShowMenu(false);
                   }}
                   className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
