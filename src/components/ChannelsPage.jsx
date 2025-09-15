@@ -8,7 +8,6 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
-// ✅ Component untuk modal pilihan aksi
 function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -40,7 +39,6 @@ function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
   );
 }
 
-// ✅ Component untuk form pembuatan channel publik
 function PublicChannelForm({ onCreate, onClose, isLoading }) {
   const [name, setName] = useState("");
   return (
@@ -83,21 +81,21 @@ function PublicChannelForm({ onCreate, onClose, isLoading }) {
   );
 }
 
-// ✅ Component untuk daftar pengguna DM
 function UserList({ user, onStartDm, onClose, api }) {
   const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
-      setLoadingUsers(true);
+      setLoading(true);
       try {
         const response = await api.get("/api/users");
-        setUsers(response.data.users || response.data);
+        const usersData = response.data.users || response.data;
+        setUsers(usersData);
       } catch (err) {
         console.error("Failed to fetch users:", err);
       } finally {
-        setLoadingUsers(false);
+        setLoading(false);
       }
     };
     fetchUsers();
@@ -114,7 +112,7 @@ function UserList({ user, onStartDm, onClose, api }) {
         </button>
       </div>
       <ul className="space-y-2 overflow-y-auto p-4 flex-1">
-        {loadingUsers ? (
+        {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
@@ -316,7 +314,7 @@ function ChannelsPageContent() {
         />;
     }
     if (channels.length === 0) {
-        return <EmptyState onCreateChannel={() => setShowAddChannelModal(true)} />; // ✅ Arahkan ke modal
+        return <EmptyState onCreateChannel={() => setShowAddChannelModal(true)} />;
     }
     return <WelcomeState />;
   };
@@ -325,8 +323,14 @@ function ChannelsPageContent() {
     <div className="flex h-screen bg-background text-foreground">
       {showAddChannelModal && (
         <AddChannelModal
-          onShowPublicChannelForm={() => setShowPublicChannelForm(true)}
-          onShowUserList={() => setShowUserList(true)}
+          onShowPublicChannelForm={() => {
+            setShowAddChannelModal(false);
+            setShowPublicChannelForm(true);
+          }}
+          onShowUserList={() => {
+            setShowAddChannelModal(false);
+            setShowUserList(true);
+          }}
           onClose={() => setShowAddChannelModal(false)}
         />
       )}
@@ -357,7 +361,7 @@ function ChannelsPageContent() {
             selectedChannelId={selectedChannelId}
             onSelectChannel={handleSelectChannel}
             onRefetch={fetchChannels}
-            onCreateChannel={() => setShowAddChannelModal(true)}
+            onShowAddChannelModal={() => setShowAddChannelModal(true)} // ✅ Membuka modal
             onLogout={logout}
             error={error}
             onDeleteChannel={handleDeleteChannel}
