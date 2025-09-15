@@ -12,7 +12,6 @@ import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 import { toast } from "react-toastify";
 
-// Helper components for different states (no changes needed here)
 function LoadingState({ message }) {
     return (
         <div className="text-center p-6 max-w-md">
@@ -83,8 +82,9 @@ function WelcomeState() {
     </div>
   );
 }
-
+// ---
 // MAIN COMPONENT
+// ---
 function ChannelsPageContent() {
   const { user, loading: authLoading, api, logout } = useAuth();
   const router = useRouter();
@@ -96,7 +96,7 @@ function ChannelsPageContent() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [view, setView] = useState('channels'); // State to manage the modal view
+  const [view, setView] = useState('channels');
   const [isCreating, setIsCreating] = useState(false);
 
   const fetchChannels = useCallback(async () => {
@@ -237,7 +237,6 @@ function ChannelsPageContent() {
     };
   }, [user, api, selectedChannelId, handleSelectChannel, channels.length]);
 
-
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -307,8 +306,8 @@ function ChannelsPageContent() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* The main sidebar and chat area layout */}
-      <div className="w-1/4 min-w-64 bg-secondary border-r border-border flex flex-col">
+      {/* Sidebar is always rendered */}
+      <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
         <ChannelSelector
           user={user}
           channels={channels || []}
@@ -323,6 +322,7 @@ function ChannelsPageContent() {
         />
       </div>
       
+      {/* Main chat content area */}
       <div
         className="flex-1 flex flex-col bg-background"
         role="main"
@@ -341,7 +341,7 @@ function ChannelsPageContent() {
         </Suspense>
       </div>
       
-      {/* This is the key change: render the modals as overlays outside the main layout */}
+      {/* Render modals conditionally as overlays */}
       {renderModals()}
     </div>
   );
