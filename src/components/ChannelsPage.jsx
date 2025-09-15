@@ -9,7 +9,6 @@ import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 import { toast } from "react-toastify";
 
-// Komponen untuk modal pilihan aksi
 function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -41,7 +40,6 @@ function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
   );
 }
 
-// Komponen untuk form pembuatan channel publik
 function PublicChannelForm({ onCreate, onClose, isLoading }) {
   const [name, setName] = useState("");
   return (
@@ -84,7 +82,6 @@ function PublicChannelForm({ onCreate, onClose, isLoading }) {
   );
 }
 
-// Komponen untuk daftar pengguna DM
 function UserList({ user, onStartDm, onClose, api }) {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -148,9 +145,7 @@ function ChannelsPageContent() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showAddChannelModal, setShowAddChannelModal] = useState(false);
-  const [showUserList, setShowUserList] = useState(false);
-  const [showPublicChannelForm, setShowPublicChannelForm] = useState(false);
+  const [view, setView] = useState('channels'); // State untuk mengelola tampilan
   const [isCreating, setIsCreating] = useState(false);
 
   const fetchChannels = useCallback(async () => {
@@ -215,15 +210,16 @@ function ChannelsPageContent() {
       const channelId = res.data.channel?._id || res.data._id;
       if (!channelId) throw new Error("No channel ID in response");
       toast.success("Public channel created successfully!");
-      setShowPublicChannelForm(false);
+      setView('channels'); // Kembali ke tampilan channel
       handleSelectChannel(channelId);
+      fetchChannels();
     } catch (err) {
       console.error("Error creating public channel:", err);
       toast.error(err.response?.data?.message || "Failed to create public channel.");
     } finally {
       setIsCreating(false);
     }
-  }, [api, handleSelectChannel]);
+  }, [api, handleSelectChannel, fetchChannels]);
 
   const handleStartDm = useCallback((otherUserId) => {
     if (api?.socket) {
@@ -231,13 +227,14 @@ function ChannelsPageContent() {
         if (response?.success && response.channelId) {
           toast.success("DM started successfully!");
           handleSelectChannel(response.channelId);
-          setShowUserList(false);
+          setView('channels'); // Kembali ke tampilan channel
+          fetchChannels();
         } else {
           toast.error(response?.error || "Failed to start DM.");
         }
       });
     }
-  }, [api, handleSelectChannel]);
+  }, [api, handleSelectChannel, fetchChannels]);
 
   const handleDeleteChannel = useCallback(async (channelId) => {
     if (window.confirm("Are you sure you want to delete this channel?")) {
@@ -272,9 +269,11 @@ function ChannelsPageContent() {
     
     socket.on("channelCreated", (newChannel) => {
       setChannels(prev => [...prev, newChannel]);
+      toast.info(`New channel #${newChannel.name} created!`);
     });
     socket.on("channelDeleted", (deletedChannelId) => {
       setChannels(prev => prev.filter(ch => (ch._id || ch.id) !== deletedChannelId));
+      toast.info("A channel was deleted.");
       if (selectedChannelId === deletedChannelId) {
         const newSelectedId = channels.length > 0 ? (channels[0]?._id || channels[0]?.id) : null;
         handleSelectChannel(newSelectedId);
@@ -318,60 +317,62 @@ function ChannelsPageContent() {
         />;
     }
     if (channels.length === 0) {
-        return <EmptyState onShowAddChannelModal={() => setShowAddChannelModal(true)} />;
+        return <EmptyState onShowAddChannelModal={() => setView('add-modal')} />;
     }
     return <WelcomeState />;
   };
 
+  const renderSidebar = () => {
+    switch (view) {
+      case 'add-modal':
+        return (
+          <AddChannelModal 
+            onShowPublicChannelForm={() => setView('public-form')}
+            onShowUserList={() => setView('user-list')}
+            onClose={() => setView('channels')}
+          />
+        );
+      case 'public-form':
+        return (
+          <PublicChannelForm
+            onCreate={handleCreatePublicChannel}
+            onClose={() => setView('channels')}
+            isLoading={isCreating}
+          />
+        );
+      case 'user-list':
+        return (
+          <UserList
+            user={user}
+            onStartDm={handleStartDm}
+            onClose={() => setView('channels')}
+            api={api}
+          />
+        );
+      default:
+        return (
+          <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
+            <ChannelSelector
+              user={user}
+              channels={channels || []}
+              loading={channelsLoading}
+              selectedChannelId={selectedChannelId}
+              onSelectChannel={handleSelectChannel}
+              onRefetch={fetchChannels}
+              onShowAddChannelModal={() => setView('add-modal')}
+              onLogout={logout}
+              error={error}
+              onDeleteChannel={handleDeleteChannel}
+            />
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {showAddChannelModal && (
-        <AddChannelModal
-          onShowPublicChannelForm={() => {
-            setShowAddChannelModal(false);
-            setShowPublicChannelForm(true);
-          }}
-          onShowUserList={() => {
-            setShowAddChannelModal(false);
-            setShowUserList(true);
-          }}
-          onClose={() => setShowAddChannelModal(false)}
-        />
-      )}
+      {renderSidebar()}
       
-      {showPublicChannelForm && (
-        <PublicChannelForm
-          onCreate={handleCreatePublicChannel}
-          onClose={() => setShowPublicChannelForm(false)}
-          isLoading={isCreating}
-        />
-      )}
-
-      {showUserList && (
-        <UserList
-          user={user}
-          onStartDm={handleStartDm}
-          onClose={() => setShowUserList(false)}
-          api={api}
-        />
-      )}
-
-      {!showUserList && !showPublicChannelForm && !showAddChannelModal && (
-        <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
-          <ChannelSelector
-            user={user}
-            channels={channels || []}
-            loading={channelsLoading}
-            selectedChannelId={selectedChannelId}
-            onSelectChannel={handleSelectChannel}
-            onRefetch={fetchChannels}
-            onShowAddChannelModal={() => setShowAddChannelModal(true)}
-            onLogout={logout}
-            error={error}
-            onDeleteChannel={handleDeleteChannel}
-          />
-        </div>
-      )}
       <div
         className="flex-1 flex flex-col bg-background"
         role="main"
