@@ -8,6 +8,79 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
+function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-sm text-foreground space-y-4">
+        <h2 className="text-xl font-bold text-center">Create or Start</h2>
+        <p className="text-center text-sm text-muted-foreground">Choose an action to create a new channel or start a direct message.</p>
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={onShowPublicChannelForm}
+            className="w-full py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Create Public Channel
+          </button>
+          <button
+            onClick={onShowUserList}
+            className="w-full py-2 bg-secondary text-foreground rounded-md hover:bg-muted transition-colors"
+          >
+            Start a New DM
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full py-2 bg-transparent text-muted-foreground rounded-md hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PublicChannelForm({ onCreate, onClose, isLoading }) {
+  const [name, setName] = useState("");
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-md text-foreground">
+        <h2 className="text-xl font-bold mb-4">Create Public Channel</h2>
+        <form onSubmit={(e) => { e.preventDefault(); onCreate(name); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Channel Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="e.g., general-chat"
+              required
+              maxLength={50}
+            />
+          </div>
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {isLoading ? "Creating..." : "Create Channel"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function UserList({ user, onStartDm, onClose, api }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -71,9 +144,10 @@ function ChannelsPageContent() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showAddChannelModal, setShowAddChannelModal] = useState(false);
   const [showUserList, setShowUserList] = useState(false);
+  const [showPublicChannelForm, setShowPublicChannelForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [showCreateChannelForm, setShowCreateChannelForm] = useState(false);
 
   const fetchChannels = useCallback(async () => {
     if (!user?.token || channelsLoading) return;
@@ -137,7 +211,7 @@ function ChannelsPageContent() {
       const channelId = res.data.channel?._id || res.data._id;
       if (!channelId) throw new Error("No channel ID in response");
       toast.success("Public channel created successfully!");
-      setShowCreateChannelForm(false);
+      setShowPublicChannelForm(false);
       handleSelectChannel(channelId);
     } catch (err) {
       console.error("Error creating public channel:", err);
@@ -287,7 +361,7 @@ function ChannelsPageContent() {
             selectedChannelId={selectedChannelId}
             onSelectChannel={handleSelectChannel}
             onRefetch={fetchChannels}
-            onShowAddChannelModal={() => setShowAddChannelModal(true)} // ✅ Membuka modal
+            onShowAddChannelModal={() => setShowAddChannelModal(true)}
             onLogout={logout}
             error={error}
             onDeleteChannel={handleDeleteChannel}
@@ -352,7 +426,7 @@ function ErrorState({ message, onRetry }) {
     );
 }
 
-function EmptyState({ onShowAddChannelModal }) {
+function EmptyState({ onCreateChannel }) {
     return (
         <div className="text-center p-6 max-w-md">
             <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
@@ -362,7 +436,7 @@ function EmptyState({ onShowAddChannelModal }) {
             </div>
             <p className="text-foreground mb-2">No channels yet. Start a new DM or create a public channel.</p>
             <button
-                onClick={onShowAddChannelModal}
+                onClick={onCreateChannel}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
             >
                 Create First Channel
