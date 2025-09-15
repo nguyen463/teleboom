@@ -62,7 +62,7 @@ export default function ChannelSelector({
 
     try {
       const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/channels`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
         { name },
         {
           headers: {
