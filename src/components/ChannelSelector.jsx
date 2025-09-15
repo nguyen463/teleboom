@@ -1,4 +1,3 @@
-// ChannelSelector.jsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -72,7 +71,7 @@ export default function ChannelSelector({
                     channel?.description ? ` - ${channel.description}` : ""
                   }`}
                 >
-                  <div className="font-medium">#{channel?.name ?? "Tanpa Nama"}</div>
+                  <div className="font-medium">#{channel?.name ?? "Unnamed"}</div>
                   {channel?.description && (
                     <div className="text-xs opacity-75 truncate">{channel.description}</div>
                   )}
@@ -119,8 +118,8 @@ export default function ChannelSelector({
           <button
             onClick={onCreateChannel}
             className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-            aria-label="Buat Channel Baru"
-            title="Buat Channel Baru"
+            aria-label="Create New Channel"
+            title="Create New Channel"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -205,7 +204,7 @@ export default function ChannelSelector({
           </div>
         ) : channels.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
-            Tidak ada channels. Klik tombol + untuk membuat channel baru.
+            No channels yet. Click the + button to create the first channel.
           </div>
         ) : (
           <div className="space-y-1" role="list">
