@@ -171,7 +171,10 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
             </button>
             {showMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20">
-                <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-muted">Update Profile</Link>
+                <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-muted">
+               Update Profile
+                 </Link>
+
                 <button onClick={onLogout} className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left">Logout</button>
               </div>
             )}
