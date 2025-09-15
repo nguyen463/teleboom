@@ -25,7 +25,7 @@ export default function CreatePublicChannelPage() {
     setError("");
 
     try {
-      const response = await fetch(`${API_URL}/channels`, {
+      const response = await fetch(`${API_URL}/api/channels`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
