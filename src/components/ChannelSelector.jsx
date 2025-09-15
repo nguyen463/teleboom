@@ -5,6 +5,9 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/utils/auth";
 import { useTheme } from "./ThemeContext";
+import axios from "axios";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function ChannelSelector({
   user,
@@ -13,7 +16,6 @@ export default function ChannelSelector({
   selectedChannelId,
   onSelectChannel,
   onRefetch,
-  onShowAddChannelModal,
   onLogout,
   onDeleteChannel,
   error,
@@ -36,7 +38,7 @@ export default function ChannelSelector({
         setShowAddMenu(false);
       }
     }
-    
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -49,21 +51,42 @@ export default function ChannelSelector({
         setShowAddMenu(false);
       }
     }
-    
+
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
-  // Navigate to create channel page
-  const navigateToCreateChannel = () => {
-    setShowAddMenu(false);
-    router.push("/create-channel");
+  // ✅ API create channel
+  const handleCreateChannel = async () => {
+    const name = prompt("Masukkan nama channel:");
+    if (!name) return;
+
+    try {
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/channels`,
+        { name },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (res.status === 201) {
+        toast.success("✅ Channel berhasil dibuat!");
+        const newChannel = res.data;
+        if (onRefetch) onRefetch();
+        router.push(`/channels/${newChannel._id}`);
+      }
+    } catch (err) {
+      console.error("❌ Error create channel:", err.response?.data || err.message);
+      toast.error(err.response?.data?.error || "Gagal membuat channel");
+    }
   };
 
-  // Navigate to create DM page
-  const navigateToCreateDM = () => {
-    setShowAddMenu(false);
-    router.push("/create-dm");
+  // ✅ API create DM (placeholder, bisa kamu isi sesuai route backend)
+  const handleCreateDM = () => {
+    toast.info("🚧 Fitur Create DM belum diimplementasikan");
   };
 
   const channelButtons = useMemo(
@@ -76,8 +99,8 @@ export default function ChannelSelector({
             const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
             const isDM = channel.isPrivate;
             const channelName = isDM
-                ? (channel.members.find(m => m._id !== user.id)?.displayName || 'Direct Message')
-                : (channel.name || 'Unnamed');
+              ? channel.members.find((m) => m._id !== user.id)?.displayName || "Direct Message"
+              : channel.name || "Unnamed";
 
             return (
               <div
@@ -140,6 +163,7 @@ export default function ChannelSelector({
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
+          {/* Add Channel / DM Menu */}
           <div className="relative" ref={addMenuRef}>
             <button
               onClick={() => setShowAddMenu(!showAddMenu)}
@@ -157,17 +181,17 @@ export default function ChannelSelector({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
-            
+
             {showAddMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
                 <button
-                  onClick={navigateToCreateChannel}
+                  onClick={handleCreateChannel}
                   className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
                 >
                   Create New Channel
                 </button>
                 <button
-                  onClick={navigateToCreateDM}
+                  onClick={handleCreateDM}
                   className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
                 >
                   Start Direct Message
@@ -176,6 +200,7 @@ export default function ChannelSelector({
             )}
           </div>
 
+          {/* Main Menu */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -233,6 +258,7 @@ export default function ChannelSelector({
         </div>
       </div>
 
+      {/* Channel List */}
       <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
         {loading ? (
           <div className="flex justify-center items-center h-20">
