@@ -46,7 +46,7 @@ function ChannelsPageContent() {
 
       setChannels(channelsData || []);
 
-      // Auto select channel if not manually selected
+      // Auto select channel
       if (!manualSelectionRef.current && channelsData.length > 0) {
         const channelExists = channelsData.find(
           (ch) => ch._id === id || ch.id === id
@@ -79,11 +79,9 @@ function ChannelsPageContent() {
     if (!user || !api?.socket) return;
     const socket = api.socket;
 
-    // Logging connect/disconnect
     socket.on("connect", () => console.log("Socket connected:", socket.id));
     socket.on("disconnect", () => console.log("Socket disconnected"));
 
-    // Channel created listener
     socket.on("channelCreated", (newChannel) => {
       setChannels((prev) => [...prev, newChannel]);
     });
@@ -136,8 +134,8 @@ function ChannelsPageContent() {
   }, [router]);
 
   const handleLogout = useCallback(() => {
-    sessionStorage.removeItem("chat-app-user");
-    sessionStorage.removeItem("chat-app-token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
     router.push("/login");
   }, [router]);
 
@@ -151,12 +149,15 @@ function ChannelsPageContent() {
           );
 
           if (selectedChannelId === channelId) {
-            const newChannels = channels.filter(
-              (ch) => (ch._id || ch.id) !== channelId
-            );
-            const newSelectedId =
-              newChannels[0]?._id || newChannels[0]?.id || null;
-            handleSelectChannel(newSelectedId);
+            setChannels((prev) => {
+              const newChannels = prev.filter(
+                (ch) => (ch._id || ch.id) !== channelId
+              );
+              const newSelectedId =
+                newChannels[0]?._id || newChannels[0]?.id || null;
+              handleSelectChannel(newSelectedId);
+              return newChannels;
+            });
           }
         } catch (err) {
           console.error("Failed to delete channel:", err);
@@ -166,7 +167,7 @@ function ChannelsPageContent() {
         }
       }
     },
-    [api, channels, selectedChannelId, handleSelectChannel]
+    [api, selectedChannelId, handleSelectChannel]
   );
 
   // ---------------- Render ----------------
@@ -200,11 +201,7 @@ function ChannelsPageContent() {
           onDeleteChannel={handleDeleteChannel}
         />
       </div>
-      <div
-        className="flex-1 flex flex-col bg-background"
-        role="main"
-        aria-label="Chat area"
-      >
+      <div className="flex-1 flex flex-col bg-background" role="main" aria-label="Chat area">
         <Suspense
           fallback={
             <div className="flex items-center justify-center h-full bg-background">
