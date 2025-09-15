@@ -16,37 +16,55 @@ export default function ChannelSelector({
   onShowAddChannelModal,
   onLogout,
   onDeleteChannel,
-  onCreateChannel,       // ✅ Tambah prop untuk create channel
-  onCreateDM,           // ✅ Tambah prop untuk create DM
   error,
 }) {
   const { theme, toggleTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
   const [hoveredChannelId, setHoveredChannelId] = useState(null);
   const menuRef = useRef(null);
+  const addMenuRef = useRef(null);
   const router = useRouter();
 
+  // Handle click outside for both menus
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setShowMenu(false);
       }
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) {
+        setShowAddMenu(false);
+      }
     }
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showMenu]);
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
+  // Handle escape key press
   useEffect(() => {
     function handleEscape(event) {
-      if (event.key === "Escape") setShowMenu(false);
+      if (event.key === "Escape") {
+        setShowMenu(false);
+        setShowAddMenu(false);
+      }
     }
-    if (showMenu) {
-      document.addEventListener("keydown", handleEscape);
-      return () => document.removeEventListener("keydown", handleEscape);
-    }
-  }, [showMenu]);
+    
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  // Navigate to create channel page
+  const navigateToCreateChannel = () => {
+    setShowAddMenu(false);
+    router.push("/create-channel");
+  };
+
+  // Navigate to create DM page
+  const navigateToCreateDM = () => {
+    setShowAddMenu(false);
+    router.push("/create-dm");
+  };
 
   const channelButtons = useMemo(
     () =>
@@ -122,22 +140,41 @@ export default function ChannelSelector({
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
-          <button
-            onClick={onShowAddChannelModal}
-            className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-            aria-label="Create New Channel or Start DM"
-            title="Create New Channel or Start DM"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          <div className="relative" ref={addMenuRef}>
+            <button
+              onClick={() => setShowAddMenu(!showAddMenu)}
+              className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label="Create New Channel or Start DM"
+              title="Create New Channel or Start DM"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+            
+            {showAddMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
+                <button
+                  onClick={navigateToCreateChannel}
+                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
+                >
+                  Create New Channel
+                </button>
+                <button
+                  onClick={navigateToCreateDM}
+                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
+                >
+                  Start Direct Message
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="relative" ref={menuRef}>
             <button
