@@ -14,13 +14,14 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [hoveredChannelId, setHoveredChannelId] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [profileModal, setProfileModal] = useState({ open: false, data: null });
   const menuRef = useRef(null);
   const addMenuRef = useRef(null);
   const router = useRouter();
 
   const socketRef = useRef(null);
 
-  // Setup Socket.IO
+  // ------------------ SOCKET.IO ------------------
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -38,7 +39,7 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
     };
   }, []);
 
-  // Click outside handler
+  // ------------------ CLICK OUTSIDE ------------------
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) setShowMenu(false);
@@ -48,19 +49,20 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Escape key handler
+  // ------------------ ESC KEY ------------------
   useEffect(() => {
     function handleEscape(event) {
       if (event.key === "Escape") {
         setShowMenu(false);
         setShowAddMenu(false);
+        setProfileModal({ open: false, data: null });
       }
     }
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
-  // Create new channel
+  // ------------------ CREATE CHANNEL ------------------
   const handleCreateChannel = async () => {
     if (channels.find((c) => c.owner?._id === user.id)) {
       toast.error("❌ Anda hanya bisa membuat 1 channel");
@@ -81,7 +83,7 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
     }
   };
 
-  // Start DM
+  // ------------------ CREATE DM ------------------
   const handleCreateDM = async (otherUserId) => {
     if (!otherUserId) return;
     const token = localStorage.getItem("token");
@@ -98,7 +100,20 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
     }
   };
 
-  // Channel buttons
+  // ------------------ VIEW PROFILE ------------------
+  const handleViewProfile = async (userId) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return router.push("/login");
+
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+      setProfileModal({ open: true, data: res.data });
+    } catch (err) {
+      toast.error("Gagal load profil user");
+    }
+  };
+
+  // ------------------ CHANNEL BUTTONS ------------------
   const channelButtons = useMemo(() => Array.isArray(channels) ? channels.map((channel) => {
     const channelId = channel?._id || channel?.id;
     const isSelected = channelId === selectedChannelId;
@@ -128,6 +143,7 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
     );
   }) : [], [channels, selectedChannelId, onSelectChannel, onDeleteChannel, user, hoveredChannelId]);
 
+  // ------------------ RENDER ------------------
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
       {/* Navbar */}
@@ -168,10 +184,13 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
         <h3 className="text-sm font-semibold mb-1">Online Users</h3>
         <div className="flex flex-col space-y-1 max-h-40 overflow-y-auto">
           {onlineUsers.map(u => (
-            <button key={u.userId} onClick={() => handleCreateDM(u.userId)} className="flex items-center gap-2 p-1 hover:bg-muted rounded">
-              <img src={u.avatarUrl || "/default-avatar.png"} className="w-5 h-5 rounded-full" />
-              <span className="text-sm truncate">{u.displayName || u.username}</span>
-            </button>
+            <div key={u.userId} className="flex items-center justify-between gap-2 p-1 hover:bg-muted rounded">
+              <button onClick={() => handleCreateDM(u.userId)} className="flex items-center gap-2 flex-1">
+                <img src={u.avatarUrl || "/default-avatar.png"} className="w-5 h-5 rounded-full" />
+                <span className="text-sm truncate">{u.displayName || u.username}</span>
+              </button>
+              <button onClick={() => handleViewProfile(u.userId)} className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90">Profile</button>
+            </div>
           ))}
         </div>
       </div>
@@ -188,6 +207,29 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
           <div className="space-y-1" role="list">{channelButtons}</div>
         )}
       </div>
+
+      {/* Profile Modal */}
+      {profileModal.open && (
+        <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h3 className="text-lg font-bold mb-2">{profileModal.data.username}</h3>
+            <p>Email: {profileModal.data.email}</p>
+            <p>Status: {profileModal.data.status}</p>
+            <button
+              className="mt-4 px-4 py-2 bg-green-500 text-white rounded"
+              onClick={() => { toast.info(`Start DM with ${profileModal.data.username}`); handleCreateDM(profileModal.data._id); setProfileModal({ open: false, data: null }); }}
+            >
+              DM
+            </button>
+            <button
+              className="mt-2 px-4 py-2 bg-gray-500 text-white rounded"
+              onClick={() => setProfileModal({ open: false, data: null })}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
