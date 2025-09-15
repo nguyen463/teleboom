@@ -69,14 +69,14 @@ export default function ChannelSelector({
       }
 
       const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
-        { name },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+  `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
+  { name },
+  {
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("token")}`, // ✅ konsisten
+    },
+  }
+);
 
       if (res.status === 201) {
         toast.success("✅ Channel berhasil dibuat!");
