@@ -1,4 +1,3 @@
-// LoginPage.jsx
 "use client";
 
 import { useState } from "react";
@@ -25,6 +24,12 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    if (!formData.email || !formData.password) {
+      setError("Email dan password harus diisi");
+      setLoading(false);
+      return;
+    }
+
     const loginData = {
       credential: formData.email, // backend pakai `credential`
       password: formData.password,
@@ -32,23 +37,33 @@ export default function LoginPage() {
 
     try {
       const response = await axios.post(`${API_URL}/api/auth/login`, loginData);
+      console.log("✅ Server response:", response.data);
+
       const { token, user } = response.data;
 
-      // 🔑 Simpan di localStorage agar konsisten dengan ChannelSelector.jsx
+      // Simpan token dan user di localStorage
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
       console.log("✅ Token berhasil disimpan di localStorage.");
       console.log("👤 Data user:", localStorage.getItem("user"));
 
-      // Redirect ke /channels setelah login sukses
+      // Redirect ke /channels
       router.push("/channels");
     } catch (err) {
-      console.error("❌ Kesalahan saat login:", err);
-      setError(
-        err.response?.data?.message ||
-          "Failed to log in. Please check your credentials."
-      );
+      console.error("❌ Error saat login:", err);
+
+      if (err.response) {
+        console.log("📌 Response data:", err.response.data);
+        console.log("📌 Response status:", err.response.status);
+        setError(err.response.data?.message || "Login gagal. Periksa kredensial Anda.");
+      } else if (err.request) {
+        console.log("📌 No response received:", err.request);
+        setError("Server tidak merespon. Coba lagi nanti.");
+      } else {
+        console.log("📌 Error setting up request:", err.message);
+        setError("Terjadi kesalahan. Coba lagi.");
+      }
     } finally {
       setLoading(false);
     }
@@ -60,9 +75,9 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-center text-gray-900">Log In</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
-            type="email"
+            type="text"
             name="email"
-            placeholder="Email Address"
+            placeholder="Email atau Username"
             value={formData.email}
             onChange={handleChange}
             className="w-full px-4 py-2 text-gray-900 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
