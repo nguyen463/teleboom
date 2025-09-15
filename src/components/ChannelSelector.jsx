@@ -8,7 +8,7 @@ import { toast } from "react-toastify";
 import Link from "next/link";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "https://teleboom-694d2bc690c3.herokuapp.com";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL;
 
 export default function ChannelSelector({
   user,
@@ -31,13 +31,12 @@ export default function ChannelSelector({
   const addMenuRef = useRef(null);
   const router = useRouter();
 
-  // Initialize Socket.io
+  // Initialize socket
   useEffect(() => {
     if (!user?.token) return;
     const socket = io(SOCKET_URL, { auth: { token: user.token } });
     socketRef.current = socket;
 
-    // Update channels if server emits new DM or channel
     socket.on("channelCreated", (newChannel) => {
       setChannelList((prev) => {
         if (prev.some((c) => c._id === newChannel._id)) return prev;
@@ -48,102 +47,84 @@ export default function ChannelSelector({
     return () => socket.disconnect();
   }, [user?.token]);
 
-  // Update channelList if channels prop changes
+  // Update channel list if channels prop changes
   useEffect(() => {
     setChannelList(channels);
   }, [channels]);
 
-  // Click outside handler
+  // Click outside menu
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) setShowMenu(false);
-      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) setShowAddMenu(false);
-    }
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false);
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target)) setShowAddMenu(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Escape key handler
   useEffect(() => {
-    function handleEscape(event) {
-      if (event.key === "Escape") {
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
         setShowMenu(false);
         setShowAddMenu(false);
       }
-    }
+    };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
-  // ✅ Create new channel (1 per user)
   const handleCreateChannel = async () => {
     if (channelList.find((c) => c.owner?._id === user.id)) {
       toast.error("❌ Anda hanya bisa membuat 1 channel");
       return;
     }
-
     const name = prompt("Masukkan nama channel:");
     if (!name) return;
-
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("❌ Token tidak ditemukan. Silakan login ulang.");
-        router.push("/login");
-        return;
-      }
-
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
         { name },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       if (res.status === 201) {
         toast.success("✅ Channel berhasil dibuat!");
         if (onRefetch) onRefetch();
       }
     } catch (err) {
-      console.error("❌ Error create channel:", err.response?.data || err.message);
       toast.error(err.response?.data?.message || "Gagal membuat channel");
     }
   };
 
-  // ✅ Start DM using socket
-  const handleCreateDM = (otherUserId) => {
-    if (!socketRef.current || !otherUserId) return;
+  const handleCreateDM = async () => {
+    const otherUserId = prompt("Masukkan user ID untuk DM:");
+    if (!otherUserId) return;
+    if (!socketRef.current) return;
+
     socketRef.current.emit("startDm", otherUserId, (res) => {
       if (res.success) {
-        // tambahkan DM baru ke channelList jika belum ada
         setChannelList((prev) => {
           if (prev.some((c) => c._id === res.channelId)) return prev;
           return [...prev, { _id: res.channelId, isPrivate: true, members: [user.id, otherUserId] }];
         });
         onSelectChannel(res.channelId);
-        toast.success("💬 DM channel berhasil dibuat!");
+        toast.success("💬 DM berhasil dibuat!");
       } else {
         toast.error(res.error || "Gagal memulai DM");
       }
     });
   };
 
-  // Channel buttons
   const channelButtons = useMemo(
     () =>
       Array.isArray(channelList)
         ? channelList.map((channel) => {
-            const channelId = channel?._id || channel?.id;
+            const channelId = channel._id;
             const isSelected = channelId === selectedChannelId;
-            const channelOwnerId = channel?.owner?._id || channel?.owner;
-            const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
+            const isOwner = channel?.owner?._id === user.id;
 
-            // ✅ Aman untuk DM, cek berbagai kemungkinan properti
-            const isDM =
-              Boolean(channel.isPrivate) ||
-              Boolean(channel.private) ||
-              channel.type === "dm" ||
-              channel.channelType === "dm";
-
+            const isDM = channel.isPrivate || channel.type === "dm" || channel.channelType === "dm";
             const channelName = isDM
               ? channel.members?.find((m) => m._id !== user.id)?.displayName || "Direct Message"
               : channel.name || "Unnamed";
@@ -160,12 +141,7 @@ export default function ChannelSelector({
                   className={`flex-1 flex items-center gap-2 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
                     isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                   }`}
-                  aria-selected={isSelected}
-                  aria-label={`Select channel ${channelName}${
-                    channel?.description ? ` - ${channel.description}` : ""
-                  }`}
                 >
-                  {/* DM Icon */}
                   {isDM && (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -182,13 +158,7 @@ export default function ChannelSelector({
                       />
                     </svg>
                   )}
-
-                  {/* Channel Name */}
                   <div className="font-medium truncate">{isDM ? channelName : `#${channelName}`}</div>
-
-                  {channel?.lastMessage?.text && (
-                    <div className="text-xs opacity-75 truncate">{channel.lastMessage.text}</div>
-                  )}
                 </button>
 
                 {isOwner && hoveredChannelId === channelId && (
@@ -197,57 +167,72 @@ export default function ChannelSelector({
                       e.stopPropagation();
                       onDeleteChannel(channelId);
                     }}
-                    className="absolute right-2 p-2 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                    aria-label={`Delete channel ${channel?.name ?? ""}`}
-                    title={`Delete channel ${channel?.name ?? ""}`}
+                    className="absolute right-2 p-2 rounded-full bg-red-600 text-white hover:bg-red-700"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.013 21H7.987a2 2 0 01-1.92-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
+                    Delete
                   </button>
                 )}
               </div>
             );
           })
         : [],
-    [channelList, selectedChannelId, onSelectChannel, onDeleteChannel, user, hoveredChannelId]
+    [channelList, selectedChannelId, hoveredChannelId]
   );
 
-  // Rest of your JSX (navbar, channel list rendering, etc.) tetap sama
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
-      {/* Navbar & Add Channel/DM & Profile Dropdown */}
-      {/* ...sama persis seperti kode lo sebelumnya... */}
+      {/* Navbar */}
+      <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 bg-secondary z-10">
+        <h2 className="text-lg font-semibold">Channels</h2>
 
-      {/* Channel List */}
-      <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
+        <div className="flex items-center space-x-2">
+          <div className="relative" ref={addMenuRef}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowAddMenu(!showAddMenu);
+              }}
+              className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              <span className="text-xl">+</span>
+            </button>
+            {showAddMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-md shadow-lg py-1 z-20">
+                <button onClick={handleCreateChannel} className="block px-4 py-2 w-full text-left hover:bg-muted">
+                  Create New Channel
+                </button>
+                <button onClick={handleCreateDM} className="block px-4 py-2 w-full text-left hover:bg-muted">
+                  Start DM
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-2 rounded-full border"
+            >
+              <img src={user.avatarUrl || "/default-avatar.png"} className="w-6 h-6 rounded-full" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-md shadow-lg py-1 z-20">
+                <Link href="/profile" className="block px-4 py-2 hover:bg-muted">Profile</Link>
+                <button onClick={onLogout} className="block px-4 py-2 hover:bg-red-100 w-full text-left">Logout</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Channel list */}
+      <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
-          <div className="flex justify-center items-center h-20">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-          </div>
-        ) : error ? (
-          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
-            {typeof error === "string" ? error : "An unexpected error occurred"}
-          </div>
+          <div className="flex justify-center items-center h-20">Loading...</div>
         ) : channelList.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground">
-            No channels yet. Click the + button to create the first channel.
-          </div>
+          <div className="text-center text-muted-foreground">No channels yet.</div>
         ) : (
-          <div className="space-y-1" role="list">
-            {channelButtons}
-          </div>
+          <div className="space-y-1">{channelButtons}</div>
         )}
       </div>
     </div>
