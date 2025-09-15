@@ -1,3 +1,4 @@
+// ChannelsPage.jsx
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
@@ -7,6 +8,7 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
+// ✅ Component untuk menampilkan daftar pengguna lain
 function UserList({ user, onStartDm, onClose, api }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -15,8 +17,7 @@ function UserList({ user, onStartDm, onClose, api }) {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        // Asumsi ada API endpoint untuk mengambil daftar pengguna
-        const response = await api.get("/api/users");
+        const response = await api.get("/api/users"); // Asumsi ada endpoint /api/users
         const usersData = response.data.users || response.data;
         setUsers(usersData);
       } catch (err) {
@@ -30,8 +31,13 @@ function UserList({ user, onStartDm, onClose, api }) {
 
   return (
     <div className="w-1/4 min-w-64 bg-secondary border-r border-border flex flex-col h-screen">
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border flex justify-between items-center">
         <h2 className="text-xl font-bold">Start a new DM</h2>
+        <button onClick={onClose} className="text-foreground/50 hover:text-foreground">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
       <ul className="space-y-2 overflow-y-auto p-4 flex-1">
         {loading ? (
@@ -51,11 +57,6 @@ function UserList({ user, onStartDm, onClose, api }) {
           ))
         )}
       </ul>
-      <div className="p-4 border-t border-border">
-        <button onClick={onClose} className="w-full px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors">
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }
@@ -247,7 +248,7 @@ function ChannelsPageContent() {
             selectedChannelId={selectedChannelId}
             onSelectChannel={handleSelectChannel}
             onRefetch={fetchChannels}
-            onStartDm={() => setShowUserList(true)}
+            onStartDm={() => setShowUserList(true)} // ✅ Perbaikan: Mengarahkan ke daftar user
             onLogout={logout}
             error={error}
             onDeleteChannel={handleDeleteChannel}
