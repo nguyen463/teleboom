@@ -5,135 +5,86 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import ChannelSelector from "../../components/ChannelSelector";
 import ChatLayout from "../../components/ChatLayout";
+import AddChannelModal from "../../components/AddChannelModal";
+import PublicChannelForm from "../../components/PublicChannelForm";
+import UserList from "../../components/UserList";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 import { toast } from "react-toastify";
 
-function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-sm text-foreground space-y-4">
-        <h2 className="text-xl font-bold text-center">Create or Start</h2>
-        <p className="text-center text-sm text-muted-foreground">Choose an action to create a new channel or start a direct message.</p>
-        <div className="flex flex-col space-y-2">
-          <button
-            onClick={onShowPublicChannelForm}
-            className="w-full py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Create Public Channel
-          </button>
-          <button
-            onClick={onShowUserList}
-            className="w-full py-2 bg-secondary text-foreground rounded-md hover:bg-muted transition-colors"
-          >
-            Start a New DM
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full py-2 bg-transparent text-muted-foreground rounded-md hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
+// Helper components for different states (no changes needed here)
+function LoadingState({ message }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-foreground">{message}</p>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-function PublicChannelForm({ onCreate, onClose, isLoading }) {
-  const [name, setName] = useState("");
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-md text-foreground">
-        <h2 className="text-xl font-bold mb-4">Create Public Channel</h2>
-        <form onSubmit={(e) => { e.preventDefault(); onCreate(name); }} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Channel Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="e.g., general-chat"
-              required
-              maxLength={50}
-            />
-          </div>
-          <div className="flex space-x-3">
+function ErrorState({ message, onRetry }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <p className="text-destructive-foreground mb-2">{message}</p>
             <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
-              disabled={isLoading}
+                onClick={onRetry}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              Cancel
+                Try again
             </button>
+        </div>
+    );
+}
+
+function EmptyState({ onShowAddChannelModal }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+            </div>
+            <p className="text-foreground mb-2">No channels yet. Start a new DM or create a public channel.</p>
             <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                onClick={onShowAddChannelModal}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              {isLoading ? "Creating..." : "Create Channel"}
+                Create First Channel
             </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+        </div>
+    );
 }
 
-function UserList({ user, onStartDm, onClose, api }) {
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoadingUsers(true);
-      try {
-        const response = await api.get("/api/users");
-        const usersData = response.data.users || response.data;
-        setUsers(usersData);
-      } catch (err) {
-        console.error("Failed to fetch users:", err);
-      } finally {
-        setLoadingUsers(false);
-      }
-    };
-    fetchUsers();
-  }, [api]);
-
+function WelcomeState() {
   return (
-    <div className="w-1/4 min-w-64 bg-secondary border-r border-border flex flex-col h-screen">
-      <div className="p-4 border-b border-border flex justify-between items-center">
-        <h2 className="text-xl font-bold">Start a new DM</h2>
-        <button onClick={onClose} className="text-foreground/50 hover:text-foreground">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+    <div className="text-center p-6 max-w-md">
+      <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-8 w-8"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+          />
+        </svg>
       </div>
-      <ul className="space-y-2 overflow-y-auto p-4 flex-1">
-        {loadingUsers ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : (
-          users.filter(u => u._id !== user.id).map(otherUser => (
-            <li key={otherUser._id}>
-              <button
-                onClick={() => onStartDm(otherUser._id)}
-                className="w-full text-left p-3 rounded-md hover:bg-muted transition-colors"
-              >
-                {otherUser.displayName}
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
+      <p className="text-foreground">Select a channel to start a chat</p>
     </div>
   );
 }
 
+// MAIN COMPONENT
 function ChannelsPageContent() {
   const { user, loading: authLoading, api, logout } = useAuth();
   const router = useRouter();
@@ -145,7 +96,7 @@ function ChannelsPageContent() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [view, setView] = useState('channels'); // State untuk mengelola tampilan
+  const [view, setView] = useState('channels'); // State to manage the modal view
   const [isCreating, setIsCreating] = useState(false);
 
   const fetchChannels = useCallback(async () => {
@@ -210,7 +161,7 @@ function ChannelsPageContent() {
       const channelId = res.data.channel?._id || res.data._id;
       if (!channelId) throw new Error("No channel ID in response");
       toast.success("Public channel created successfully!");
-      setView('channels'); // Kembali ke tampilan channel
+      setView('channels');
       handleSelectChannel(channelId);
       fetchChannels();
     } catch (err) {
@@ -227,7 +178,7 @@ function ChannelsPageContent() {
         if (response?.success && response.channelId) {
           toast.success("DM started successfully!");
           handleSelectChannel(response.channelId);
-          setView('channels'); // Kembali ke tampilan channel
+          setView('channels');
           fetchChannels();
         } else {
           toast.error(response?.error || "Failed to start DM.");
@@ -322,11 +273,11 @@ function ChannelsPageContent() {
     return <WelcomeState />;
   };
 
-  const renderSidebar = () => {
+  const renderModals = () => {
     switch (view) {
       case 'add-modal':
         return (
-          <AddChannelModal 
+          <AddChannelModal
             onShowPublicChannelForm={() => setView('public-form')}
             onShowUserList={() => setView('user-list')}
             onClose={() => setView('channels')}
@@ -350,28 +301,27 @@ function ChannelsPageContent() {
           />
         );
       default:
-        return (
-          <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
-            <ChannelSelector
-              user={user}
-              channels={channels || []}
-              loading={channelsLoading}
-              selectedChannelId={selectedChannelId}
-              onSelectChannel={handleSelectChannel}
-              onRefetch={fetchChannels}
-              onShowAddChannelModal={() => setView('add-modal')}
-              onLogout={logout}
-              error={error}
-              onDeleteChannel={handleDeleteChannel}
-            />
-          </div>
-        );
+        return null;
     }
   };
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {renderSidebar()}
+      {/* The main sidebar and chat area layout */}
+      <div className="w-1/4 min-w-64 bg-secondary border-r border-border flex flex-col">
+        <ChannelSelector
+          user={user}
+          channels={channels || []}
+          loading={channelsLoading}
+          selectedChannelId={selectedChannelId}
+          onSelectChannel={handleSelectChannel}
+          onRefetch={fetchChannels}
+          onShowAddChannelModal={() => setView('add-modal')}
+          onLogout={logout}
+          error={error}
+          onDeleteChannel={handleDeleteChannel}
+        />
+      </div>
       
       <div
         className="flex-1 flex flex-col bg-background"
@@ -390,86 +340,9 @@ function ChannelsPageContent() {
           </div>
         </Suspense>
       </div>
-    </div>
-  );
-}
-
-function LoadingScreen() {
-  return (
-    <div className="flex items-center justify-center h-screen bg-background">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
-      <p className="text-foreground">Checking authentication...</p>
-    </div>
-  );
-}
-
-function LoadingState({ message }) {
-    return (
-        <div className="text-center p-6 max-w-md">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-foreground">{message}</p>
-        </div>
-    );
-}
-
-function ErrorState({ message, onRetry }) {
-    return (
-        <div className="text-center p-6 max-w-md">
-            <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            </div>
-            <p className="text-destructive-foreground mb-2">{message}</p>
-            <button
-                onClick={onRetry}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-                Try again
-            </button>
-        </div>
-    );
-}
-
-function EmptyState({ onShowAddChannelModal }) {
-    return (
-        <div className="text-center p-6 max-w-md">
-            <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-            </div>
-            <p className="text-foreground mb-2">No channels yet. Start a new DM or create a public channel.</p>
-            <button
-                onClick={onShowAddChannelModal}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-                Create First Channel
-            </button>
-        </div>
-    );
-}
-
-function WelcomeState() {
-  return (
-    <div className="text-center p-6 max-w-md">
-      <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-8 w-8"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
-          />
-        </svg>
-      </div>
-      <p className="text-foreground">Select a channel to start a chat</p>
+      
+      {/* This is the key change: render the modals as overlays outside the main layout */}
+      {renderModals()}
     </div>
   );
 }
