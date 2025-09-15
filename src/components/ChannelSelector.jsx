@@ -13,7 +13,7 @@ export default function ChannelSelector({
   selectedChannelId,
   onSelectChannel,
   onRefetch,
-  onShowAddChannelModal, // ✅ Menggunakan prop baru
+  onShowAddChannelModal,
   onLogout,
   onDeleteChannel,
   error,
