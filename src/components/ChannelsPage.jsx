@@ -36,7 +36,7 @@ function ChannelsPageContent() {
       }
 
       setChannels(channelsData || []);
-      
+
       const currentChannelExists = channelsData.find(ch => (ch._id || ch.id) === urlChannelId);
 
       if (urlChannelId && currentChannelExists) {
@@ -149,6 +149,28 @@ function ChannelsPageContent() {
     return null;
   }
 
+  // ✅ FIX: Logika render yang telah disederhanakan
+  const renderChatContent = () => {
+    if (channelsLoading) {
+        return <LoadingState message="Loading channels..." />;
+    }
+    if (error) {
+        return <ErrorState message={error} onRetry={fetchChannels} />;
+    }
+    if (selectedChannelId && selectedChannelId !== "undefined") {
+        return <ChatLayout
+            user={user}
+            channelId={selectedChannelId}
+            logout={logout}
+            key={selectedChannelId}
+        />;
+    }
+    if (channels.length === 0) {
+        return <EmptyState onCreateChannel={handleCreateChannel} />;
+    }
+    return <WelcomeState />;
+  };
+
   return (
     <div className="flex h-screen bg-background text-foreground">
       <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
@@ -177,113 +199,91 @@ function ChannelsPageContent() {
             </div>
           }
         >
-          {selectedChannelId && selectedChannelId !== "undefined" ? (
-            <ChatLayout
-              user={user}
-              channelId={selectedChannelId}
-              logout={logout}
-              key={selectedChannelId}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full min-h-full bg-background">
-              <div className="text-center p-6 max-w-md">
-                {channelsLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-foreground">Loading channels...</p>
-                  </>
-                ) : error ? (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-destructive-foreground mb-2">{error}</p>
-                    <button
-                      onClick={fetchChannels}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      Try again
-                    </button>
-                  </>
-                ) : channels.length === 0 ? (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-foreground mb-2">No channels yet. Click the + button to create the first channel.</p>
-                    <button
-                      onClick={handleCreateChannel}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      Create First Channel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-foreground">Select a channel to start a chat</p>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
+          <div className="flex items-center justify-center h-full min-h-full bg-background">
+            {renderChatContent()}
+          </div>
         </Suspense>
       </div>
     </div>
   );
 }
 
-export default function ChannelsPage() {
+function LoadingScreen() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-screen bg-background">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+    <div className="flex items-center justify-center h-screen bg-background">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
+      <p className="text-foreground">Checking authentication...</p>
+    </div>
+  );
+}
+
+function LoadingState({ message }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-foreground">{message}</p>
         </div>
-      }
-    >
-      <ChannelsPageContent />
-    </Suspense>
+    );
+}
+
+function ErrorState({ message, onRetry }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-destructive rounded-full flex items-center justify-center text-destructive-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <p className="text-destructive-foreground mb-2">{message}</p>
+            <button
+                onClick={onRetry}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+                Try again
+            </button>
+        </div>
+    );
+}
+
+function EmptyState({ onCreateChannel }) {
+    return (
+        <div className="text-center p-6 max-w-md">
+            <div className="mx-auto mb-4 w-16 h-16 bg-muted rounded-full flex items-center justify-center text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+            </div>
+            <p className="text-foreground mb-2">No channels yet. Click the + button to create the first channel.</p>
+            <button
+                onClick={onCreateChannel}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors mt-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+                Create First Channel
+            </button>
+        </div>
+    );
+}
+
+function WelcomeState() {
+  return (
+    <div className="text-center p-6 max-w-md">
+      <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-8 w-8"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+          />
+        </svg>
+      </div>
+      <p className="text-foreground">Select a channel to start a chat</p>
+    </div>
   );
 }
