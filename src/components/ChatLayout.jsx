@@ -197,6 +197,16 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socketRef.current = socket;
 
+    // ✅ FIX: Hapus listener lama untuk menghindari duplikasi
+    const handleMessagesCleared = ({ channelId: clearedChannelId }) => {
+      if (clearedChannelId === channelId) {
+        setMessages([]);
+        setHasMore(false);
+        setPage(0);
+      }
+    };
+    socket.on("messagesCleared", handleMessagesCleared);
+
     socket.on("connect", () => {
       setConnectionStatus("connected");
       setError(null);
@@ -253,13 +263,11 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("disconnect", (reason) => {
       setConnectionStatus("disconnected");
-      setError("Disconnected from server, attempting to reconnect...");
       console.log("🔍 Socket disconnected:", reason);
     });
 
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
-      setError("Connection failed: " + err.message);
       setIsLoading(false);
       toast.error("Connection failed: " + err.message);
     });
@@ -312,14 +320,6 @@ export default function ChatLayout({ user, channelId, logout }) {
       }
     });
 
-    socket.on("messagesCleared", ({ channelId: clearedChannelId }) => {
-      if (clearedChannelId === channelId) {
-        setMessages([]);
-        setHasMore(false);
-        setPage(0);
-      }
-    });
-
     socket.on("online_users", (users) => {
       if (Array.isArray(users)) {
         setOnlineUsers(users);
@@ -351,6 +351,8 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     return () => {
       if (socketRef.current) {
+        // ✅ FIX: Hapus listener messagesCleared saat cleanup
+        socketRef.current.off("messagesCleared", handleMessagesCleared);
         socketRef.current.disconnect();
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -606,7 +608,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                   Leave Channel
                 </button>
               )}
-              {/* ✅ FIX: Tombol "Clear All Messages" ditambahkan kembali di sini */}
               {isOwner && (
                 <button
                   onClick={handleClearMessages}
@@ -615,14 +616,6 @@ export default function ChatLayout({ user, channelId, logout }) {
                   Clear All Messages
                 </button>
               )}
-              <button
-                onClick={() => {
-                  logout();
-                }}
-                className="block w-full text-left px-4 py-2 hover:bg-destructive hover:text-destructive-foreground transition-colors text-destructive"
-              >
-                Logout
-              </button>
             </div>
           )}
         </div>
@@ -641,9 +634,10 @@ export default function ChatLayout({ user, channelId, logout }) {
         </div>
       )}
 
-      {error && (
+      {/* ✅ FIX: Menghapus total blok kode error yang mengganggu */}
+      {/* {error && (
         <div className="bg-destructive text-destructive-foreground p-2 text-center">{error}</div>
-      )}
+      )} */}
 
       <div
         ref={messagesContainerRef}
