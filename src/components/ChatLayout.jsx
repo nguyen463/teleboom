@@ -798,15 +798,118 @@ export default function ChatLayout({ user, channelId, logout }) {
                            }}
                            className="bg-muted px-3 py-1 rounded text-foreground text-sm"
                          >
-                       <span className="text-base">Pilih channel untuk memulai obrolan</span>
-                     </>
-                   )}
-                 </div>
-               </div>
-             )}
-           </Suspense>
-         </div>
-       </div>
-     </div>
-   );
+                           Cancel
+                         </button>
+                       </div>
+                     </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef}></div>
+      </div>
+
+      {imagePreview && (
+        <div className="p-4 bg-muted">
+          <img src={imagePreview} alt="Preview" className="max-h-32 rounded-lg" />
+          <button
+            onClick={() => {
+              setSelectedImage(null);
+              setImagePreview(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+            className="mt-2 text-sm text-destructive"
+          >
+            Remove Image
+          </button>
+        </div>
+      )}
+
+      <div className="p-4 bg-secondary flex justify-between items-center">
+        {isMember ? (
+          <div className="flex-1">
+            {typingUsers.length > 0 && (
+              <div className="text-sm text-muted-foreground mb-2">
+                {typingUsers.map((u) => u.displayName || u.username).join(", ")} is typing...
+              </div>
+            )}
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                value={newMsg}
+                onChange={handleTyping}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                className="flex-1 p-2 rounded border-border bg-background text-foreground"
+                placeholder="Type a message..."
+                disabled={isUploading}
+              />
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 bg-muted text-foreground rounded-full hover:bg-border transition-colors"
+                disabled={isUploading}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={sendMessage}
+                className="p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
+                disabled={isUploading || (!newMsg.trim() && !selectedImage)}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 text-center">
+            <button
+              onClick={joinChannel}
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Join Channel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
