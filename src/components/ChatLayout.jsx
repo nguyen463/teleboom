@@ -239,13 +239,13 @@ export default function ChatLayout({ user, channelId, logout }) {
 
     socket.on("disconnect", (reason) => {
       setConnectionStatus("disconnected");
-      setError("Disconnected from server. Attempting to reconnect...");
+      setError("Disconnected from server, attempting to reconnect..."); // Pesan ini sekarang diatur di `error`
       console.log("🔍 Socket disconnected:", reason);
     });
 
     socket.on("connect_error", (err) => {
       setConnectionStatus("error");
-      setError("Connection failed: " + err.message);
+      setError("Connection failed: " + err.message); // Pesan ini sekarang diatur di `error`
       setIsLoading(false);
       toast.error("Connection failed: " + err.message);
     });
@@ -380,7 +380,6 @@ export default function ChatLayout({ user, channelId, logout }) {
     const messageData = { text: newMsg.trim(), channelId };
 
     const onMessageSent = (response) => {
-      // ✅ FIX: Penanganan error yang lebih robust
       if (!response || response?.error) {
         console.error("Failed to send message. Server response:", response);
         setError(response?.error || "Failed to send message: Connection error.");
@@ -510,6 +509,19 @@ export default function ChatLayout({ user, channelId, logout }) {
     );
   }
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "connected":
+        return "bg-green-500";
+      case "disconnected":
+        return "bg-yellow-500";
+      case "error":
+        return "bg-red-500";
+      default:
+        return "bg-gray-400";
+    }
+  };
+
   return (
     <div key={`${theme}-${forceUpdate}`} className="flex flex-col h-screen bg-background text-foreground font-sans">
       <ToastContainer
@@ -522,7 +534,10 @@ export default function ChatLayout({ user, channelId, logout }) {
       <header className="bg-primary text-primary-foreground p-4 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <span className="hidden md:inline">Hi, {userDisplayName}</span>
-          <span className="text-sm opacity-75">({connectionStatus})</span>
+          <div className="flex items-center space-x-1">
+            <span className={`w-2 h-2 rounded-full ${getStatusColor(connectionStatus)}`}></span>
+            <span className="text-sm opacity-75 hidden md:inline">({connectionStatus})</span>
+          </div>
         </div>
         <div className="relative">
           <button
@@ -587,9 +602,10 @@ export default function ChatLayout({ user, channelId, logout }) {
         </div>
       )}
 
-      {error && (
+      {/* ✅ Hapus banner error yang mengganggu */}
+      {/* {error && (
         <div className="bg-destructive text-destructive-foreground p-2 text-center">{error}</div>
-      )}
+      )} */}
 
       <div
         ref={messagesContainerRef}
