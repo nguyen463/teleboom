@@ -13,7 +13,7 @@ export default function ChannelSelector({
   selectedChannelId,
   onSelectChannel,
   onRefetch,
-  onShowAddChannelModal,
+  onShowAddChannelModal, // ✅ Pastikan prop ini ada
   onLogout,
   onDeleteChannel,
   error,
@@ -55,8 +55,8 @@ export default function ChannelSelector({
             const channelOwnerId = channel?.owner?._id || channel?.owner;
             const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
             const isDM = channel.isPrivate;
-            const channelName = isDM 
-                ? (channel.members.find(m => m._id !== user.id)?.displayName || 'Direct Message') 
+            const channelName = isDM
+                ? (channel.members.find(m => m._id !== user.id)?.displayName || 'Direct Message')
                 : (channel.name || 'Unnamed');
 
             return (
@@ -120,6 +120,7 @@ export default function ChannelSelector({
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
+          {/* ✅ Perbaikan: onClick harus memanggil onShowAddChannelModal */}
           <button
             onClick={onShowAddChannelModal}
             className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
