@@ -25,9 +25,8 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    // Create a new object with the correct key for the backend API
     const loginData = {
-      credential: formData.email, // <--- Corrected this line
+      credential: formData.email, // backend pakai `credential`
       password: formData.password,
     };
 
@@ -35,16 +34,21 @@ export default function LoginPage() {
       const response = await axios.post(`${API_URL}/api/auth/login`, loginData);
       const { token, user } = response.data;
 
-      sessionStorage.setItem("chat-app-token", token);
-      sessionStorage.setItem("chat-app-user", JSON.stringify(user));
+      // 🔑 Simpan di localStorage agar konsisten dengan ChannelSelector.jsx
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
 
-      console.log("Token berhasil disimpan di sessionStorage.");
-      console.log("Data user yang disimpan:", sessionStorage.getItem("chat-app-user"));
+      console.log("✅ Token berhasil disimpan di localStorage.");
+      console.log("👤 Data user:", localStorage.getItem("user"));
 
-      router.push("/channels"); // Redirect to /channels instead of /chat
+      // Redirect ke /channels setelah login sukses
+      router.push("/channels");
     } catch (err) {
-      console.error("Kesalahan saat login:", err);
-      setError(err.response?.data?.message || "Failed to log in. Please  check your credentials.");
+      console.error("❌ Kesalahan saat login:", err);
+      setError(
+        err.response?.data?.message ||
+          "Failed to log in. Please check your credentials."
+      );
     } finally {
       setLoading(false);
     }
@@ -53,9 +57,7 @@ export default function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
-        <h1 className="text-2xl font-bold text-center text-gray-900">
-          Log In
-        </h1>
+        <h1 className="text-2xl font-bold text-center text-gray-900">Log In</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
@@ -88,7 +90,10 @@ export default function LoginPage() {
         {error && <p className="text-sm text-center text-red-600">{error}</p>}
         <p className="text-sm text-center text-gray-600">
           Belum punya akun?{" "}
-          <Link href="/register" className="font-medium text-blue-600 hover:underline">
+          <Link
+            href="/register"
+            className="font-medium text-blue-600 hover:underline"
+          >
             Register
           </Link>
         </p>
