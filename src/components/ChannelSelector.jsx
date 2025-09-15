@@ -1,3 +1,4 @@
+// ChannelSelector.jsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -12,7 +13,7 @@ export default function ChannelSelector({
   selectedChannelId,
   onSelectChannel,
   onRefetch,
-  onCreateChannel,
+  onStartDm,
   onLogout,
   onDeleteChannel,
   error,
@@ -53,6 +54,10 @@ export default function ChannelSelector({
             const isSelected = channelId === selectedChannelId;
             const channelOwnerId = channel?.owner?._id || channel?.owner;
             const isOwner = channelOwnerId && user?.id === String(channelOwnerId);
+            const isDM = channel.isPrivate;
+            const channelName = isDM 
+                ? (channel.members.find(m => m._id !== user.id)?.displayName || 'Direct Message') 
+                : (channel.name || 'Unnamed');
 
             return (
               <div
@@ -67,13 +72,13 @@ export default function ChannelSelector({
                     isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                   }`}
                   aria-selected={isSelected}
-                  aria-label={`Select channel ${channel?.name ?? ""}${
+                  aria-label={`Select channel ${channelName}${
                     channel?.description ? ` - ${channel.description}` : ""
                   }`}
                 >
-                  <div className="font-medium">#{channel?.name ?? "Unnamed"}</div>
-                  {channel?.description && (
-                    <div className="text-xs opacity-75 truncate">{channel.description}</div>
+                  <div className="font-medium">{isDM ? channelName : `#${channelName}`}</div>
+                  {channel?.lastMessage?.text && (
+                    <div className="text-xs opacity-75 truncate">{channel.lastMessage.text}</div>
                   )}
                 </button>
 
@@ -115,11 +120,12 @@ export default function ChannelSelector({
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
+          {/* ✅ Tombol "New DM" baru */}
           <button
-            onClick={onCreateChannel}
+            onClick={onStartDm}
             className="p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-            aria-label="Create New Channel"
-            title="Create New Channel"
+            aria-label="Start New DM"
+            title="Start New DM"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
