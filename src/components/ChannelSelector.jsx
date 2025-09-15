@@ -29,12 +29,8 @@ export default function ChannelSelector({
   // Click outside handler
   useEffect(() => {
     function handleClickOutside(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenu(false);
-      }
-      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) {
-        setShowAddMenu(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(event.target)) setShowMenu(false);
+      if (addMenuRef.current && !addMenuRef.current.contains(event.target)) setShowAddMenu(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -52,14 +48,17 @@ export default function ChannelSelector({
     return () => document.removeEventListener("keydown", handleEscape);
   }, []);
 
-  // ✅ Create new channel
-  const handleCreateChannel = async () => {
-    // Cek apakah user sudah punya channel
-    const userChannel = channels.find(
-      (ch) => ch.owner?._id === user.id || ch.owner === user.id
+  // Check if user already has a public channel
+  const userHasChannel = useMemo(() => {
+    return channels.some(
+      (ch) => !ch.isPrivate && String(ch.owner?._id || ch.owner) === String(user?.id)
     );
-    if (userChannel) {
-      toast.error("❌ Anda hanya bisa membuat 1 channel");
+  }, [channels, user]);
+
+  // Create new channel
+  const handleCreateChannel = async () => {
+    if (userHasChannel) {
+      toast.error("❌ Kamu sudah memiliki satu channel publik.");
       return;
     }
 
@@ -77,11 +76,7 @@ export default function ChannelSelector({
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/channels`,
         { name },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (res.status === 201) {
@@ -89,23 +84,14 @@ export default function ChannelSelector({
         if (onRefetch) onRefetch();
       }
     } catch (err) {
-      const message = err.response?.data?.message || err.message || "Gagal membuat channel";
-      console.error("❌ Error create channel:", message);
-      toast.error(message);
-
-      // Jika token expired / unauthorized
-      if (message.toLowerCase().includes("token has expired") || message.toLowerCase().includes("unauthorized")) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        toast.info("🔑 Silakan login ulang.");
-        router.push("/login");
-      }
+      console.error("❌ Error create channel:", err.response?.data || err.message);
+      toast.error(err.response?.data?.message || "Gagal membuat channel");
     }
   };
 
-  // Placeholder DM creation
+  // Start DM
   const handleCreateDM = () => {
-    toast.info("🚧 Fitur Create DM belum diimplementasikan");
+    toast.info("🚧 Fitur Start DM belum diimplementasikan");
   };
 
   // Channel buttons
@@ -134,10 +120,6 @@ export default function ChannelSelector({
                   className={`flex-1 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
                     isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                   }`}
-                  aria-selected={isSelected}
-                  aria-label={`Select channel ${channelName}${
-                    channel?.description ? ` - ${channel.description}` : ""
-                  }`}
                 >
                   <div className="font-medium">{isDM ? channelName : `#${channelName}`}</div>
                   {channel?.lastMessage?.text && (
@@ -152,8 +134,6 @@ export default function ChannelSelector({
                       onDeleteChannel(channelId);
                     }}
                     className="absolute right-2 p-2 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-                    aria-label={`Delete channel ${channel?.name ?? ""}`}
-                    title={`Delete channel ${channel?.name ?? ""}`}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -178,56 +158,38 @@ export default function ChannelSelector({
     [channels, selectedChannelId, onSelectChannel, onDeleteChannel, user, hoveredChannelId]
   );
 
-  // Cek user punya channel
-  const userHasChannel = channels.some(
-    (ch) => ch.owner?._id === user.id || ch.owner === user.id
-  );
-
   return (
     <div className="h-full flex flex-col bg-secondary text-foreground">
+      {/* Header */}
       <div className="p-4 border-b border-border flex justify-between items-center sticky top-0 z-10 bg-secondary">
         <h2 className="text-lg font-semibold">Channels</h2>
         <div className="flex items-center space-x-2">
-          {/* Add Channel / DM Menu */}
+          {/* Add Channel / DM dropdown */}
           <div className="relative" ref={addMenuRef}>
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (userHasChannel) {
-                  toast.error("❌ Anda hanya bisa membuat 1 channel");
-                  return;
-                }
                 setShowAddMenu(!showAddMenu);
               }}
-              className={`p-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
-                userHasChannel ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-              aria-label="Create New Channel or Start DM"
-              title={userHasChannel ? "Hanya boleh membuat 1 channel" : "Create New Channel or Start DM"}
-              disabled={userHasChannel}
+              className="p-2 bg-primary text-white rounded hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              +
             </button>
 
             {showAddMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
                 <button
                   onClick={handleCreateChannel}
-                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
+                  className={`block px-4 py-2 text-sm w-full text-left ${
+                    userHasChannel ? "opacity-50 cursor-not-allowed" : "hover:bg-muted"
+                  }`}
+                  disabled={userHasChannel}
                 >
-                  Create New Channel
+                  Create Channel
                 </button>
                 <button
                   onClick={handleCreateDM}
-                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
+                  className="block px-4 py-2 text-sm w-full text-left hover:bg-muted"
                 >
                   Start Direct Message
                 </button>
@@ -235,13 +197,11 @@ export default function ChannelSelector({
             )}
           </div>
 
-          {/* Main Menu */}
+          {/* Main Menu dropdown */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="p-2 bg-muted text-foreground rounded-full hover:bg-muted-foreground/20 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-              aria-label="Menu"
-              aria-expanded={showMenu}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -253,25 +213,21 @@ export default function ChannelSelector({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+
             {showMenu && (
-              <div
-                className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200"
-                role="menu"
-                aria-labelledby="menu-button"
-              >
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-2 duration-200">
                 <button
                   onClick={() => {
                     if (onRefetch) onRefetch();
                     setShowMenu(false);
                   }}
-                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left focus:outline-none focus:bg-muted"
-                  role="menuitem"
+                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left"
                 >
                   Refresh Channels
                 </button>
                 <button
                   onClick={toggleTheme}
-                  className="block w-full text-left px-4 py-2 hover:bg-muted transition-colors"
+                  className="block px-4 py-2 text-sm hover:bg-muted w-full text-left"
                 >
                   Switch to {theme === "light" ? "Dark" : "Light"} Mode
                 </button>
@@ -282,8 +238,7 @@ export default function ChannelSelector({
                       setShowMenu(false);
                     }
                   }}
-                  className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left focus:outline-none focus:bg-destructive/10"
-                  role="menuitem"
+                  className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left"
                 >
                   Logout
                 </button>
@@ -294,17 +249,17 @@ export default function ChannelSelector({
       </div>
 
       {/* Channel List */}
-      <div className="flex-1 overflow-y-auto p-2" role="listbox" aria-label="Channel list">
+      <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex justify-center items-center h-20">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
           </div>
         ) : error ? (
-          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
+          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm">
             {typeof error === "string" ? error : "An unexpected error occurred"}
           </div>
         ) : !Array.isArray(channels) ? (
-          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm" role="alert">
+          <div className="p-4 text-destructive-foreground bg-destructive/10 rounded-md text-sm">
             Error: Invalid channel data
           </div>
         ) : channels.length === 0 ? (
@@ -312,9 +267,7 @@ export default function ChannelSelector({
             No channels yet. Click the + button to create the first channel.
           </div>
         ) : (
-          <div className="space-y-1" role="list">
-            {channelButtons}
-          </div>
+          <div className="space-y-1">{channelButtons}</div>
         )}
       </div>
     </div>
