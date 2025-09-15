@@ -8,131 +8,6 @@ import ChatLayout from "../../components/ChatLayout";
 import { useAuth } from "../utils/auth";
 import { useTheme } from "../../components/ThemeContext";
 
-function AddChannelModal({ onShowPublicChannelForm, onShowUserList, onClose }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-sm text-foreground space-y-4">
-        <h2 className="text-xl font-bold text-center">Create or Start</h2>
-        <p className="text-center text-sm text-muted-foreground">Choose an action to create a new channel or start a direct message.</p>
-        <div className="flex flex-col space-y-2">
-          <button
-            onClick={onShowPublicChannelForm}
-            className="w-full py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Create Public Channel
-          </button>
-          <button
-            onClick={onShowUserList}
-            className="w-full py-2 bg-secondary text-foreground rounded-md hover:bg-muted transition-colors"
-          >
-            Start a New DM
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full py-2 bg-transparent text-muted-foreground rounded-md hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PublicChannelForm({ onCreate, onClose, isLoading }) {
-  const [name, setName] = useState("");
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-card p-6 rounded-lg shadow-xl w-full max-w-md text-foreground">
-        <h2 className="text-xl font-bold mb-4">Create Public Channel</h2>
-        <form onSubmit={(e) => { e.preventDefault(); onCreate(name); }} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Channel Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder="e.g., general-chat"
-              required
-              maxLength={50}
-            />
-          </div>
-          <div className="flex space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-muted text-foreground rounded-md hover:bg-muted/70 transition-colors"
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {isLoading ? "Creating..." : "Create Channel"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function UserList({ user, onStartDm, onClose, api }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
-      try {
-        const response = await api.get("/api/users");
-        const usersData = response.data.users || response.data;
-        setUsers(usersData);
-      } catch (err) {
-        console.error("Failed to fetch users:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUsers();
-  }, [api]);
-
-  return (
-    <div className="w-1/4 min-w-64 bg-secondary border-r border-border flex flex-col h-screen">
-      <div className="p-4 border-b border-border flex justify-between items-center">
-        <h2 className="text-xl font-bold">Start a new DM</h2>
-        <button onClick={onClose} className="text-foreground/50 hover:text-foreground">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <ul className="space-y-2 overflow-y-auto p-4 flex-1">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : (
-          users.filter(u => u._id !== user.id).map(otherUser => (
-            <li key={otherUser._id}>
-              <button
-                onClick={() => onStartDm(otherUser._id)}
-                className="w-full text-left p-3 rounded-md hover:bg-muted transition-colors"
-              >
-                {otherUser.displayName}
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
-    </div>
-  );
-}
-
 function ChannelsPageContent() {
   const { user, loading: authLoading, api, logout } = useAuth();
   const router = useRouter();
@@ -144,10 +19,6 @@ function ChannelsPageContent() {
   const [channels, setChannels] = useState([]);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showAddChannelModal, setShowAddChannelModal] = useState(false);
-  const [showUserList, setShowUserList] = useState(false);
-  const [showPublicChannelForm, setShowPublicChannelForm] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
 
   const fetchChannels = useCallback(async () => {
     if (!user?.token || channelsLoading) return;
@@ -204,36 +75,10 @@ function ChannelsPageContent() {
     [handleSetUrlChannelId]
   );
 
-  const handleCreatePublicChannel = useCallback(async (name) => {
-    setIsCreating(true);
-    try {
-      const res = await api.post("/api/channels", { name, isPrivate: false });
-      const channelId = res.data.channel?._id || res.data._id;
-      if (!channelId) throw new Error("No channel ID in response");
-      toast.success("Public channel created successfully!");
-      setShowPublicChannelForm(false);
-      handleSelectChannel(channelId);
-    } catch (err) {
-      console.error("Error creating public channel:", err);
-      toast.error(err.response?.data?.message || "Failed to create public channel.");
-    } finally {
-      setIsCreating(false);
-    }
-  }, [api, handleSelectChannel]);
-
-  const handleStartDm = useCallback((otherUserId) => {
-    if (api?.socket) {
-      api.socket.emit("startDm", otherUserId, (response) => {
-        if (response?.success && response.channelId) {
-          toast.success("DM started successfully!");
-          handleSelectChannel(response.channelId);
-          setShowUserList(false);
-        } else {
-          toast.error(response?.error || "Failed to start DM.");
-        }
-      });
-    }
-  }, [api, handleSelectChannel]);
+  const handleCreateChannel = useCallback(() => {
+    // ✅ PERBAIKAN: Mengarahkan ke halaman daftar pengguna
+    router.push("/channels/users");
+  }, [router]);
 
   const handleDeleteChannel = useCallback(async (channelId) => {
     if (window.confirm("Are you sure you want to delete this channel?")) {
@@ -283,7 +128,6 @@ function ChannelsPageContent() {
     };
   }, [user, api, selectedChannelId, handleSelectChannel, channels.length]);
 
-
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -314,60 +158,27 @@ function ChannelsPageContent() {
         />;
     }
     if (channels.length === 0) {
-        return <EmptyState onShowAddChannelModal={() => setShowAddChannelModal(true)} />;
+        return <EmptyState onCreateChannel={handleCreateChannel} />;
     }
     return <WelcomeState />;
   };
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {showAddChannelModal && (
-        <AddChannelModal
-          onShowPublicChannelForm={() => {
-            setShowAddChannelModal(false);
-            setShowPublicChannelForm(true);
-          }}
-          onShowUserList={() => {
-            setShowAddChannelModal(false);
-            setShowUserList(true);
-          }}
-          onClose={() => setShowAddChannelModal(false)}
-        />
-      )}
-      
-      {showPublicChannelForm && (
-        <PublicChannelForm
-          onCreate={handleCreatePublicChannel}
-          onClose={() => setShowPublicChannelForm(false)}
-          isLoading={isCreating}
-        />
-      )}
-
-      {showUserList && (
-        <UserList
+      <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
+        <ChannelSelector
           user={user}
-          onStartDm={handleStartDm}
-          onClose={() => setShowUserList(false)}
-          api={api}
+          channels={channels || []}
+          loading={channelsLoading}
+          selectedChannelId={selectedChannelId}
+          onSelectChannel={handleSelectChannel}
+          onRefetch={fetchChannels}
+          onCreateChannel={handleCreateChannel} // ✅ Menggunakan fungsi yang telah diperbaiki
+          onLogout={logout}
+          error={error}
+          onDeleteChannel={handleDeleteChannel}
         />
-      )}
-
-      {!showUserList && !showPublicChannelForm && !showAddChannelModal && (
-        <div className="w-1/4 min-w-64 bg-secondary border-r border-border">
-          <ChannelSelector
-            user={user}
-            channels={channels || []}
-            loading={channelsLoading}
-            selectedChannelId={selectedChannelId}
-            onSelectChannel={handleSelectChannel}
-            onRefetch={fetchChannels}
-            onShowAddChannelModal={() => setShowAddChannelModal(true)}
-            onLogout={logout}
-            error={error}
-            onDeleteChannel={handleDeleteChannel}
-          />
-        </div>
-      )}
+      </div>
       <div
         className="flex-1 flex flex-col bg-background"
         role="main"
