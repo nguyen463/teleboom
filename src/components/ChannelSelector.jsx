@@ -164,21 +164,20 @@ export default function ChannelSelector({ user, channels = [], loading = false, 
             )}
           </div>
 
-          {/* Profile Dropdown */}
-          <div className="relative" ref={menuRef}>
-            <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary">
-              <img src={user.avatarUrl || "/default-avatar.png"} className="w-6 h-6 rounded-full" />
-            </button>
-            {showMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20">
-                <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-muted">
-               Update Profile
-                 </Link>
+         {/* Profile Dropdown */}
+<div className="relative" ref={menuRef}>
+  <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full border focus:outline-none focus:ring-2 focus:ring-primary">
+    <img src={user.avatarUrl || "/default-avatar.png"} className="w-6 h-6 rounded-full" />
+  </button>
+  {showMenu && (
+    <div className="absolute right-0 mt-2 w-48 bg-card border border-border text-foreground rounded-md shadow-lg py-1 z-20">
+      {/* ✅ Ganti href ke /profile */}
+      <Link href="/profile" className="block px-4 py-2 text-sm hover:bg-muted">Update Profile</Link>
+      <button onClick={onLogout} className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left">Logout</button>
+    </div>
+  )}
+</div>
 
-                <button onClick={onLogout} className="block px-4 py-2 text-sm text-destructive hover:bg-destructive/10 w-full text-left">Logout</button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
