@@ -110,7 +110,7 @@ export default function ChannelSelector({
               >
                 <button
                   onClick={() => onSelectChannel(channelId)}
-                  className={`flex-1 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                  className={`flex-1 flex items-center gap-2 text-left p-3 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
                     isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                   }`}
                   aria-selected={isSelected}
@@ -118,7 +118,25 @@ export default function ChannelSelector({
                     channel?.description ? ` - ${channel.description}` : ""
                   }`}
                 >
-                  <div className="font-medium">{isDM ? channelName : `#${channelName}`}</div>
+                  {/* DM Icon */}
+                  {isDM && (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 text-blue-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 8h10M7 12h8m-8 4h6M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  )}
+                  {/* Channel Name */}
+                  <div className="font-medium truncate">{isDM ? channelName : `#${channelName}`}</div>
                   {channel?.lastMessage?.text && (
                     <div className="text-xs opacity-75 truncate">{channel.lastMessage.text}</div>
                   )}
